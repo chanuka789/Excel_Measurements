@@ -1,55 +1,48 @@
-# DWFx Structural - Excel add-in
+# DWFx Measure - Excel add-in
 
-View a Revit DWFx structural model in 3D inside Excel, linked to the structural
-Measurement sheet and BOQ (same format as the `dfwx-structurel` skill).
+View any Revit DWFx model (architecture, structure, interiors, MEP) in 3D inside Excel, browse its elements
+like CostX, and send measurements to a **Take-off** sheet. An optional AI assistant turns plain-English
+requests into element selections; the add-in always calculates the numbers itself from the model.
 
-## What it does
-- Open a `.dwfx` file in the Excel task pane. The server measures it and decodes the 3D model.
-- **Create sheets in Excel** adds `Read Me`, `BOQ`, `Measurement` and `Rates` to the open workbook
-  (all quantities are formulas, the same as the skill output).
-- Click an element in 3D: it turns amber and the matching row is selected in the Measurement sheet.
-- Select rows in the Measurement sheet: those elements are highlighted in 3D.
-- Select a BOQ item: every element in that item (for example all 200 mm ground slabs) is highlighted.
-- **Isolate** shows only the selected elements. **Show all** brings everything back.
-- The colour legend is also a filter (click a type to show only that type). The level list filters by level.
-- Claude in Excel can read the Measurement and BOQ sheets like any other sheets.
+Live: https://dwfx-addin-production.up.railway.app (Railway project `excel-measurements`, service `dwfx-addin`,
+deploys on every push to `main`).
 
-## Run locally
-```bash
-npm install
-pip install openpyxl
-npm start            # http://localhost:3000
-```
-Excel needs HTTPS for add-ins, so for Excel use Railway (below) or a local HTTPS dev certificate.
+## Using it
+1. Home tab > **DWFx 3D model** > enter the access code > open a `.dwfx`.
+2. **Elements** tab: Category > Family > Type > element tree with counts. Tick boxes select elements
+   (shown amber in 3D). Search by type, family or Revit ID; filter by level. Click a name to zoom to it.
+3. Click elements in 3D (Ctrl+click to add). **Isolate** shows only ticked elements.
+4. **Measure** tab: totals of every quantity found on the ticked elements (Count, Area, Length, Volume,
+   Perimeter, ...). Tick the ones you need, name the group, choose sub-totals by Type or Level,
+   then **Add to Excel take-off**. Each group is added below the last one (G1, G2, ...) with SUBTOTAL formulas.
+5. Selecting rows in the Take-off sheet highlights those elements in 3D; selecting a G-title row highlights the group.
+6. **AI** tab: e.g. "measure internal walls on the first floor, area and length by type". Review the proposed
+   groups, then **Add to Excel**.
 
-## Live deployment
-- App: https://dwfx-addin-production.up.railway.app
-- Railway project: `excel-measurements`, service `dwfx-addin` (deploys on every push to `main`).
-- `manifest.xml` already points to the live address.
+## Units and accuracy
+- Lengths are converted from mm to metres; areas m2, volumes m3.
+- Revit exports areas/volumes rounded to the model's project-unit precision (often whole m2). For walls the
+  add-in also gives **Face area (L x H)** from length x unconnected height.
+- Elements without decoded 3D geometry can still be measured from the browser.
 
-## Deploy on Railway (from scratch)
-1. Put this folder in a private GitHub repository.
-2. Railway > New Project > Deploy from GitHub repo. Railway uses the `Dockerfile` (Node + Python).
-3. Settings > Networking > Generate domain. You get `https://<name>.up.railway.app`.
-4. Optional but recommended for client models: add a variable `APP_TOKEN` (a password).
-   Users type it in the "Access code" field.
-5. In `manifest.xml`, replace every `https://YOUR-APP.up.railway.app` with your domain.
+## AI settings (Railway > service > Variables)
+| Variable | DeepSeek | Meta Muse Spark via OpenRouter |
+|---|---|---|
+| `AI_BASE_URL` | `https://api.deepseek.com` | `https://openrouter.ai/api/v1` |
+| `AI_MODEL` | `deepseek-flash` | Muse Spark 1.3 model id shown on OpenRouter |
+| `AI_API_KEY` | your DeepSeek key | your OpenRouter key |
 
-## Add it to Excel
-- **Excel on the web:** Home > Add-ins > More add-ins > My Add-ins > Upload My Add-in > choose `manifest.xml`.
-- **Excel desktop (Windows):** put `manifest.xml` in a shared network folder, add that folder in
-  File > Options > Trust Center > Trust Center Settings > Trusted Add-in Catalogs, restart Excel,
-  then Home > Add-ins > Shared Folder.
-- **Company-wide:** your Microsoft 365 admin can deploy the manifest from the admin centre.
+Any OpenAI-compatible chat API works. Only a summary of the model (category/family/type names, counts, levels
+and quantity names) is sent to the AI, never element values or geometry.
 
-The button "DWFx 3D model" appears on the Home tab.
+## Other settings
+- `APP_TOKEN`: access code users type in the pane.
 
-## Requirements and limits
-- Excel API 1.9 for selection linking; 1.13 for "Create sheets in Excel"
-  (older Excel: use "Download Excel file" and copy the sheets).
-- Models are processed on the server and deleted straight after; nothing is stored.
-- 3D geometry is decoded with the open-source `dwf-viewer` package (AGPL-3.0). That is fine for
-  your own or internal use. If you sell or offer this as a service to other companies, the AGPL
-  requires you to share the source code of the whole app - get advice first.
-- Tested on one Revit 2023 structural DWFx: 435 of 438 measured elements shown in 3D
-  (two hollow equipment bases and the LWC step have no decoded geometry).
+## Add to Excel
+- Excel on the web: Home > Add-ins > More add-ins > My Add-ins > Upload My Add-in > `manifest.xml`.
+- Excel desktop (Windows): put `manifest.xml` in a shared folder, add the `\\PC\folder` path in
+  Trust Center > Trusted Add-in Catalogs (tick Show in Menu), restart Excel, Home > Add-ins > Shared Folder.
+
+## Notes
+- 3D geometry is decoded with the open-source `dwf-viewer` package (AGPL-3.0); fine for own/internal use.
+- `py/dwfx_structural.py` is the structural measurement + BOQ generator (also available as a Claude skill).

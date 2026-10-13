@@ -3,147 +3,167 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DWFx Structural</title>
+<title>DWFx Measure</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <script type="importmap">
-{ "imports": {
-  "three": "/vendor/three/build/three.module.js",
-  "three/addons/": "/vendor/three/examples/jsm/"
-} }
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
 </script>
 <style>
 :root {
-  --ink: #1d2730;
-  --ink-soft: #5b6670;
-  --line: #c9cfd4;
-  --paper: #ffffff;
-  --concrete: #e9ebec;
-  --brand: #0a5082;
-  --brand-ink: #ffffff;
-  --pick: #f2a900;
-  --danger: #b3261e;
-  --r: 4px;
+  --ink: #1d2730; --ink-soft: #5b6670; --line: #c9cfd4; --line-soft: #e3e7ea;
+  --paper: #ffffff; --concrete: #e9ebec; --brand: #0a5082; --pick: #f2a900; --pick-soft: #fff4d6;
+  --danger: #b3261e; --r: 4px;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
-body {
-  font: 14px/1.45 "Barlow", "Segoe UI", system-ui, sans-serif;
-  color: var(--ink); background: var(--paper);
-  display: flex; flex-direction: column; min-width: 280px;
-}
-h1, h2 { font-family: "Barlow Semi Condensed", "Barlow", sans-serif; font-weight: 600; margin: 0; }
-h1 { font-size: 17px; letter-spacing: .01em; }
-h2 { font-size: 15px; }
-button, select, input { font: inherit; color: inherit; }
-button {
-  border: 1px solid var(--line); background: var(--paper); border-radius: var(--r);
-  padding: 6px 10px; cursor: pointer; min-height: 32px;
-}
+body { font: 13px/1.45 "Barlow", "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--paper);
+  display: flex; flex-direction: column; min-width: 280px; }
+h1 { font: 600 17px "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { border: 1px solid var(--line); background: var(--paper); border-radius: var(--r); padding: 5px 10px; cursor: pointer; min-height: 30px; }
 button:hover { border-color: var(--brand); }
-button.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 600; }
+button.primary { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 600; }
 button.primary:hover { background: #083f67; }
 button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
 button:disabled { opacity: .45; cursor: default; }
+input[type=text], input[type=password], select, textarea { border: 1px solid var(--line); border-radius: var(--r); padding: 5px 7px; background: #fff; }
 :focus-visible { outline: 2px solid var(--pick); outline-offset: 2px; }
 
-header {
-  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-  border-bottom: 3px solid var(--brand);
-}
-header .mark {
-  width: 26px; height: 26px; flex: none; background: var(--brand); color: #fff; border-radius: 3px;
-  display: grid; place-items: center; font: 600 15px "Barlow Semi Condensed", sans-serif;
-}
-header .file { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 3px solid var(--brand); }
+.mark { width: 24px; height: 24px; flex: none; background: var(--brand); border-radius: 3px; display: grid; place-items: center; }
+.file { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 #start { padding: 16px 12px; display: grid; gap: 12px; }
 #start p { margin: 0; color: var(--ink-soft); max-width: 60ch; }
-.drop {
-  border: 1.5px dashed var(--brand); border-radius: var(--r); padding: 22px 12px; text-align: center;
-  background: #f4f8fb; cursor: pointer;
-}
+.drop { border: 1.5px dashed var(--brand); border-radius: var(--r); padding: 22px 12px; text-align: center; background: #f4f8fb; cursor: pointer; }
 .drop.over { background: #e3eef6; }
 .drop strong { display: block; font-size: 15px; }
 .drop span { color: var(--ink-soft); font-size: 12px; }
 label.field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-soft); }
-label.field input { border: 1px solid var(--line); border-radius: var(--r); padding: 6px 8px; color: var(--ink); }
+#startStatus { color: var(--ink-soft); }
+#startStatus.err { color: var(--danger); }
 
 #app { display: none; flex: 1; min-height: 0; flex-direction: column; }
 body.loaded #app { display: flex; }
 body.loaded #start { display: none; }
 
-#viewer { position: relative; flex: 1 1 auto; min-height: 260px; background: var(--concrete); }
+#viewer { position: relative; height: 40vh; min-height: 200px; background: var(--concrete); resize: vertical; overflow: hidden; flex: none; }
 #viewer canvas { display: block; width: 100%; height: 100%; }
-#hint {
-  position: absolute; left: 8px; bottom: 8px; font-size: 11px; color: var(--ink-soft);
-  background: rgba(255,255,255,.85); padding: 2px 6px; border-radius: 3px; pointer-events: none;
-}
+.vtools { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
+.vtools button { min-height: 26px; padding: 2px 8px; font-size: 12px; background: rgba(255,255,255,.92); }
+.vtools button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+#pickInfo { position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px); font-size: 12px; background: rgba(255,255,255,.92);
+  padding: 3px 7px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* category strip: the legend is also the filter */
-#cats { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px 4px; }
-#cats button {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 3px 8px; font-size: 12px;
-}
-#cats i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-#cats button[aria-pressed="true"] i { outline: 1px solid #fff; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 8px; flex: none; }
+.tabs button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 7px 10px; font-weight: 600; color: var(--ink-soft); }
+.tabs button[aria-selected="true"] { color: var(--brand); border-bottom-color: var(--brand); }
+.tabs .count { font-weight: 500; color: var(--ink-soft); }
+.panel { flex: 1; min-height: 0; overflow: auto; padding: 8px 12px; display: none; }
+.panel.on { display: block; }
 
-.tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px; align-items: center; }
-.tools select { border: 1px solid var(--line); border-radius: var(--r); padding: 5px 6px; background: #fff; max-width: 100%; }
-.tools .grow { flex: 1; }
+/* element browser */
+.bar { display: flex; gap: 6px; margin-bottom: 6px; }
+.bar input { flex: 1; min-width: 0; }
+#tree { font-size: 13px; user-select: none; }
+.node { display: flex; align-items: center; gap: 4px; padding: 2px 2px; border-radius: 3px; cursor: default; }
+.node:hover { background: var(--line-soft); }
+.node.hl { background: var(--pick-soft); }
+.node .tw { width: 16px; text-align: center; color: var(--ink-soft); cursor: pointer; flex: none; font-size: 10px; }
+.node input { margin: 0; flex: none; }
+.node .lbl { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.node .n { color: var(--ink-soft); font-size: 12px; flex: none; }
+.node .sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.kids { margin-left: 14px; }
+.more { color: var(--ink-soft); font-size: 12px; padding: 2px 22px; }
 
-#sel { border-top: 1px solid var(--line); padding: 8px 12px 10px; font-size: 13px; max-height: 32vh; overflow: auto; }
-#sel .empty { color: var(--ink-soft); }
-#sel table { width: 100%; border-collapse: collapse; }
-#sel td { padding: 2px 4px 2px 0; vertical-align: top; }
-#sel td:first-child { color: var(--ink-soft); width: 72px; }
-#sel .count { font-weight: 600; margin-bottom: 4px; }
+/* measure */
+.sum { font-weight: 600; margin: 2px 0 8px; }
+table.q { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.q th { text-align: left; font-weight: 600; color: var(--ink-soft); border-bottom: 1px solid var(--line); padding: 4px 4px; }
+table.q td { border-bottom: 1px solid var(--line-soft); padding: 4px 4px; }
+table.q td.v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.row label { display: inline-flex; gap: 5px; align-items: center; }
+.hint { color: var(--ink-soft); font-size: 12px; }
+.empty { color: var(--ink-soft); padding: 10px 0; }
 
-#excel { border-top: 1px solid var(--line); padding: 8px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-#status { font-size: 12px; color: var(--ink-soft); padding: 0 12px 8px; min-height: 18px; }
+/* AI */
+#aiAsk { width: 100%; min-height: 64px; resize: vertical; }
+.card { border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: var(--r); padding: 8px 10px; margin: 8px 0; }
+.card h3 { margin: 0 0 4px; font: 600 14px "Barlow Semi Condensed", sans-serif; }
+.card .note { color: var(--ink-soft); font-size: 12px; margin: 4px 0; }
+.aimsg { margin: 8px 0; }
+
+#status { font-size: 12px; color: var(--ink-soft); padding: 4px 12px 6px; border-top: 1px solid var(--line); min-height: 24px; flex: none; }
 #status.err { color: var(--danger); }
 </style>
 </head>
 <body>
 <header>
-  <div class="mark" aria-hidden="true">S</div>
+  <div class="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1.5 14 4.8v6.4L8 14.5 2 11.2V4.8z" fill="none" stroke="#fff" stroke-width="1.4"/><path d="M2 4.8 8 8l6-3.2M8 8v6.5" fill="none" stroke="#f2a900" stroke-width="1.4"/></svg></div>
   <div style="min-width:0">
-    <h1>DWFx Structural</h1>
-    <div class="file" id="fileName">Model, measurement and BOQ in one place</div>
+    <h1>DWFx Measure</h1>
+    <div class="file" id="fileName">3D model and take-off in Excel</div>
   </div>
 </header>
 
 <section id="start">
-  <p>Open a structural DWFx exported from Revit. The 3D model loads here, and the Measurement and BOQ sheets are created in this workbook, linked to the model.</p>
+  <p>Open a DWFx exported from Revit: architecture, structure, interiors or MEP. You can browse the elements, see them in 3D and send measurements to this workbook.</p>
   <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a DWFx file">
     <strong>Choose a DWFx file</strong>
     <span>or drop it here</span>
   </div>
   <input type="file" id="file" accept=".dwfx" hidden>
-  <label class="field">Access code (if your server has one)
+  <label class="field">Access code
     <input id="token" type="password" autocomplete="off">
   </label>
-  <div id="startStatus" class="status"></div>
+  <div id="startStatus" role="status"></div>
 </section>
 
-<section id="app" aria-label="Model viewer">
-  <div id="viewer"><div id="hint">Click to select, Ctrl+click to add, drag to orbit</div></div>
-  <div id="cats" aria-label="Element types"></div>
-  <div class="tools">
-    <button id="isolate" title="Show only the selected elements">Isolate</button>
-    <button id="showAll" title="Show every element">Show all</button>
-    <button id="clear" title="Clear the selection">Clear</button>
-    <button id="fit" title="Zoom to the visible elements">Fit</button>
-    <select id="level" aria-label="Level"></select>
+<section id="app" aria-label="Model">
+  <div id="viewer">
+    <div class="vtools">
+      <button id="isolate" title="Show only the ticked elements">Isolate</button>
+      <button id="showAll" title="Show every element">Show all</button>
+      <button id="fit" title="Zoom to the visible elements">Fit</button>
+    </div>
+    <div id="pickInfo" hidden></div>
   </div>
-  <div id="sel"><div class="empty">Nothing selected. Click an element, or select rows in the Measurement or BOQ sheet.</div></div>
-  <div id="excel">
-    <button class="primary" id="makeSheets">Create sheets in Excel</button>
-    <button id="download">Download Excel file</button>
-    <button id="another">Open another model</button>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="elements">Elements</button>
+    <button role="tab" aria-selected="false" data-tab="measure">Measure <span class="count" id="selCount"></span></button>
+    <button role="tab" aria-selected="false" data-tab="ai">AI</button>
   </div>
+
+  <div class="panel on" id="tab-elements" role="tabpanel">
+    <div class="bar">
+      <input type="text" id="search" placeholder="Search type, family or Revit ID" aria-label="Search elements">
+      <select id="level" aria-label="Level"></select>
+    </div>
+    <div class="bar">
+      <button id="tickVisible" title="Tick everything that matches the search and level">Tick matches</button>
+      <button id="clear">Clear ticks</button>
+      <button id="collapse">Collapse</button>
+    </div>
+    <div id="tree" role="tree"></div>
+  </div>
+
+  <div class="panel" id="tab-measure" role="tabpanel">
+    <div id="measureBody"></div>
+  </div>
+
+  <div class="panel" id="tab-ai" role="tabpanel">
+    <label class="field">Describe what to measure
+      <textarea id="aiAsk" placeholder="e.g. Measure all internal walls on the first floor, area and length, grouped by wall type"></textarea>
+    </label>
+    <div class="row"><button class="primary" id="aiGo">Ask AI</button><span class="hint">The AI picks the elements and quantities. The add-in calculates the numbers from the model.</span></div>
+    <div id="aiOut"></div>
+  </div>
+
   <div id="status" role="status"></div>
 </section>
 
