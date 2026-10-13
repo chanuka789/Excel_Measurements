@@ -4,3 +4,5 @@ node_modules/
 *.xlsx
 test_*.png
 .data/
+__pycache__/
+*.pyc
