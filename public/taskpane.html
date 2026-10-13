@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DWFx Structural</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "/vendor/three/build/three.module.js",
+  "three/addons/": "/vendor/three/examples/jsm/"
+} }
+</script>
+<style>
+:root {
+  --ink: #1d2730;
+  --ink-soft: #5b6670;
+  --line: #c9cfd4;
+  --paper: #ffffff;
+  --concrete: #e9ebec;
+  --brand: #0a5082;
+  --brand-ink: #ffffff;
+  --pick: #f2a900;
+  --danger: #b3261e;
+  --r: 4px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font: 14px/1.45 "Barlow", "Segoe UI", system-ui, sans-serif;
+  color: var(--ink); background: var(--paper);
+  display: flex; flex-direction: column; min-width: 280px;
+}
+h1, h2 { font-family: "Barlow Semi Condensed", "Barlow", sans-serif; font-weight: 600; margin: 0; }
+h1 { font-size: 17px; letter-spacing: .01em; }
+h2 { font-size: 15px; }
+button, select, input { font: inherit; color: inherit; }
+button {
+  border: 1px solid var(--line); background: var(--paper); border-radius: var(--r);
+  padding: 6px 10px; cursor: pointer; min-height: 32px;
+}
+button:hover { border-color: var(--brand); }
+button.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 600; }
+button.primary:hover { background: #083f67; }
+button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+button:disabled { opacity: .45; cursor: default; }
+:focus-visible { outline: 2px solid var(--pick); outline-offset: 2px; }
+
+header {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-bottom: 3px solid var(--brand);
+}
+header .mark {
+  width: 26px; height: 26px; flex: none; background: var(--brand); color: #fff; border-radius: 3px;
+  display: grid; place-items: center; font: 600 15px "Barlow Semi Condensed", sans-serif;
+}
+header .file { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+#start { padding: 16px 12px; display: grid; gap: 12px; }
+#start p { margin: 0; color: var(--ink-soft); max-width: 60ch; }
+.drop {
+  border: 1.5px dashed var(--brand); border-radius: var(--r); padding: 22px 12px; text-align: center;
+  background: #f4f8fb; cursor: pointer;
+}
+.drop.over { background: #e3eef6; }
+.drop strong { display: block; font-size: 15px; }
+.drop span { color: var(--ink-soft); font-size: 12px; }
+label.field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-soft); }
+label.field input { border: 1px solid var(--line); border-radius: var(--r); padding: 6px 8px; color: var(--ink); }
+
+#app { display: none; flex: 1; min-height: 0; flex-direction: column; }
+body.loaded #app { display: flex; }
+body.loaded #start { display: none; }
+
+#viewer { position: relative; flex: 1 1 auto; min-height: 260px; background: var(--concrete); }
+#viewer canvas { display: block; width: 100%; height: 100%; }
+#hint {
+  position: absolute; left: 8px; bottom: 8px; font-size: 11px; color: var(--ink-soft);
+  background: rgba(255,255,255,.85); padding: 2px 6px; border-radius: 3px; pointer-events: none;
+}
+
+/* category strip: the legend is also the filter */
+#cats { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px 4px; }
+#cats button {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 3px 8px; font-size: 12px;
+}
+#cats i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+#cats button[aria-pressed="true"] i { outline: 1px solid #fff; }
+
+.tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px; align-items: center; }
+.tools select { border: 1px solid var(--line); border-radius: var(--r); padding: 5px 6px; background: #fff; max-width: 100%; }
+.tools .grow { flex: 1; }
+
+#sel { border-top: 1px solid var(--line); padding: 8px 12px 10px; font-size: 13px; max-height: 32vh; overflow: auto; }
+#sel .empty { color: var(--ink-soft); }
+#sel table { width: 100%; border-collapse: collapse; }
+#sel td { padding: 2px 4px 2px 0; vertical-align: top; }
+#sel td:first-child { color: var(--ink-soft); width: 72px; }
+#sel .count { font-weight: 600; margin-bottom: 4px; }
+
+#excel { border-top: 1px solid var(--line); padding: 8px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+#status { font-size: 12px; color: var(--ink-soft); padding: 0 12px 8px; min-height: 18px; }
+#status.err { color: var(--danger); }
+</style>
+</head>
+<body>
+<header>
+  <div class="mark" aria-hidden="true">S</div>
+  <div style="min-width:0">
+    <h1>DWFx Structural</h1>
+    <div class="file" id="fileName">Model, measurement and BOQ in one place</div>
+  </div>
+</header>
+
+<section id="start">
+  <p>Open a structural DWFx exported from Revit. The 3D model loads here, and the Measurement and BOQ sheets are created in this workbook, linked to the model.</p>
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a DWFx file">
+    <strong>Choose a DWFx file</strong>
+    <span>or drop it here</span>
+  </div>
+  <input type="file" id="file" accept=".dwfx" hidden>
+  <label class="field">Access code (if your server has one)
+    <input id="token" type="password" autocomplete="off">
+  </label>
+  <div id="startStatus" class="status"></div>
+</section>
+
+<section id="app" aria-label="Model viewer">
+  <div id="viewer"><div id="hint">Click to select, Ctrl+click to add, drag to orbit</div></div>
+  <div id="cats" aria-label="Element types"></div>
+  <div class="tools">
+    <button id="isolate" title="Show only the selected elements">Isolate</button>
+    <button id="showAll" title="Show every element">Show all</button>
+    <button id="clear" title="Clear the selection">Clear</button>
+    <button id="fit" title="Zoom to the visible elements">Fit</button>
+    <select id="level" aria-label="Level"></select>
+  </div>
+  <div id="sel"><div class="empty">Nothing selected. Click an element, or select rows in the Measurement or BOQ sheet.</div></div>
+  <div id="excel">
+    <button class="primary" id="makeSheets">Create sheets in Excel</button>
+    <button id="download">Download Excel file</button>
+    <button id="another">Open another model</button>
+  </div>
+  <div id="status" role="status"></div>
+</section>
+
+<script type="module" src="taskpane.js"></script>
+</body>
+</html>
