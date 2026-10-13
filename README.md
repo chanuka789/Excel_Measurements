@@ -22,7 +22,12 @@ npm start            # http://localhost:3000
 ```
 Excel needs HTTPS for add-ins, so for Excel use Railway (below) or a local HTTPS dev certificate.
 
-## Deploy on Railway
+## Live deployment
+- App: https://dwfx-addin-production.up.railway.app
+- Railway project: `excel-measurements`, service `dwfx-addin` (deploys on every push to `main`).
+- `manifest.xml` already points to the live address.
+
+## Deploy on Railway (from scratch)
 1. Put this folder in a private GitHub repository.
 2. Railway > New Project > Deploy from GitHub repo. Railway uses the `Dockerfile` (Node + Python).
 3. Settings > Networking > Generate domain. You get `https://<name>.up.railway.app`.

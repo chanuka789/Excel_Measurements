@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Replace every https://YOUR-APP.up.railway.app with your Railway address before sideloading. -->
+<!-- Live address: https://dwfx-addin-production.up.railway.app -->
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
            xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
@@ -11,11 +11,11 @@
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="DWFx Structural"/>
   <Description DefaultValue="View a DWFx structural model in 3D and link it to the measurement sheet and BOQ."/>
-  <IconUrl DefaultValue="https://YOUR-APP.up.railway.app/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://YOUR-APP.up.railway.app/assets/icon-64.png"/>
-  <SupportUrl DefaultValue="https://YOUR-APP.up.railway.app/"/>
+  <IconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-64.png"/>
+  <SupportUrl DefaultValue="https://dwfx-addin-production.up.railway.app/"/>
   <AppDomains>
-    <AppDomain>https://YOUR-APP.up.railway.app</AppDomain>
+    <AppDomain>https://dwfx-addin-production.up.railway.app</AppDomain>
   </AppDomains>
   <Hosts>
     <Host Name="Workbook"/>
@@ -26,7 +26,7 @@
     </Sets>
   </Requirements>
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://YOUR-APP.up.railway.app/taskpane.html"/>
+    <SourceLocation DefaultValue="https://dwfx-addin-production.up.railway.app/taskpane.html"/>
   </DefaultSettings>
   <Permissions>ReadWriteDocument</Permissions>
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
@@ -66,12 +66,12 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon16" DefaultValue="https://YOUR-APP.up.railway.app/assets/icon-16.png"/>
-        <bt:Image id="Icon32" DefaultValue="https://YOUR-APP.up.railway.app/assets/icon-32.png"/>
-        <bt:Image id="Icon80" DefaultValue="https://YOUR-APP.up.railway.app/assets/icon-80.png"/>
+        <bt:Image id="Icon16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-16.png"/>
+        <bt:Image id="Icon32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-32.png"/>
+        <bt:Image id="Icon80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="PaneUrl" DefaultValue="https://YOUR-APP.up.railway.app/taskpane.html"/>
+        <bt:Url id="PaneUrl" DefaultValue="https://dwfx-addin-production.up.railway.app/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GroupLabel" DefaultValue="Structural"/>
