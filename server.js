@@ -1,126 +1,64 @@
-// DWFx Measure add-in server: serves the Excel task pane, reads DWFx models, and relays AI requests.
+// DWFx Measure server: serves the Excel add-in, the project API, and (optionally) runs the job worker.
 import express from 'express';
 import multer from 'multer';
 import compression from 'compression';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { pool, migrate, one } from './src/db.js';
+import { api } from './src/api.js';
+import { syncUsers } from './src/auth.js';
+import { readModel } from './src/processing.js';
+import { registerAI, AI } from './src/ai.js';
+import { storageKind } from './src/storage.js';
+import { startWorker } from './worker.js';
 
-const run = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const PY = process.env.PYTHON || 'python3';
-const TOKEN = process.env.APP_TOKEN || '';            // shared access code
-// AI provider: any OpenAI-compatible chat API (DeepSeek, OpenRouter for Meta Muse Spark, Meta Model API, ...)
-const AI = {
-  base: (process.env.AI_BASE_URL || 'https://api.deepseek.com').replace(/\/+$/, ''),
-  key: process.env.AI_API_KEY || '',
-  model: process.env.AI_MODEL || 'deepseek-flash',
-};
-
-const app = express();
-const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 500 * 1024 * 1024 } });
+export const app = express();
+app.disable('x-powered-by');
 app.use(compression());
-app.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', req.path.startsWith('/vendor/') ? 'public, max-age=86400' : 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
 app.use('/vendor/three', express.static(path.join(here, 'node_modules/three')));
 app.use(express.static(path.join(here, 'public'), { index: 'taskpane.html' }));
-app.get('/health', (_req, res) => res.json({ ok: true, ai: Boolean(AI.key), model: AI.key ? AI.model : null }));
+app.get('/health', async (_req, res) => {
+  let db = false; try { db = Boolean(await one('SELECT 1 AS ok')); } catch { /* db down */ }
+  res.status(db ? 200 : 503).json({ ok: db, db, storage: storageKind.split(':')[0], ai: Boolean(AI.key), model: AI.key ? AI.model : null });
+});
 
-const auth = (req, res, next) =>
-  (TOKEN && req.get('x-app-token') !== TOKEN) ? res.status(401).json({ error: 'Wrong access code.' }) : next();
-
-// ---- read a model: elements + quantities + 3D geometry
-app.post('/api/model', auth, upload.single('model'), async (req, res) => {
+// Quick open: read a DWFx without saving it to a project (signed-in users only).
+const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 500 * 1024 * 1024 } });
+registerAI(api);
+api.post('/model', upload.single('model'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No DWFx file received.' });
   const job = path.join(os.tmpdir(), 'dwfx-' + crypto.randomUUID());
   await fs.mkdir(job);
-  const model = path.join(job, 'model.dwfx');
   try {
-    await fs.rename(req.file.path, model);
-    const opts = { cwd: here, maxBuffer: 256 * 1024 * 1024, timeout: 15 * 60 * 1000 };
-    await run(PY, ['-I', 'py/elements.py', model, path.join(job, 'elements.json')], opts);
-    let geometry = { meshes: [], labels: {} }, geoNote = '';
-    try {
-      await run('node', ['decode.mjs', model, path.join(job, 'meshes.json')], opts);
-      await run(PY, ['-I', 'py/geometry.py', model, path.join(job, 'meshes.json'), path.join(job, 'geometry.json')], opts);
-      geometry = JSON.parse(await fs.readFile(path.join(job, 'geometry.json'), 'utf8'));
-    } catch (e) { geoNote = '3D geometry could not be decoded for this file; measurements still work.'; }
-    const elements = JSON.parse(await fs.readFile(path.join(job, 'elements.json'), 'utf8'));
-    res.json({ fileName: req.file.originalname, ...elements, geometry, geoNote });
+    const file = path.join(job, 'model.dwfx');
+    await fs.rename(req.file.path, file);
+    const r = await readModel(file, job);
+    res.json({ fileName: req.file.originalname, ...r.elements, geometry: r.geometry, geoNote: r.geoNote });
   } catch (err) {
     res.status(500).json({ error: String(err.stderr || err.message || err).trim().split('\n').pop().slice(0, 500) });
-  } finally {
-    fs.rm(job, { recursive: true, force: true }).catch(() => {});   // models are never stored
-  }
+  } finally { fs.rm(job, { recursive: true, force: true }).catch(() => {}); }
 });
+app.use('/api', api);
 
-// ---- AI assistant: turns a plain-English request into a measurement plan (the add-in computes the numbers)
-const SYSTEM = `You are a senior quantity surveyor working inside an Excel add-in that measures Revit DWFx models.
-You get a SUMMARY of the model and a REQUEST. Think like a QS (NRM2 / POMI practice): decide which elements to
-measure and HOW to calculate each quantity, then return a plan. The add-in reads the real element values, evaluates
-your formulas for every element, and writes them to Excel as live formulas. You never invent numbers.
+export async function start(port = process.env.PORT || 3000) {
+  if (!pool) throw new Error('DATABASE_URL is not set. Add a Postgres database and set DATABASE_URL.');
+  await migrate();
+  const s = await syncUsers();
+  console.log(`Users: ${s.active} active, ${s.disabled} disabled${s.problems.length ? `, ${s.problems.length} APP_USERS problem(s)` : ''}`);
+  if ((process.env.WORKER_IN_API || '1') === '1') startWorker();     // set WORKER_IN_API=0 when a separate worker service runs
+  return new Promise(r => { const srv = app.listen(port, () => { console.log(`DWFx Measure server on port ${port}, storage ${storageKind.split(':')[0]}, AI ${AI.key ? AI.model : 'off'}`); r(srv); }); });
+}
 
-SUMMARY gives, per type: category, family, type, count, levels, "type_name_sizes_m" (sizes parsed from the type
-name in metres, e.g. "B-200X750" -> [0.2, 0.75], usually width then depth/height), and "quantities"
-(property name -> unit and a sample value). All units are metres, m2, m3.
-
-Return ONLY this JSON:
-{"message": "short plain-English summary of what you measured and any key assumption",
- "groups": [{
-   "name": "take-off group name, e.g. 'Formwork to RC beams - First floor'",
-   "filter": {"category": [], "family": [], "type": [], "type_contains": [], "type_excludes": [], "level": [], "use_ticked": false},
-   "group_by": "type" | "level" | "",
-   "inputs": [ {"key": "L", "label": "Cut length", "unit": "m", "source": "property", "name": "Cut Length"},
-               {"key": "b", "label": "Width", "unit": "m", "source": "type_dim", "index": 0},
-               {"key": "n", "label": "Count", "unit": "nr", "source": "count", "sum": true} ],
-   "constants": [ {"key": "slab", "label": "Slab thickness deducted", "value": 0.2, "unit": "m"} ],
-   "formulas": [ {"key": "FW", "label": "Formwork soffit + sides", "unit": "m2", "expr": "({b} + 2*MAX({h} - {slab}, 0)) * {L}"} ],
-   "note": "method and assumptions the QS must check"
- }]}
-
-Rules:
-- input "source": "property" (name must be an exact quantity name from the summary), "type_dim" (index into
-  type_name_sizes_m), "name_dim", or "count". Set "sum": true only for inputs that make sense to total (lengths,
-  areas, volumes, counts), never for widths/depths/heights.
-- "expr" uses {key} of inputs, constants or earlier formulas, numbers, + - * / ( ), and MAX, MIN, ABS, ROUND,
-  SQRT, PI, IF(cond,a,b). No other text. Formula results are always totalled.
-- Put every assumption (slab thickness, lap allowance, wastage %, number of faces, deductions) in "constants"
-  so the QS can change it in Excel. Never hide assumptions inside numbers in a formula.
-- Typical methods: beam formwork = soffit width + 2 sides x (depth - slab) x length (use Cut Length when present);
-  ground beams usually no soffit; column formwork = perimeter x height (less beam/slab depth if asked);
-  wall formwork = 2 faces x length x height; slab soffit = area, slab edges = perimeter x thickness;
-  blinding = plan area x thickness; waterproofing = surfaces in contact with ground; finishes = face areas.
-- Use "use_ticked": true when the user says "selected" / "ticked" elements.
-- Use only category/family/type/level/quantity names that exist in the summary. If the needed data is missing,
-  say so in "message" and suggest the closest method. If the request is unclear, return no groups and ask.`;
-
-app.post('/api/ai', auth, express.json({ limit: '4mb' }), async (req, res) => {
-  if (!AI.key) return res.status(503).json({ error: 'AI is not set up on the server. Add AI_API_KEY in Railway.' });
-  const { request, summary } = req.body || {};
-  if (!request || !summary) return res.status(400).json({ error: 'Missing request or model summary.' });
-  try {
-    const r = await fetch(AI.base + '/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AI.key },
-      body: JSON.stringify({
-        model: AI.model, temperature: 0.1, response_format: { type: 'json_object' },
-        messages: [{ role: 'system', content: SYSTEM },
-                   { role: 'user', content: 'SUMMARY:\n' + JSON.stringify(summary) + '\n\nREQUEST:\n' + String(request).slice(0, 2000) }],
-      }),
-      signal: AbortSignal.timeout(120000),
-    });
-    const body = await r.json().catch(() => ({}));
-    if (!r.ok) return res.status(502).json({ error: 'AI provider error: ' + (body.error?.message || r.statusText) });
-    const text = body.choices?.[0]?.message?.content || '{}';
-    const plan = JSON.parse(text.replace(/^```(json)?|```$/g, '').trim());
-    res.json({ plan, model: AI.model });
-  } catch (err) {
-    res.status(502).json({ error: 'AI request failed: ' + err.message });
-  }
-});
-
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log('DWFx Measure server on port', port, AI.key ? `(AI: ${AI.model})` : '(AI off)'));
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  start().catch((e) => { console.error(e.message); process.exit(1); });
+}

@@ -3,3 +3,4 @@ node_modules/
 *.dwfx
 *.xlsx
 test_*.png
+.data/

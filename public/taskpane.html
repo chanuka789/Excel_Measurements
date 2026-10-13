@@ -4,178 +4,352 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DWFx Measure</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <script type="importmap">
 { "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
 </script>
 <style>
+/* Fluent 2 design tokens (light), with a dark set that follows the Office theme or the system. */
 :root {
-  --ink: #1d2730; --ink-soft: #5b6670; --line: #c9cfd4; --line-soft: #e3e7ea;
-  --paper: #ffffff; --concrete: #e9ebec; --brand: #0a5082; --pick: #f2a900; --pick-soft: #fff4d6;
-  --danger: #b3261e; --r: 4px;
+  --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+  --mono: "Cascadia Mono", Consolas, "Courier New", monospace;
+  --bg: #ffffff; --bg2: #fafafa; --bg3: #f5f5f5; --bg-hover: #f0f0f0; --bg-pressed: #e0e0e0;
+  --fg: #242424; --fg2: #424242; --fg3: #616161; --fg-disabled: #bdbdbd;
+  --stroke: #d1d1d1; --stroke2: #e0e0e0; --stroke-strong: #616161;
+  --brand: #0f6cbd; --brand-hover: #115ea3; --brand-pressed: #0f548c; --brand-bg: #ebf3fc; --brand-fg: #ffffff; --brand-text: #0f6cbd;
+  --ok: #107c10; --ok-bg: #f1faf1; --bad: #c50f1f; --bad-bg: #fdf3f4; --warn: #bc4b09; --warn-bg: #fff9f5; --info-bg: #ebf3fc;
+  --pick: #f2a900; --pick-bg: #fff4ce; --viewer: #e8eaec;
+  --r: 4px; --r-l: 8px; --shadow: 0 2px 4px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12); --shadow-l: 0 8px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #292929; --bg2: #1f1f1f; --bg3: #333333; --bg-hover: #3d3d3d; --bg-pressed: #1f1f1f;
+  --fg: #ffffff; --fg2: #d6d6d6; --fg3: #adadad; --fg-disabled: #5c5c5c;
+  --stroke: #666666; --stroke2: #525252; --stroke-strong: #adadad;
+  --brand: #2886de; --brand-hover: #479ef5; --brand-pressed: #0f6cbd; --brand-bg: #0e2a45; --brand-fg: #ffffff; --brand-text: #62abf5;
+  --ok: #54b054; --ok-bg: #052505; --bad: #dc626d; --bad-bg: #3b0509; --warn: #fa9e66; --warn-bg: #411200; --info-bg: #0e2a45;
+  --pick-bg: #463100; --viewer: #1b1d1f;
+  --shadow: 0 2px 4px rgba(0,0,0,.4), 0 0 2px rgba(0,0,0,.3); --shadow-l: 0 8px 16px rgba(0,0,0,.4), 0 0 2px rgba(0,0,0,.3);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #292929; --bg2: #1f1f1f; --bg3: #333333; --bg-hover: #3d3d3d; --bg-pressed: #1f1f1f;
+    --fg: #ffffff; --fg2: #d6d6d6; --fg3: #adadad; --fg-disabled: #5c5c5c;
+    --stroke: #666666; --stroke2: #525252; --stroke-strong: #adadad;
+    --brand: #2886de; --brand-hover: #479ef5; --brand-pressed: #0f6cbd; --brand-bg: #0e2a45; --brand-fg: #ffffff; --brand-text: #62abf5;
+    --ok: #54b054; --ok-bg: #052505; --bad: #dc626d; --bad-bg: #3b0509; --warn: #fa9e66; --warn-bg: #411200; --info-bg: #0e2a45;
+    --pick-bg: #463100; --viewer: #1b1d1f;
+    color-scheme: dark;
+  }
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
-body { font: 13px/1.45 "Barlow", "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--paper);
-  display: flex; flex-direction: column; min-width: 280px; }
-h1 { font: 600 17px "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0; }
+body { font: 14px/20px var(--font); color: var(--fg); background: var(--bg); display: flex; flex-direction: column; min-width: 300px; -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; }
+h2.h { font-size: 20px; line-height: 28px; }
+h3 { font-size: 14px; line-height: 20px; }
+p { margin: 0 0 8px; }
+.muted { color: var(--fg3); }
+.small { font-size: 12px; line-height: 16px; }
+.grow { flex: 1; min-width: 0; }
+code { font: 12px var(--mono); background: var(--bg3); padding: 1px 4px; border-radius: 3px; word-break: break-word; }
+.mono { font-family: var(--mono); font-size: 12px; }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; border-radius: var(--r); }
+
+/* controls */
 button, select, input, textarea { font: inherit; color: inherit; }
-button { border: 1px solid var(--line); background: var(--paper); border-radius: var(--r); padding: 5px 10px; cursor: pointer; min-height: 30px; }
-button:hover { border-color: var(--brand); }
-button.primary { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 600; }
-button.primary:hover { background: #083f67; }
-button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
-button:disabled { opacity: .45; cursor: default; }
-input[type=text], input[type=password], select, textarea { border: 1px solid var(--line); border-radius: var(--r); padding: 5px 7px; background: #fff; }
-:focus-visible { outline: 2px solid var(--pick); outline-offset: 2px; }
+.btn, .vtools button, .bar button, .row button, #props button, .card button:not(.link) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 5px 12px;
+  border: 1px solid var(--stroke); background: var(--bg); color: var(--fg); border-radius: var(--r); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn:hover, .vtools button:hover, .bar button:hover, .row button:hover, #props button:hover, .card button:not(.link):hover { background: var(--bg-hover); border-color: var(--stroke); }
+.btn:active { background: var(--bg-pressed); }
+.btn.primary, .row button.primary, .card button.primary { background: var(--brand); border-color: transparent; color: var(--brand-fg); }
+.btn.primary:hover, .row button.primary:hover, .card button.primary:hover { background: var(--brand-hover); }
+.btn.primary:active { background: var(--brand-pressed); }
+.btn.subtle { background: transparent; border-color: transparent; }
+.btn.subtle:hover { background: var(--bg-hover); }
+.btn.danger { background: var(--bad); border-color: transparent; color: #fff; }
+.btn.danger:hover { filter: brightness(.92); }
+.danger-text { color: var(--bad) !important; }
+.btn.small, .row button, .bar button, .vtools button, #props button, .card button:not(.link) { min-height: 28px; padding: 3px 10px; font-size: 13px; }
+button:disabled, .btn:disabled { opacity: 1; color: var(--fg-disabled) !important; background: var(--bg3) !important; border-color: var(--stroke2) !important; cursor: not-allowed; }
+.link { background: none; border: 0; padding: 0; color: var(--brand-text); cursor: pointer; font-weight: 400; }
+.link:hover { text-decoration: underline; }
+.input, input[type=text], input[type=search], input[type=password], input[type=email], select, textarea {
+  width: 100%; min-height: 32px; padding: 5px 10px; border: 1px solid var(--stroke); border-bottom-color: var(--stroke-strong);
+  border-radius: var(--r); background: var(--bg); color: var(--fg); }
+.input:focus, input:focus, select:focus, textarea:focus { outline: none; border-bottom: 2px solid var(--brand); padding-bottom: 4px; }
+.input.small { min-height: 28px; padding: 2px 6px; width: auto; }
+textarea { resize: vertical; min-height: 64px; line-height: 20px; }
+input[type=file] { font-size: 13px; max-width: 100%; }
+input[type=checkbox] { accent-color: var(--brand); width: 16px; height: 16px; }
+.field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--fg2); margin-bottom: 10px; }
+.field .input, .field input, .field select, .field textarea { font-weight: 400; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+@media (max-width: 360px) { .two { grid-template-columns: 1fr; } }
+.actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 6px; }
+.actions.left { justify-content: flex-start; }
 
-header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 3px solid var(--brand); }
-.mark { width: 24px; height: 24px; flex: none; background: var(--brand); border-radius: 3px; display: grid; place-items: center; }
-.file { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* sign-in */
+#signin { flex: 1; display: grid; place-items: center; padding: 24px 16px; background: var(--bg2); }
+.signin-card { width: 100%; max-width: 360px; background: var(--bg); border-radius: var(--r-l); box-shadow: var(--shadow-l); padding: 24px; }
+.signin-card .brandline { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.signin-card h1 { font-size: 20px; line-height: 28px; }
+.signin-card .btn.primary { width: 100%; min-height: 36px; margin-top: 4px; }
 
-#start { padding: 16px 12px; display: grid; gap: 12px; }
-#start p { margin: 0; color: var(--ink-soft); max-width: 60ch; }
-.drop { border: 1.5px dashed var(--brand); border-radius: var(--r); padding: 22px 12px; text-align: center; background: #f4f8fb; cursor: pointer; }
-.drop.over { background: #e3eef6; }
-.drop strong { display: block; font-size: 15px; }
-.drop span { color: var(--ink-soft); font-size: 12px; }
-label.field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-soft); }
-#startStatus { color: var(--ink-soft); }
-#startStatus.err { color: var(--danger); }
+/* header */
+.mark { width: 28px; height: 28px; flex: none; background: var(--brand); border-radius: 6px; display: grid; place-items: center; }
+header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--stroke2); flex: none; }
+header .ctx { min-width: 0; flex: 1; }
+header .ctx strong { display: block; font-size: 14px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header .ctx span { display: block; font-size: 12px; line-height: 16px; color: var(--fg3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--brand-bg); color: var(--brand-text); font-weight: 600; font-size: 12px; border: 0; cursor: pointer; flex: none; }
+.avatar:hover { filter: brightness(.95); }
+.menu { position: absolute; right: 8px; top: 46px; z-index: 30; min-width: 220px; background: var(--bg); border-radius: var(--r-l); box-shadow: var(--shadow-l); padding: 4px; }
+.menu .who { padding: 8px 10px; border-bottom: 1px solid var(--stroke2); margin-bottom: 4px; }
+.menu button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 7px 10px; border-radius: var(--r); cursor: pointer; }
+.menu button:hover { background: var(--bg-hover); }
 
-#app { display: none; flex: 1; min-height: 0; flex-direction: column; }
-body.loaded #app { display: flex; }
-body.loaded #start { display: none; }
+/* tabs */
+.tabs { display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--stroke2); flex: none; overflow-x: auto; scrollbar-width: none; background: var(--bg); }
+.tabs button { position: relative; border: 0; background: none; padding: 10px 10px 9px; font-weight: 400; color: var(--fg2); cursor: pointer; white-space: nowrap; }
+.tabs button:hover { color: var(--fg); }
+.tabs button[aria-selected="true"] { font-weight: 600; color: var(--fg); }
+.tabs button[aria-selected="true"]::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px; border-radius: 2px; background: var(--brand); }
+.tabs .count { color: var(--fg3); font-weight: 400; }
 
-#viewer { position: relative; height: 40vh; min-height: 200px; background: var(--concrete); resize: vertical; overflow: hidden; flex: none; }
-#viewer canvas { display: block; width: 100%; height: 100%; }
-.vtools { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
-.vtools button { min-height: 26px; padding: 2px 8px; font-size: 12px; background: rgba(255,255,255,.92); }
-.vtools button[aria-pressed="true"] { background: var(--ink); color: #fff; }
-#pickInfo { position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px); font-size: 12px; background: rgba(255,255,255,.92);
-  padding: 3px 7px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 8px; flex: none; }
-.tabs button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 7px 10px; font-weight: 600; color: var(--ink-soft); }
-.tabs button[aria-selected="true"] { color: var(--brand); border-bottom-color: var(--brand); }
-.tabs .count { font-weight: 500; color: var(--ink-soft); }
-.panel { flex: 1; min-height: 0; overflow: auto; padding: 8px 12px; display: none; }
+#shell { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.panel { flex: 1; min-height: 0; overflow: auto; padding: 12px; display: none; }
 .panel.on { display: block; }
 
+/* viewer */
+#viewer { position: relative; height: 40vh; min-height: 180px; background: var(--viewer); resize: vertical; overflow: hidden; flex: none; border-bottom: 1px solid var(--stroke2); }
+#viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.vtools { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.vtools button { background: var(--bg); box-shadow: var(--shadow); border-color: transparent; }
+.vtools button[aria-pressed="true"] { background: var(--brand); color: var(--brand-fg); }
+#pickInfo { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); font-size: 12px; background: var(--bg); box-shadow: var(--shadow);
+  padding: 3px 8px; border-radius: var(--r); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vload { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--viewer) 80%, transparent); font-weight: 600; }
+
+/* lists, cards, tables */
+.toolbar, .phead { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.phead { align-items: flex-start; }
+.crumbs { font-size: 13px; color: var(--fg3); margin-bottom: 6px; display: flex; gap: 6px; align-items: center; min-width: 0; }
+.crumbs span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card { background: var(--bg); border: 1px solid var(--stroke2); border-radius: var(--r-l); padding: 12px; margin: 0 0 12px; box-shadow: none; }
+.card h3 { margin-bottom: 8px; }
+.form { background: var(--bg2); }
+.plist { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.prow { width: 100%; text-align: left; display: grid; gap: 2px; padding: 12px; border: 1px solid var(--stroke2); border-radius: var(--r-l); background: var(--bg); cursor: pointer; box-shadow: var(--shadow); }
+.prow:hover { background: var(--bg-hover); }
+.pname { font-weight: 600; }
+.pmeta { font-size: 12px; color: var(--fg3); }
+.badge { display: inline-block; font-size: 11px; line-height: 16px; padding: 0 6px; border-radius: 10px; background: var(--bg3); color: var(--fg2); font-weight: 600; }
+.pill { display: inline-block; font-size: 11px; line-height: 18px; padding: 0 8px; border-radius: 10px; font-weight: 600; vertical-align: 1px; }
+.pill.ok { background: var(--ok-bg); color: var(--ok); } .pill.bad { background: var(--bad-bg); color: var(--bad); }
+.pill.info { background: var(--info-bg); color: var(--brand-text); } .pill.neutral { background: var(--bg3); color: var(--fg2); }
+.pill.brand { background: var(--brand); color: var(--brand-fg); }
+.empty-state { padding: 16px; border: 1px dashed var(--stroke); border-radius: var(--r-l); color: var(--fg2); background: var(--bg2); margin-bottom: 12px; }
+.empty-state p:last-child { margin: 0; }
+.loading { color: var(--fg3); padding: 12px 0; }
+.msg { padding: 8px 10px; border-radius: var(--r); margin: 8px 0; }
+.msg.bad { background: var(--bad-bg); color: var(--bad); } .msg.ok { background: var(--ok-bg); color: var(--ok); }
+.sec { border-top: 1px solid var(--stroke2); }
+.sec-h { display: flex; align-items: center; gap: 8px; }
+.sec-t { flex: 1; display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 12px 0; font-weight: 600; font-size: 14px; cursor: pointer; text-align: left; color: var(--fg); }
+.sec-t .chev { width: 14px; color: var(--fg3); }
+.sec-t .count { color: var(--fg3); font-weight: 400; }
+.sec-b { padding: 0 0 14px; }
+.model { margin-bottom: 12px; }
+.model-h { margin-bottom: 6px; }
+.vlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.vlist > li, .plist > li { min-width: 0; }
+.vrow { min-width: 0; overflow: hidden; border: 1px solid var(--stroke2); border-radius: var(--r-l); padding: 8px 10px; background: var(--bg); }
+.vrow.current { border-color: var(--brand); box-shadow: inset 3px 0 0 var(--brand); }
+.vmain { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.vnum { font-weight: 600; }
+.vfile { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vact { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.progress { height: 4px; border-radius: 2px; background: var(--bg3); overflow: hidden; margin: 8px 0; }
+.progress > div { height: 100%; width: 0; background: var(--brand); transition: width .2s; }
+.progress.indet > div { width: 30%; animation: slide 1.2s ease-in-out infinite; }
+@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+@media (prefers-reduced-motion: reduce) { .progress.indet > div { animation: none; width: 100%; opacity: .5; } }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th { text-align: left; font-weight: 600; color: var(--fg2); border-bottom: 1px solid var(--stroke); padding: 6px 6px; }
+.tbl td { border-bottom: 1px solid var(--stroke2); padding: 6px 6px; vertical-align: top; }
+.tbl .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tbl .right { text-align: right; white-space: nowrap; }
+.tbl .wrap { word-break: break-word; }
+.tscroll { overflow-x: auto; }
+.inline-form { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 6px; }
+.inline-form .input { flex: 1; min-width: 140px; width: auto; }
+.inline-form select.input { flex: 0 0 auto; }
+.act { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 13px; }
+.row-actions { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--stroke2); }
+.danger-zone strong { color: var(--bad); }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0 0 8px; font-size: 13px; }
+.kv dt { color: var(--fg3); } .kv dd { margin: 0; }
+.quick { margin-top: 16px; font-size: 13px; }
+.quick summary { cursor: pointer; color: var(--brand-text); margin-bottom: 6px; }
+
 /* element browser */
-.bar { display: flex; gap: 6px; margin-bottom: 6px; }
+.bar { display: flex; gap: 6px; margin-bottom: 8px; }
 .bar input { flex: 1; min-width: 0; }
+.bar select { width: auto; max-width: 45%; }
 #tree { font-size: 13px; user-select: none; }
-.node { display: flex; align-items: center; gap: 4px; padding: 2px 2px; border-radius: 3px; cursor: default; }
-.node:hover { background: var(--line-soft); }
-.node.hl { background: var(--pick-soft); }
-.node .tw { width: 16px; text-align: center; color: var(--ink-soft); cursor: pointer; flex: none; font-size: 10px; }
+.node { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: var(--r); min-height: 28px; }
+.node:hover { background: var(--bg-hover); }
+.node.hl { background: var(--pick-bg); }
+.node .tw { width: 16px; text-align: center; color: var(--fg3); cursor: pointer; flex: none; font-size: 10px; }
 .node input { margin: 0; flex: none; }
 .node .lbl { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-.node .n { color: var(--ink-soft); font-size: 12px; flex: none; }
-.node .sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
-.kids { margin-left: 14px; }
-.more { color: var(--ink-soft); font-size: 12px; padding: 2px 22px; }
+.node .n { color: var(--fg3); font-size: 12px; flex: none; }
+.node .sw { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.kids { margin-left: 16px; }
+.more { color: var(--fg3); font-size: 12px; padding: 2px 26px; }
 
-/* measure */
+/* measure + AI (shared classes from the model screens) */
 .sum { font-weight: 600; margin: 2px 0 8px; }
-table.q { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.q th { text-align: left; font-weight: 600; color: var(--ink-soft); border-bottom: 1px solid var(--line); padding: 4px 4px; }
-table.q td { border-bottom: 1px solid var(--line-soft); padding: 4px 4px; }
+table.q { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px; }
+table.q th { text-align: left; font-weight: 600; color: var(--fg2); border-bottom: 1px solid var(--stroke); padding: 5px 4px; }
+table.q td { border-bottom: 1px solid var(--stroke2); padding: 5px 4px; }
 table.q td.v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
-.row label { display: inline-flex; gap: 5px; align-items: center; }
-.hint { color: var(--ink-soft); font-size: 12px; }
-.empty { color: var(--ink-soft); padding: 10px 0; }
-
-/* AI */
-#aiAsk { width: 100%; min-height: 64px; resize: vertical; }
-.card { border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: var(--r); padding: 8px 10px; margin: 8px 0; }
-.card h3 { margin: 0 0 4px; font: 600 14px "Barlow Semi Condensed", sans-serif; }
-.card .note { color: var(--ink-soft); font-size: 12px; margin: 4px 0; }
+.row label { display: inline-flex; gap: 6px; align-items: center; }
+.row input[type=text] { width: auto; }
+.row label input[type=text] { width: 80px; }
+.row select { width: auto; }
+.hint { color: var(--fg3); font-size: 12px; line-height: 16px; }
+.empty { color: var(--fg2); padding: 16px; border: 1px dashed var(--stroke); border-radius: var(--r-l); background: var(--bg2); }
+#tab-measure h4, #props h4 { margin: 14px 0 6px; font-size: 13px; }
+#aiAsk { min-height: 72px; }
+.card .note { color: var(--fg3); font-size: 12px; margin: 4px 0; }
 .aimsg { margin: 8px 0; }
+.ai-card { border-left: 3px solid var(--brand); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.chips button { border: 1px solid var(--stroke); background: var(--bg); border-radius: 14px; padding: 3px 10px; font-size: 12px; cursor: pointer; color: var(--fg2); }
+.chips button:hover { background: var(--bg-hover); }
 
-#app { position: relative; }
-#props { position: absolute; inset: 0 0 0 auto; width: min(100%, 420px); background: #fff; border-left: 3px solid var(--brand);
-  box-shadow: -4px 0 12px rgba(29,39,48,.15); overflow: auto; padding: 10px 12px; z-index: 5; }
+/* properties side sheet */
+#props { position: absolute; inset: 0 0 0 auto; width: min(100%, 420px); background: var(--bg); box-shadow: var(--shadow-l); overflow: auto; padding: 12px; z-index: 20; }
 #props table.q { table-layout: fixed; }
 #props table.q td { white-space: normal !important; word-break: break-word; vertical-align: top; }
-#props table.q td:first-child { width: 48%; color: var(--ink-soft); }
+#props table.q td:first-child { width: 48%; color: var(--fg3); }
 #props .ph { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
-#props h4, #tab-measure h4 { margin: 12px 0 4px; font: 600 13px "Barlow Semi Condensed", sans-serif; }
-code { font: 12px Consolas, "Courier New", monospace; background: #f1f3f5; padding: 1px 4px; border-radius: 3px; }
-#status { font-size: 12px; color: var(--ink-soft); padding: 4px 12px 6px; border-top: 1px solid var(--line); min-height: 24px; flex: none; }
-#status.err { color: var(--danger); }
+
+/* dialog */
+#dialog { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.4); display: grid; place-items: center; padding: 16px; }
+.dlg { width: 100%; max-width: 400px; background: var(--bg); border-radius: var(--r-l); box-shadow: var(--shadow-l); padding: 20px; }
+.dlg h2 { font-size: 18px; line-height: 24px; margin-bottom: 8px; }
+.dlg-body { color: var(--fg2); margin-bottom: 12px; }
+.dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+/* status bar */
+#status { font-size: 12px; line-height: 16px; color: var(--fg2); padding: 6px 12px; border-top: 1px solid var(--stroke2); min-height: 29px; flex: none; background: var(--bg2); }
+#status.bad { color: var(--bad); background: var(--bad-bg); }
+#status.ok { color: var(--ok); }
 </style>
 </head>
 <body>
-<header>
-  <div class="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1.5 14 4.8v6.4L8 14.5 2 11.2V4.8z" fill="none" stroke="#fff" stroke-width="1.4"/><path d="M2 4.8 8 8l6-3.2M8 8v6.5" fill="none" stroke="#f2a900" stroke-width="1.4"/></svg></div>
-  <div style="min-width:0">
-    <h1>DWFx Measure</h1>
-    <div class="file" id="fileName">3D model and take-off in Excel</div>
-  </div>
-</header>
 
-<section id="start">
-  <p>Open a DWFx exported from Revit: architecture, structure, interiors or MEP. You can browse the elements, see them in 3D and send measurements to this workbook.</p>
-  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a DWFx file">
-    <strong>Choose a DWFx file</strong>
-    <span>or drop it here</span>
-  </div>
-  <input type="file" id="file" accept=".dwfx" hidden>
-  <label class="field">Access code
-    <input id="token" type="password" autocomplete="off">
-  </label>
-  <div id="startStatus" role="status"></div>
-</section>
+<!-- sign-in -->
+<main id="signin" hidden>
+  <form class="signin-card" id="signinForm" novalidate>
+    <div class="brandline">
+      <div class="mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 16 16"><path d="M8 1.5 14 4.8v6.4L8 14.5 2 11.2V4.8z" fill="none" stroke="#fff" stroke-width="1.4"/><path d="M2 4.8 8 8l6-3.2M8 8v6.5" fill="none" stroke="#f2a900" stroke-width="1.4"/></svg></div>
+      <div><h1>DWFx Measure</h1><div class="muted small">3D models and take-off in Excel</div></div>
+    </div>
+    <label class="field">Email<input id="siEmail" type="email" autocomplete="username" required></label>
+    <label class="field">Password<input id="siPw" type="password" autocomplete="current-password" required></label>
+    <div id="siErr" class="msg bad" role="alert" hidden></div>
+    <button class="btn primary" id="siGo">Sign in</button>
+    <p class="muted small" style="margin:12px 0 0">Your administrator creates your account. Ask them if you do not have a password.</p>
+  </form>
+</main>
 
-<section id="app" aria-label="Model">
-  <div id="viewer">
+<!-- app -->
+<div id="shell" hidden>
+  <header>
+    <div class="mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 16 16"><path d="M8 1.5 14 4.8v6.4L8 14.5 2 11.2V4.8z" fill="none" stroke="#fff" stroke-width="1.4"/><path d="M2 4.8 8 8l6-3.2M8 8v6.5" fill="none" stroke="#f2a900" stroke-width="1.4"/></svg></div>
+    <div class="ctx"><strong id="ctxProject">DWFx Measure</strong><span id="ctxModel">No model open</span></div>
+    <button class="avatar" id="userBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Account"></button>
+    <div class="menu" id="userMenu" role="menu" hidden>
+      <div class="who"><strong id="umName"></strong><div class="muted small" id="umEmail"></div></div>
+      <button role="menuitem" id="umTheme">Theme: follow Office</button>
+      <button role="menuitem" id="umOut">Sign out</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" aria-selected="true" data-tab="project">Project</button>
+    <button role="tab" aria-selected="false" data-tab="elements">Elements</button>
+    <button role="tab" aria-selected="false" data-tab="measure">Measure <span class="count" id="selCount"></span></button>
+    <button role="tab" aria-selected="false" data-tab="ai">AI</button>
+    <button role="tab" aria-selected="false" data-tab="admin" id="adminTab" hidden>Admin</button>
+  </nav>
+
+  <div id="viewer" hidden>
     <div class="vtools">
-      <button id="isolate" title="Show only the ticked elements">Isolate</button>
+      <button id="isolate" title="Show only the selected elements (Ribbon: Isolate)">Isolate</button>
       <button id="showAll" title="Show every element">Show all</button>
       <button id="fit" title="Zoom to the visible elements">Fit</button>
     </div>
     <div id="pickInfo" hidden></div>
-  </div>
-  <div class="tabs" role="tablist">
-    <button role="tab" aria-selected="true" data-tab="elements">Elements</button>
-    <button role="tab" aria-selected="false" data-tab="measure">Measure <span class="count" id="selCount"></span></button>
-    <button role="tab" aria-selected="false" data-tab="ai">AI</button>
+    <div class="vload" id="vload" hidden></div>
   </div>
 
-  <div class="panel on" id="tab-elements" role="tabpanel">
-    <div class="bar">
-      <input type="text" id="search" placeholder="Search type, family or Revit ID" aria-label="Search elements">
-      <select id="level" aria-label="Level"></select>
+  <section class="panel on" id="tab-project" role="tabpanel"><div id="projectBody"></div></section>
+
+  <section class="panel" id="tab-elements" role="tabpanel">
+    <div class="nomodel empty" hidden>Open a model version from the Project tab to browse its elements.</div>
+    <div class="withmodel">
+      <div class="bar">
+        <input type="search" id="search" placeholder="Search type, family or Revit ID" aria-label="Search elements">
+        <select id="level" aria-label="Level"></select>
+      </div>
+      <div class="bar">
+        <button id="tickVisible" title="Select everything that matches the search and level">Select matches</button>
+        <button id="clear">Clear selection</button>
+        <button id="collapse">Collapse all</button>
+      </div>
+      <div id="tree" role="tree" aria-label="Model elements"></div>
     </div>
-    <div class="bar">
-      <button id="tickVisible" title="Tick everything that matches the search and level">Tick matches</button>
-      <button id="clear">Clear ticks</button>
-      <button id="collapse">Collapse</button>
+  </section>
+
+  <section class="panel" id="tab-measure" role="tabpanel">
+    <div class="nomodel empty" hidden>Open a model version from the Project tab, select elements, then measure them here.</div>
+    <div class="withmodel"><div id="measureBody"></div></div>
+  </section>
+
+  <section class="panel" id="tab-ai" role="tabpanel">
+    <div class="nomodel empty" hidden>Open a model version from the Project tab, then ask the AI to measure it.</div>
+    <div class="withmodel">
+      <label class="field">Describe what to measure
+        <textarea id="aiAsk" placeholder="e.g. Formwork to concrete beams on Level 1: soffit and both sides, less the slab thickness"></textarea>
+      </label>
+      <div class="chips" id="aiChips">
+        <button data-ask="Formwork to all concrete beams: soffit plus both sides less slab thickness">Beam formwork</button>
+        <button data-ask="Concrete volume of all structural columns, grouped by level">Column concrete</button>
+        <button data-ask="Area of internal walls by type, both faces, for plaster and paint">Wall finishes</button>
+        <button data-ask="Count all doors and windows by type">Doors and windows</button>
+        <button data-ask="Measure the selected elements in the most useful way for a QS">Selected elements</button>
+      </div>
+      <div class="row"><button class="primary" id="aiGo">Ask AI</button><span class="hint">The AI works out the method and formulas. The add-in calculates every number from the model and writes live Excel formulas.</span></div>
+      <div id="aiOut"></div>
     </div>
-    <div id="tree" role="tree"></div>
-  </div>
+  </section>
 
-  <div class="panel" id="tab-measure" role="tabpanel">
-    <div id="measureBody"></div>
-  </div>
+  <section class="panel" id="tab-admin" role="tabpanel"><div id="adminBody"></div></section>
 
-  <div class="panel" id="tab-ai" role="tabpanel">
-    <label class="field">Describe what to measure
-      <textarea id="aiAsk" placeholder="e.g. Calculate formwork to concrete beams on the first floor (soffit and sides, less slab thickness)"></textarea>
-    </label>
-    <div class="row"><button class="primary" id="aiGo">Ask AI</button><span class="hint">The AI works out the method and formulas. The add-in calculates from the model and writes live Excel formulas. Right-click any element to see its properties.</span></div>
-    <div id="aiOut"></div>
-  </div>
-
-  <div id="status" role="status"></div>
   <aside id="props" hidden aria-label="Element properties"></aside>
-</section>
+</div>
+
+<div id="status" role="status" aria-live="polite"></div>
+<div id="dialog" hidden></div>
 
 <script type="module" src="taskpane.js"></script>
 </body>

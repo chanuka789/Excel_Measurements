@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Live address: https://dwfx-addin-production.up.railway.app -->
+<!-- DWFx Measure add-in. Live address: https://dwfx-addin-production.up.railway.app
+     Ribbon tab "DWFx Measure" with a shared runtime: the task pane and the ribbon buttons run in the same page. -->
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
            xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
            xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
            xsi:type="TaskPaneApp">
   <Id>6f1c2a4e-8d3b-4f7a-9c51-2b7e0d4a9f13</Id>
-  <Version>0.2.0.0</Version>
+  <Version>0.3.0.0</Version>
   <ProviderName>QSGS</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="DWFx Measure"/>
-  <Description DefaultValue="View any Revit DWFx model in 3D, browse its elements and send measurements to Excel."/>
+  <Description DefaultValue="View any Revit DWFx model in 3D, browse its elements, measure with live Excel formulas and keep every project on your server."/>
   <IconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-64.png"/>
   <SupportUrl DefaultValue="https://dwfx-addin-production.up.railway.app/"/>
@@ -30,55 +31,265 @@
   </DefaultSettings>
   <Permissions>ReadWriteDocument</Permissions>
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Requirements>
+      <bt:Sets DefaultMinVersion="1.1">
+        <bt:Set Name="SharedRuntime" MinVersion="1.1"/>
+      </bt:Sets>
+    </Requirements>
     <Hosts>
       <Host xsi:type="Workbook">
+        <Runtimes>
+          <Runtime resid="PaneUrl" lifetime="long"/>
+        </Runtimes>
         <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title"/>
+            <Description resid="GetStarted.Description"/>
+            <LearnMoreUrl resid="PaneUrl"/>
+          </GetStarted>
+          <FunctionFile resid="PaneUrl"/>
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
-            <OfficeTab id="TabHome">
-              <Group id="DwfxGroup">
-                <Label resid="GroupLabel"/>
+            <CustomTab id="DWFx.Tab">
+              <Group id="DWFx.G.Project">
+                <Label resid="G.Project"/>
                 <Icon>
-                  <bt:Image size="16" resid="Icon16"/>
-                  <bt:Image size="32" resid="Icon32"/>
-                  <bt:Image size="80" resid="Icon80"/>
+                    <bt:Image size="16" resid="I.group.16"/>
+                    <bt:Image size="32" resid="I.group.32"/>
+                    <bt:Image size="80" resid="I.group.80"/>
                 </Icon>
-                <Control xsi:type="Button" id="DwfxOpen">
-                  <Label resid="ButtonLabel"/>
-                  <Supertip>
-                    <Title resid="ButtonLabel"/>
-                    <Description resid="ButtonTip"/>
-                  </Supertip>
+                <Control xsi:type="Button" id="DWFx.Projects">
+                  <Label resid="L.Projects"/>
+                  <Supertip><Title resid="L.Projects"/><Description resid="T.Projects"/></Supertip>
                   <Icon>
-                    <bt:Image size="16" resid="Icon16"/>
-                    <bt:Image size="32" resid="Icon32"/>
-                    <bt:Image size="80" resid="Icon80"/>
+                    <bt:Image size="16" resid="I.projects.16"/>
+                    <bt:Image size="32" resid="I.projects.32"/>
+                    <bt:Image size="80" resid="I.projects.80"/>
                   </Icon>
-                  <Action xsi:type="ShowTaskpane">
-                    <TaskpaneId>DwfxPane</TaskpaneId>
-                    <SourceLocation resid="PaneUrl"/>
-                  </Action>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>openProjects</FunctionName></Action>
+                </Control>
+                <Control xsi:type="Button" id="DWFx.Refresh">
+                  <Label resid="L.Refresh"/>
+                  <Supertip><Title resid="L.Refresh"/><Description resid="T.Refresh"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.refresh.16"/>
+                    <bt:Image size="32" resid="I.refresh.32"/>
+                    <bt:Image size="80" resid="I.refresh.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>refreshProject</FunctionName></Action>
                 </Control>
               </Group>
-            </OfficeTab>
+              <Group id="DWFx.G.Model">
+                <Label resid="G.Model"/>
+                <Icon>
+                    <bt:Image size="16" resid="I.group.16"/>
+                    <bt:Image size="32" resid="I.group.32"/>
+                    <bt:Image size="80" resid="I.group.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="DWFx.Elements">
+                  <Label resid="L.Elements"/>
+                  <Supertip><Title resid="L.Elements"/><Description resid="T.Elements"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.elements.16"/>
+                    <bt:Image size="32" resid="I.elements.32"/>
+                    <bt:Image size="80" resid="I.elements.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>openElements</FunctionName></Action>
+                </Control>
+              </Group>
+              <Group id="DWFx.G.View">
+                <Label resid="G.View"/>
+                <Icon>
+                    <bt:Image size="16" resid="I.group.16"/>
+                    <bt:Image size="32" resid="I.group.32"/>
+                    <bt:Image size="80" resid="I.group.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="DWFx.Fit">
+                  <Label resid="L.Fit"/>
+                  <Supertip><Title resid="L.Fit"/><Description resid="T.Fit"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.fit.16"/>
+                    <bt:Image size="32" resid="I.fit.32"/>
+                    <bt:Image size="80" resid="I.fit.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>viewFit</FunctionName></Action>
+                </Control>
+                <Control xsi:type="Button" id="DWFx.ShowAll">
+                  <Label resid="L.ShowAll"/>
+                  <Supertip><Title resid="L.ShowAll"/><Description resid="T.ShowAll"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.showall.16"/>
+                    <bt:Image size="32" resid="I.showall.32"/>
+                    <bt:Image size="80" resid="I.showall.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>viewShowAll</FunctionName></Action>
+                </Control>
+                <Control xsi:type="Button" id="DWFx.Isolate">
+                  <Label resid="L.Isolate"/>
+                  <Supertip><Title resid="L.Isolate"/><Description resid="T.Isolate"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.isolate.16"/>
+                    <bt:Image size="32" resid="I.isolate.32"/>
+                    <bt:Image size="80" resid="I.isolate.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>viewIsolate</FunctionName></Action>
+                </Control>
+                <Control xsi:type="Button" id="DWFx.Clear">
+                  <Label resid="L.Clear"/>
+                  <Supertip><Title resid="L.Clear"/><Description resid="T.Clear"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.clear.16"/>
+                    <bt:Image size="32" resid="I.clear.32"/>
+                    <bt:Image size="80" resid="I.clear.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>viewClear</FunctionName></Action>
+                </Control>
+              </Group>
+              <Group id="DWFx.G.Measure">
+                <Label resid="G.Measure"/>
+                <Icon>
+                    <bt:Image size="16" resid="I.group.16"/>
+                    <bt:Image size="32" resid="I.group.32"/>
+                    <bt:Image size="80" resid="I.group.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="DWFx.Measure">
+                  <Label resid="L.Measure"/>
+                  <Supertip><Title resid="L.Measure"/><Description resid="T.Measure"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.measure.16"/>
+                    <bt:Image size="32" resid="I.measure.32"/>
+                    <bt:Image size="80" resid="I.measure.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>openMeasure</FunctionName></Action>
+                </Control>
+                <Control xsi:type="Button" id="DWFx.FromExcel">
+                  <Label resid="L.FromExcel"/>
+                  <Supertip><Title resid="L.FromExcel"/><Description resid="T.FromExcel"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.fromexcel.16"/>
+                    <bt:Image size="32" resid="I.fromexcel.32"/>
+                    <bt:Image size="80" resid="I.fromexcel.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>selectFromExcel</FunctionName></Action>
+                </Control>
+              </Group>
+              <Group id="DWFx.G.AI">
+                <Label resid="G.AI"/>
+                <Icon>
+                    <bt:Image size="16" resid="I.group.16"/>
+                    <bt:Image size="32" resid="I.group.32"/>
+                    <bt:Image size="80" resid="I.group.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="DWFx.AskAI">
+                  <Label resid="L.AskAI"/>
+                  <Supertip><Title resid="L.AskAI"/><Description resid="T.AskAI"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.ai.16"/>
+                    <bt:Image size="32" resid="I.ai.32"/>
+                    <bt:Image size="80" resid="I.ai.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>openAI</FunctionName></Action>
+                </Control>
+              </Group>
+              <Group id="DWFx.G.Admin">
+                <Label resid="G.Admin"/>
+                <Icon>
+                    <bt:Image size="16" resid="I.group.16"/>
+                    <bt:Image size="32" resid="I.group.32"/>
+                    <bt:Image size="80" resid="I.group.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="DWFx.Admin">
+                  <Label resid="L.Admin"/>
+                  <Supertip><Title resid="L.Admin"/><Description resid="T.Admin"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.admin.16"/>
+                    <bt:Image size="32" resid="I.admin.32"/>
+                    <bt:Image size="80" resid="I.admin.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>openAdmin</FunctionName></Action>
+                </Control>
+              </Group>
+              <Label resid="TabLabel"/>
+            </CustomTab>
           </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-16.png"/>
-        <bt:Image id="Icon32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-32.png"/>
-        <bt:Image id="Icon80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-80.png"/>
+        <bt:Image id="I.admin.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/admin-16.png"/>
+        <bt:Image id="I.admin.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/admin-32.png"/>
+        <bt:Image id="I.admin.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/admin-80.png"/>
+        <bt:Image id="I.ai.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/ai-16.png"/>
+        <bt:Image id="I.ai.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/ai-32.png"/>
+        <bt:Image id="I.ai.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/ai-80.png"/>
+        <bt:Image id="I.clear.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/clear-16.png"/>
+        <bt:Image id="I.clear.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/clear-32.png"/>
+        <bt:Image id="I.clear.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/clear-80.png"/>
+        <bt:Image id="I.elements.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/elements-16.png"/>
+        <bt:Image id="I.elements.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/elements-32.png"/>
+        <bt:Image id="I.elements.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/elements-80.png"/>
+        <bt:Image id="I.fit.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fit-16.png"/>
+        <bt:Image id="I.fit.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fit-32.png"/>
+        <bt:Image id="I.fit.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fit-80.png"/>
+        <bt:Image id="I.fromexcel.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-16.png"/>
+        <bt:Image id="I.fromexcel.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-32.png"/>
+        <bt:Image id="I.fromexcel.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-80.png"/>
+        <bt:Image id="I.group.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-16.png"/>
+        <bt:Image id="I.group.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-32.png"/>
+        <bt:Image id="I.group.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-80.png"/>
+        <bt:Image id="I.isolate.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/isolate-16.png"/>
+        <bt:Image id="I.isolate.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/isolate-32.png"/>
+        <bt:Image id="I.isolate.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/isolate-80.png"/>
+        <bt:Image id="I.measure.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-16.png"/>
+        <bt:Image id="I.measure.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-32.png"/>
+        <bt:Image id="I.measure.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-80.png"/>
+        <bt:Image id="I.projects.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-16.png"/>
+        <bt:Image id="I.projects.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-32.png"/>
+        <bt:Image id="I.projects.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-80.png"/>
+        <bt:Image id="I.refresh.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-16.png"/>
+        <bt:Image id="I.refresh.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-32.png"/>
+        <bt:Image id="I.refresh.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-80.png"/>
+        <bt:Image id="I.showall.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/showall-16.png"/>
+        <bt:Image id="I.showall.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/showall-32.png"/>
+        <bt:Image id="I.showall.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/showall-80.png"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="PaneUrl" DefaultValue="https://dwfx-addin-production.up.railway.app/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GroupLabel" DefaultValue="Take-off"/>
-        <bt:String id="ButtonLabel" DefaultValue="DWFx 3D model"/>
+        <bt:String id="G.Project" DefaultValue="Project"/>
+        <bt:String id="G.Model" DefaultValue="Model"/>
+        <bt:String id="G.View" DefaultValue="3D view"/>
+        <bt:String id="G.Measure" DefaultValue="Measure"/>
+        <bt:String id="G.AI" DefaultValue="AI"/>
+        <bt:String id="G.Admin" DefaultValue="Admin"/>
+        <bt:String id="L.Projects" DefaultValue="Projects"/>
+        <bt:String id="L.Refresh" DefaultValue="Refresh"/>
+        <bt:String id="L.Elements" DefaultValue="Elements"/>
+        <bt:String id="L.Fit" DefaultValue="Fit view"/>
+        <bt:String id="L.ShowAll" DefaultValue="Show all"/>
+        <bt:String id="L.Isolate" DefaultValue="Isolate"/>
+        <bt:String id="L.Clear" DefaultValue="Clear selection"/>
+        <bt:String id="L.Measure" DefaultValue="Measure"/>
+        <bt:String id="L.FromExcel" DefaultValue="Select from Excel"/>
+        <bt:String id="L.AskAI" DefaultValue="Ask AI"/>
+        <bt:String id="L.Admin" DefaultValue="Admin"/>
+        <bt:String id="TabLabel" DefaultValue="DWFx Measure"/>
+        <bt:String id="GetStarted.Title" DefaultValue="DWFx Measure is ready"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="ButtonTip" DefaultValue="Open the DWFx 3D viewer, element browser and take-off tools."/>
+        <bt:String id="T.Projects" DefaultValue="Open your projects: models, drawings, team and saved take-offs."/>
+        <bt:String id="T.Refresh" DefaultValue="Reload the open project to see new uploads and processing status."/>
+        <bt:String id="T.Elements" DefaultValue="Browse the model elements by category, family and type."/>
+        <bt:String id="T.Fit" DefaultValue="Zoom the 3D view to the visible elements."/>
+        <bt:String id="T.ShowAll" DefaultValue="Show every element and clear the level filter."/>
+        <bt:String id="T.Isolate" DefaultValue="Show only the selected elements in 3D. Press again to show the rest."/>
+        <bt:String id="T.Clear" DefaultValue="Clear the element selection."/>
+        <bt:String id="T.Measure" DefaultValue="Measure the selected elements and add live formulas to the Take-off sheet."/>
+        <bt:String id="T.FromExcel" DefaultValue="Highlight in 3D the elements of the Take-off rows you selected in Excel."/>
+        <bt:String id="T.AskAI" DefaultValue="Ask the AI to work out a measurement method, for example beam formwork."/>
+        <bt:String id="T.Admin" DefaultValue="Users, password hashes, backups and system status (administrators only)."/>
+        <bt:String id="GetStarted.Description" DefaultValue="Open the DWFx Measure tab on the ribbon and choose Projects to sign in."/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

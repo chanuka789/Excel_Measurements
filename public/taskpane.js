@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { dimsOf, keyOf, evaluate as evaluateSpec, unitFmt, fmt } from './js/engine.js';
+import { $, esc, App, api, session, status, confirmBox } from './js/core.js';
+import { showProjects, openProject, refreshProject, currentProject, resetProjects } from './js/project.js';
+import { showAdmin } from './js/admin.js';
 
 // ================================================================== state
 const S = {
@@ -7,11 +11,6 @@ const S = {
   ticked: new Set(), isolated: false, search: '', level: '', open: new Set(),
   tree: null, catColor: new Map(), takeoff: [], rowsById: null, quiet: 0,
 };
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const status = (msg, err = false) => { const el = $('status'); el.textContent = msg; el.className = err ? 'err' : ''; };
-const fmt = (v, u) => (u === 'm' ? v.toFixed(3) : u === '' ? (Number.isInteger(v) ? String(v) : v.toFixed(2)) : v.toFixed(2))
-  .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
 // muted, distinguishable colours for categories (assigned in order of size)
 const PALETTE = ['#8a9aa6', '#c98a2b', '#2f6fa3', '#b5473a', '#6b5b8c', '#7a8a5a', '#3f8f8a', '#a8794f',
@@ -22,7 +21,7 @@ const host = $('viewer');
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 host.prepend(renderer.domElement);
-const scene = new THREE.Scene(); scene.background = new THREE.Color('#e9ebec');
+const scene = new THREE.Scene(); scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--viewer').trim() || '#e8eaec');
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000);
 const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f94, 1.6));
@@ -30,10 +29,18 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(1, 2, 1.
 const root = new THREE.Group(); scene.add(root);
 function resize() {
   const w = host.clientWidth, h = Math.max(host.clientHeight, 1);
-  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); invalidate();
 }
 new ResizeObserver(resize).observe(host);
-(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+// render only when something changed (saves battery and keeps Excel responsive)
+let dirty = true;
+const invalidate = () => { dirty = true; };
+controls.addEventListener('change', invalidate);
+(function loop() {
+  const moving = controls.update();
+  if ((dirty || moving) && !host.hidden) { renderer.render(scene, camera); dirty = false; }
+  requestAnimationFrame(loop);
+})();
 
 const mats = new Map();
 const matFor = (cat) => {
@@ -70,7 +77,7 @@ function fit(ids) {
   const d = r / Math.sin(Math.min(vf, hf)) * 0.8;
   camera.position.copy(c).add(new THREE.Vector3(1, 0.75, 1.1).normalize().multiplyScalar(d));
   camera.near = d / 300; camera.far = d * 30; camera.updateProjectionMatrix();
-  controls.target.copy(c); controls.update();
+  controls.target.copy(c); controls.update(); invalidate();
 }
 function paint() {
   const any = S.ticked.size > 0;
@@ -81,7 +88,7 @@ function paint() {
     m.material = on ? pickMat : (any ? ghostMat : matFor(e?.cat));
     m.children[0].visible = !any || on;
   }
-  $('isolate').setAttribute('aria-pressed', String(S.isolated));
+  $('isolate').setAttribute('aria-pressed', String(S.isolated)); invalidate();
   $('selCount').textContent = S.ticked.size ? `(${S.ticked.size})` : '';
 }
 
@@ -205,11 +212,25 @@ $('isolate').onclick = () => {
 };
 $('showAll').onclick = () => { S.isolated = false; S.level = ''; $('level').value = ''; renderTree(); paint(); fit(); };
 $('fit').onclick = () => fit();
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
-  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
-  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === 'tab-' + b.dataset.tab));
-  if (b.dataset.tab === 'measure') renderMeasure();
-});
+// ---------------------------------------------------------------- tabs
+const MODEL_TABS = ['elements', 'measure', 'ai'];
+let currentTab = 'project';
+function selectTab(name) {
+  if (name === 'admin' && session.get()?.user?.role !== 'admin') name = 'project';
+  currentTab = name;
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x.dataset.tab === name)));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === 'tab-' + name));
+  const showViewer = Boolean(S.data) && MODEL_TABS.includes(name);
+  const was = !$('viewer').hidden;
+  $('viewer').hidden = !showViewer;
+  if (showViewer && !was) resize();
+  document.querySelectorAll('.nomodel').forEach(el => { el.hidden = Boolean(S.data); });
+  document.querySelectorAll('.withmodel').forEach(el => { el.hidden = !S.data; });
+  if (name === 'measure' && S.data) renderMeasure();
+  if (name === 'admin') showAdmin();
+  if (name === 'project' && currentProject()) refreshProject();
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => selectTab(b.dataset.tab));
 
 function update() { paint(); renderTree(); if ($('tab-measure').classList.contains('on')) renderMeasure(); }
 
@@ -220,50 +241,7 @@ function update() { paint(); renderTree(); if ($('tab-measure').classList.contai
 //     constants: [{ key, label, value, unit }],          -> editable yellow assumption cells in Excel
 //     formulas:  [{ key, label, unit, expr }] }          -> expr like "({b} + 2*({h} - {slab})) * {L}"
 // The same spec gives the preview here and the live Excel formulas, so the two always agree.
-const DIM_RE = /(\d{2,4}(?:\.\d+)?)\s*[xX×*]\s*(\d{2,4}(?:\.\d+)?)(?:\s*[xX×*]\s*(\d{2,4}(?:\.\d+)?))?/;
-const dimsOf = (text) => { const m = DIM_RE.exec(text || ''); return m ? m.slice(1).filter(Boolean).map(v => +v / 1000) : []; };
-const keyOf = (s) => { const k = String(s).replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'q'; return /^\d/.test(k) ? 'q_' + k : k; };
-const FN = { MAX: Math.max, MIN: Math.min, ABS: Math.abs, SQRT: Math.sqrt, PI: () => Math.PI,
-  ROUND: (x, n = 0) => Math.round(x * 10 ** n) / 10 ** n, IF: (c, a, b) => (c ? a : b) };
-const FN_RE = /\b(MAX|MIN|ABS|SQRT|PI|ROUND|IF)\b/g;
-
-function inputValue(e, inp) {
-  if (inp.source === 'count') return 1;
-  if (inp.source === 'type_dim') return dimsOf(e.type)[inp.index ?? 0] ?? null;
-  if (inp.source === 'name_dim') return dimsOf(e.name)[inp.index ?? 0] ?? null;
-  const q = e.q[inp.name];
-  return q ? q[0] : null;
-}
-function compile(expr, keys) {
-  const body = String(expr).replace(/\{([A-Za-z_]\w*)\}/g, (m, k) => {
-    if (!keys.includes(k)) throw new Error(`Unknown column {${k}} in formula ${expr}`);
-    return 'v.' + k;
-  });
-  const rest = body.replace(/v\.[A-Za-z_]\w*/g, '0').replace(FN_RE, '');
-  if (/[^0-9.+\-*/()\s,<>=]/.test(rest)) throw new Error('Formula uses unsupported text: ' + expr);
-  const js = body.replace(FN_RE, 'F.$1').replace(/<>/g, '!=').replace(/(?<![<>=!])=(?!=)/g, '==');
-  return new Function('v', 'F', '"use strict"; return (' + js + ');');
-}
-function evaluate(spec) {
-  const keys = [...spec.inputs, ...spec.constants, ...spec.formulas].map(c => c.key);
-  const fns = spec.formulas.map(f => ({ ...f, fn: compile(f.expr, keys) }));
-  const rows = [], tot = {}, missing = {};
-  for (const id of spec.ids) {
-    const e = S.byId.get(id); if (!e) continue;
-    const v = {};
-    spec.constants.forEach(c => { v[c.key] = Number(c.value) || 0; });
-    spec.inputs.forEach(i => { v[i.key] = inputValue(e, i); if (v[i.key] == null) missing[i.key] = (missing[i.key] || 0) + 1; });
-    fns.forEach(f => {
-      const ok = spec.inputs.every(i => v[i.key] != null || !f.expr.includes('{' + i.key + '}'));
-      let r = null; if (ok) { try { r = f.fn(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x ?? 0])), FN); } catch { r = null; } }
-      v[f.key] = typeof r === 'number' && isFinite(r) ? r : null;
-    });
-    rows.push({ e, v });
-    [...spec.inputs.filter(i => i.sum), ...spec.formulas].forEach(c => { if (v[c.key] != null) tot[c.key] = (tot[c.key] || 0) + v[c.key]; });
-  }
-  return { rows, tot, missing };
-}
-const unitFmt = (u) => u === 'nr' ? '#,##0' : u === 'm' ? '#,##0.000' : '#,##0.00';
+const evaluate = (spec) => evaluateSpec(spec, S.byId);
 
 // ---------------------------------------------------------------- manual measure tab
 const DEFAULT_Q = /^(area|length|volume|perimeter|face area.*|count)$/i;
@@ -361,7 +339,8 @@ function downloadCsv() {
 // ================================================================== Excel take-off sheet
 const SHEET = 'Take-off';
 const colL = (n) => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - 1 - m) / 26; } return s; };
-async function addToExcel(spec) {
+async function addToExcel(spec, { save = true } = {}) {
+  if (!S.inExcel) throw new Error('Open this add-in inside Excel to write the take-off sheet.');
   const { rows: evRows } = evaluate(spec);              // validates formulas before touching Excel
   try {
     await Excel.run(async (ctx) => {
@@ -443,8 +422,18 @@ async function addToExcel(spec) {
       await ctx.sync();
     });
     S.rowsById = null;
-    status(`Added G-group "${spec.name}" to the ${SHEET} sheet.`);
-  } catch (err) { status('Excel error: ' + err.message, true); throw err; }
+    status(`Added "${spec.name}" to the ${SHEET} sheet.`, 'ok');
+  } catch (err) { status('Excel error: ' + err.message, 'bad'); throw err; }
+  if (save) await saveTakeoff(spec);
+}
+// keep a server copy of every group added while a project model is open (editors and owners)
+async function saveTakeoff(spec) {
+  const p = currentProject();
+  if (!p || !S.versionId || !['owner', 'editor'].includes(p.my_role)) return;
+  try {
+    await api('POST', `/projects/${p.project.id}/takeoffs`, { versionId: S.versionId, spec });
+    status(`Added "${spec.name}" to the ${SHEET} sheet and saved it to ${p.project.name}.`, 'ok');
+  } catch (err) { status(`Added to Excel, but saving to the project failed: ${err.message}`, 'bad'); }
 }
 
 async function rowsById() {
@@ -535,9 +524,7 @@ $('aiGo').onclick = async () => {
   const ask = $('aiAsk').value.trim(); if (!ask) return;
   const out = $('aiOut'); out.innerHTML = '<div class="hint">The AI is working out the measurement method…</div>';
   try {
-    const res = await fetch('api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-app-token': token() },
-      body: JSON.stringify({ request: ask, summary: modelSummary() }) });
-    const data = await res.json(); if (!res.ok) throw new Error(data.error || res.statusText);
+    const data = await api('POST', '/ai', { request: ask, summary: modelSummary(), projectId: currentProject()?.project.id });
     renderPlan(data.plan || {}, data.model);
   } catch (err) { out.innerHTML = `<div class="aimsg" style="color:var(--danger)">${esc(err.message)}</div>`; }
 };
@@ -546,7 +533,7 @@ function renderPlan(plan, model) {
   if (plan.message) out.insertAdjacentHTML('beforeend', `<div class="aimsg">${esc(plan.message)}</div>`);
   (plan.groups || []).forEach((g) => {
     const spec = specFromAI(g);
-    const card = document.createElement('div'); card.className = 'card'; out.append(card);
+    const card = document.createElement('div'); card.className = 'card ai-card'; out.append(card);
     const draw = () => {
       let ev, err = '';
       try { ev = evaluate(spec); } catch (e) { err = e.message; }
@@ -605,43 +592,175 @@ function showProps(id) {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('props').hidden = true; });
 
 // ================================================================== loading a model
-const token = () => $('token').value;
-try { $('token').value = localStorage.getItem('dwfxToken') || ''; } catch { /* storage blocked */ }
-const drop = $('drop');
-drop.onclick = () => $('file').click();
-drop.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } };
-drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
-drop.ondragleave = () => drop.classList.remove('over');
-drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); };
-$('file').onchange = (e) => e.target.files[0] && load(e.target.files[0]);
-
-async function load(file) {
-  const st = $('startStatus'); st.className = '';
-  st.textContent = `Reading ${file.name}. Large models can take a minute…`;
-  try { localStorage.setItem('dwfxToken', token()); } catch { /* storage blocked */ }
+function loadModelData(data, { versionId = null, label = '' } = {}) {
+  S.data = data; S.E = data.elements; S.byId = new Map(S.E.map(e => [e.id, e]));
+  S.versionId = versionId;
+  S.ticked.clear(); S.isolated = false; S.search = ''; S.level = ''; S.open.clear(); S.rowsById = null; S.catColor.clear(); mats.clear();
+  $('search').value = ''; $('aiOut').innerHTML = ''; $('props').hidden = true; $('pickInfo').hidden = true;
+  buildTree();
+  $('ctxModel').textContent = label || data.fileName;
+  const levels = [...new Set(S.E.map(e => e.level).filter(Boolean))];
+  $('level').innerHTML = '<option value="">All levels</option>' + levels.map(l => `<option>${esc(l)}</option>`).join('');
+  selectTab('elements');
+  buildScene(data.geometry);
+  renderTree(); paint();
+  const shown = S.E.filter(e => S.meshById.has(e.id)).length;
+  status(`${S.E.length} elements in ${S.tree.size} categories, ${shown} shown in 3D.` + (data.geoNote ? ' ' + data.geoNote : ''), 'ok');
+}
+function closeModel() {
+  S.data = null; S.E = []; S.byId = new Map(); S.versionId = null; S.ticked.clear(); root.clear(); S.meshes = []; S.meshById = new Map();
+  $('ctxModel').textContent = 'No model open'; selectTab(currentTab); invalidate();
+}
+async function withViewerBusy(msg, fn) {
+  $('viewer').hidden = false; resize();
+  const v = $('vload'); v.hidden = false; v.textContent = msg; status(msg);
+  try { return await fn(); } finally { v.hidden = true; }
+}
+async function openVersion(vid) {
+  const p = currentProject();
+  const m = p?.models.find(x => x.versions.some(v => v.id === vid));
+  const v = m?.versions.find(x => x.id === vid);
+  const label = m ? `${m.name} v${v.version} · ${v.file_name}` : '';
+  try {
+    const data = await withViewerBusy(`Opening ${label || 'model'}…`, async () => {
+      const res = await api('GET', `/versions/${vid}/model`, null, { raw: true });
+      return res.json();
+    });
+    loadModelData(data, { versionId: vid, label });
+    try { localStorage.setItem('dwfxLastVersion', vid); } catch { /* storage blocked */ }
+  } catch (err) { status('Could not open the model: ' + err.message, 'bad'); if (!S.data) selectTab('project'); }
+}
+async function quickOpen(file) {
   const fd = new FormData(); fd.append('model', file, file.name);
   try {
-    const res = await fetch('api/model', { method: 'POST', body: fd, headers: { 'x-app-token': token() } });
-    const data = await res.json(); if (!res.ok) throw new Error(data.error || res.statusText);
-    S.data = data; S.E = data.elements; S.byId = new Map(S.E.map(e => [e.id, e]));
-    S.ticked.clear(); S.isolated = false; S.search = ''; S.level = ''; S.open.clear(); S.rowsById = null; mats.clear();
-    buildTree();
-    document.body.classList.add('loaded'); resize();
-    $('fileName').textContent = file.name;
-    buildScene(data.geometry);
-    const levels = [...new Set(S.E.map(e => e.level).filter(Boolean))];
-    $('level').innerHTML = '<option value="">All levels</option>' + levels.map(l => `<option>${esc(l)}</option>`).join('');
-    renderTree(); paint(); st.textContent = '';
-    const shown = S.E.filter(e => S.meshById.has(e.id)).length;
-    status(`${S.E.length} elements in ${S.tree.size} categories, ${shown} shown in 3D.` + (data.geoNote ? ' ' + data.geoNote : ''));
-  } catch (err) { st.className = 'err'; st.textContent = 'Could not open this file: ' + err.message; }
+    const data = await withViewerBusy(`Reading ${file.name}. Large models can take a minute…`, () => api('POST', '/model', fd));
+    loadModelData(data, { label: `${file.name} (not saved)` });
+  } catch (err) { status('Could not open this file: ' + err.message, 'bad'); if (!S.data) selectTab('project'); }
 }
 
-// ================================================================== Office
-const officeReady = (typeof Office !== 'undefined') ? Office.onReady() : Promise.resolve({ host: null });
-officeReady.then((info) => {
-  S.inExcel = typeof Office !== 'undefined' && info.host === Office.HostType.Excel;
-  if (S.inExcel) Excel.run(async (ctx) => { ctx.workbook.worksheets.onSelectionChanged.add(onExcelSelect); await ctx.sync(); }).catch(() => {});
+// ================================================================== sign-in, header, theme
+function initials(name) { return String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join(''); }
+function showSignedIn(user) {
+  $('signin').hidden = true; $('shell').hidden = false;
+  $('userBtn').textContent = initials(user.name); $('userBtn').title = `${user.name} (${user.email})`;
+  $('umName').textContent = user.name; $('umEmail').textContent = user.email;
+  $('adminTab').hidden = user.role !== 'admin';
+  resize();
+}
+function showSignIn(msg) {
+  $('shell').hidden = true; $('signin').hidden = false; $('userMenu').hidden = true;
+  $('siErr').hidden = !msg; $('siErr').textContent = msg || '';
+  setTimeout(() => ($('siEmail').value ? $('siPw') : $('siEmail')).focus(), 0);
+}
+App.onSignedOut = () => { resetProjects(); closeModel(); showSignIn('Your session has ended. Please sign in again.'); };
+$('signinForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const email = $('siEmail').value.trim(), password = $('siPw').value;
+  if (!email || !password) { $('siErr').hidden = false; $('siErr').textContent = 'Enter your email and password.'; return; }
+  $('siGo').disabled = true; $('siGo').textContent = 'Signing in…';
+  try {
+    const r = await api('POST', '/auth/login', { email, password });
+    session.set({ token: r.token, user: r.user }); $('siPw').value = '';
+    try { localStorage.setItem('dwfxEmail', email); } catch { /* storage blocked */ }
+    showSignedIn(r.user); await startProjects();
+  } catch (err) { $('siErr').hidden = false; $('siErr').textContent = err.status === 401 ? 'The email or password is not correct.' : err.message; }
+  finally { $('siGo').disabled = false; $('siGo').textContent = 'Sign in'; }
+};
+$('userBtn').onclick = (e) => { e.stopPropagation(); const m = $('userMenu'); m.hidden = !m.hidden; $('userBtn').setAttribute('aria-expanded', String(!m.hidden)); };
+document.addEventListener('click', (e) => { if (!$('userMenu').contains(e.target)) { $('userMenu').hidden = true; $('userBtn').setAttribute('aria-expanded', 'false'); } });
+$('umOut').onclick = async () => {
+  if (!await confirmBox({ title: 'Sign out?', body: '<p>Your projects stay saved on the server. Your workbook is not changed.</p>', confirmLabel: 'Sign out' })) return;
+  try { await api('POST', '/auth/logout'); } catch { /* already signed out */ }
+  session.set(null); resetProjects(); closeModel(); showSignIn();
+};
+
+const THEMES = ['office', 'light', 'dark'];
+const THEME_LABEL = { office: 'Theme: follow Office', light: 'Theme: light', dark: 'Theme: dark' };
+let themePref = 'office';
+try { themePref = localStorage.getItem('dwfxTheme') || 'office'; } catch { /* storage blocked */ }
+function officeIsDark() {
+  try {
+    const bg = Office.context.officeTheme?.bodyBackgroundColor;
+    if (!bg) return null;
+    const n = parseInt(bg.replace('#', ''), 16), lum = 0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255);
+    return lum < 128;
+  } catch { return null; }
+}
+function applyTheme() {
+  const d = document.documentElement;
+  let dark = themePref === 'dark' ? true : themePref === 'light' ? false : officeIsDark();
+  if (dark == null) d.removeAttribute('data-theme'); else d.dataset.theme = dark ? 'dark' : 'light';
+  $('umTheme').textContent = THEME_LABEL[themePref];
+  scene.background = new THREE.Color(getComputedStyle(d).getPropertyValue('--viewer').trim() || '#e8eaec');
+  edgeMat.color.set(dark ? '#c8ced3' : '#3b444c'); invalidate();
+}
+$('umTheme').onclick = () => {
+  themePref = THEMES[(THEMES.indexOf(themePref) + 1) % THEMES.length];
+  try { localStorage.setItem('dwfxTheme', themePref); } catch { /* storage blocked */ }
+  applyTheme();
+};
+
+async function startProjects() {
+  selectTab('project');
+  let last = null; try { last = localStorage.getItem('dwfxLastProject:' + (session.get()?.user?.id || '')); } catch { /* storage blocked */ }
+  if (last) await openProject(last, false, true); else await showProjects();
+}
+$('aiChips').addEventListener('click', (e) => { const b = e.target.closest('[data-ask]'); if (b) { $('aiAsk').value = b.dataset.ask; $('aiAsk').focus(); } });
+
+// ================================================================== App registry (used by the project screen and the ribbon)
+Object.assign(App, {
+  selectTab, openVersion, quickOpen, closeModel, addToExcel,
+  currentVersionId: () => S.versionId,
+  setContext: (project) => { $('ctxProject').textContent = project ? project.name : 'DWFx Measure'; },
+  fit: () => fit(), showAll: () => $('showAll').click(),
+  isolate: () => $('isolate').click(),
+  clear: () => { S.ticked.clear(); S.isolated = false; update(); },
+  selectFromRows: async () => {
+    if (!S.data) { status('Open a model first.', 'bad'); return; }
+    await Excel.run(async (ctx) => {
+      const r = ctx.workbook.getSelectedRange(); r.load('address'); const sh = ctx.workbook.worksheets.getActiveWorksheet(); sh.load('id');
+      await ctx.sync();
+      S.quiet = 0; await onExcelSelect({ worksheetId: sh.id, address: r.address.split('!').pop() });
+    });
+  },
 });
 
-window.__dwfx = { S, update, fit, applyFilter, renderPlan, quantitiesFor, load, evaluate, specFromAI, showProps };
+// ================================================================== ribbon commands (shared runtime)
+const RIBBON = {
+  openProjects: () => selectTab('project'), openElements: () => selectTab('elements'), openMeasure: () => selectTab('measure'),
+  openAI: () => { selectTab('ai'); $('aiAsk')?.focus(); }, openAdmin: () => { if (session.get()?.user?.role !== 'admin') status('Admin is for administrators only.', 'bad'); else selectTab('admin'); },
+  viewFit: () => App.fit(), viewShowAll: () => App.showAll(), viewIsolate: () => App.isolate(), viewClear: () => App.clear(),
+  selectFromExcel: () => App.selectFromRows(), refreshProject: () => refreshProject(),
+};
+function registerRibbon() {
+  if (typeof Office === 'undefined' || !Office.actions?.associate) return;
+  for (const [name, fn] of Object.entries(RIBBON)) {
+    Office.actions.associate(name, async (event) => {
+      try { await Office.addin?.showAsTaskpane?.(); } catch { /* older Office */ }
+      try { if (!session.get()?.token) showSignIn('Sign in first.'); else await fn(); }
+      catch (err) { status(err.message, 'bad'); }
+      event.completed();
+    });
+  }
+}
+
+// ================================================================== start
+const officeReady = (typeof Office !== 'undefined') ? Office.onReady().catch(() => ({ host: null })) : Promise.resolve({ host: null });
+officeReady.then(async (info) => {
+  S.inExcel = typeof Office !== 'undefined' && info?.host === Office.HostType.Excel;
+  if (S.inExcel) {
+    Excel.run(async (ctx) => { ctx.workbook.worksheets.onSelectionChanged.add(onExcelSelect); await ctx.sync(); }).catch(() => {});
+    registerRibbon();
+    try { Office.context.document.addHandlerAsync?.(Office.EventType.OfficeThemeChanged, applyTheme); } catch { /* not supported */ }
+  }
+  applyTheme();
+  try { $('siEmail').value = localStorage.getItem('dwfxEmail') || ''; } catch { /* storage blocked */ }
+  const s = session.get();
+  if (!s?.token) return showSignIn();
+  try {
+    const { user } = await api('GET', '/auth/me');
+    session.set({ ...s, user }); showSignedIn(user); await startProjects();
+  } catch (err) { if (err.status !== 401) showSignIn(err.message); }
+});
+
+window.__dwfx = { S, App, update, fit, applyFilter, renderPlan, quantitiesFor, evaluate, specFromAI, showProps, loadModelData, selectTab };
