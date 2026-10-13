@@ -9,14 +9,17 @@ import { processVersion, backupDatabase } from './src/processing.js';
 const HANDLERS = {
   process_version: (p) => processVersion(p.versionId),
   backup: () => backupDatabase(),
+  // the AI test set takes a while: run it in the background so model processing is never blocked
+  ai_eval: async (p) => { const m = await import('./src/aieval.js'); m.runEvaluation(p).catch(e => console.error('AI evaluation failed:', e.message)); },
 };
+const MAX_ATTEMPTS = { ai_eval: 1 };
 let running = false, timer = null;
 
 async function tick() {
   const job = await claim();
   if (!job) return false;
   try { await HANDLERS[job.kind]?.(job.payload); await finish(job.id); }
-  catch (e) { console.error(`job ${job.id} (${job.kind}) failed:`, e.message); await fail(job, e.message); }
+  catch (e) { console.error(`job ${job.id} (${job.kind}) failed:`, e.message); await fail(job, e.message, MAX_ATTEMPTS[job.kind] || 3); }
   return true;
 }
 async function scheduleBackup() {

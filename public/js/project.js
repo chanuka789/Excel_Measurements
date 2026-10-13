@@ -1,5 +1,7 @@
 // Projects tab: list, create, details (models + versions, drawings, team, saved take-offs, activity, export, delete).
 import { $, esc, App, api, upload, downloadFile, fmtBytes, fmtDate, fmtDay, status, confirmBox, session } from './core.js';
+import { openDrawing, canView } from './drawings.js';
+import { S } from './state.js';
 
 const P = { list: [], detail: null, filter: '', poll: null, users: null, open: new Set(['models']) };
 const DISCIPLINES = ['Architecture', 'Structure', 'Interiors', 'Mechanical', 'Electrical', 'Plumbing', 'Fire', 'Landscape', 'Other'];
@@ -68,10 +70,12 @@ export async function openProject(id, keepScroll = false, quiet = false) {
   try { P.detail = await api('GET', '/projects/' + id); } catch (e) { P.detail = null; if (!quiet) status(e.message, 'bad'); return showProjects(); }
   try { localStorage.setItem('dwfxLastProject:' + (session.get()?.user?.id || ''), id); } catch { /* storage blocked */ }
   App.setContext?.(P.detail.project);
+  applySettings();
   schedulePoll();
   renderDetail(); box().scrollTop = y;
 }
 export const currentProject = () => P.detail;
+function applySettings() { S.settings = { openingThreshold: 0.5, ...(P.detail?.project?.settings || {}) }; }
 
 function section(key, title, count, body, actions = '') {
   const open = P.open.has(key);
@@ -95,6 +99,7 @@ function renderDetail() {
     ${section('drawings', 'Drawings and documents', d.drawings.length, drawingsHtml(), can('editor') ? '<button class="btn small" id="drToggle">Upload</button>' : '')}
     ${section('takeoffs', 'Saved take-off groups', d.takeoffs.length, takeoffsHtml())}
     ${section('team', 'Team', d.members.length, teamHtml())}
+    ${section('settings', 'Project settings and QS rules', null, settingsHtml())}
     ${section('activity', 'Activity', null, '<div id="actList" class="loading">Loading…</div>')}
     ${section('manage', 'Export and delete', null, manageHtml())}`;
   wireDetail();
@@ -127,6 +132,7 @@ function modelsHtml() {
         ${v.status === 'failed' ? `<div class="msg bad small">${esc(v.error || 'Processing failed.')}</div>` : ''}
         <div class="vact">
           ${v.status === 'ready' ? `<button class="btn small primary" data-open="${v.id}">${isOpen ? 'Reload' : 'Open'}</button>` : ''}
+          ${v.stats?.sheets?.length ? `<button class="btn small" data-sheets="${v.id}">2D sheets (${v.stats.sheets.length})</button>` : ''}
           <button class="btn small" data-src="${v.id}" data-name="${esc(v.file_name)}">Download</button>
           ${v.status === 'failed' && can('editor') ? `<button class="btn small" data-re="${v.id}">Try again</button>` : ''}
           ${can('owner') ? `<button class="btn small subtle danger-text" data-delv="${v.id}" data-label="${esc(m.name)} v${v.version}">Delete</button>` : ''}
@@ -143,7 +149,7 @@ function drawingsHtml() {
   if (!d.drawings.length) return up + '<div class="empty-state"><p>No drawings yet. Upload the drawing set so the team keeps everything for this project in one place.</p></div>';
   return up + `<table class="tbl"><thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody>${d.drawings.map(x => `
     <tr><td class="wrap">${esc(x.name)}</td><td class="num">${fmtBytes(Number(x.size))}</td><td class="small">${fmtDay(x.created_at)}<br><span class="muted">${esc(x.uploaded_by || '')}</span></td>
-    <td class="right"><button class="btn small" data-dl="${x.id}" data-name="${esc(x.name)}">Download</button>${can('editor') ? ` <button class="btn small subtle danger-text" data-deld="${x.id}" data-name="${esc(x.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+    <td class="right">${canView(x.name) ? `<button class="btn small" data-view="${x.id}">View</button> ` : ''}<button class="btn small" data-dl="${x.id}" data-name="${esc(x.name)}">Download</button>${can('editor') ? ` <button class="btn small subtle danger-text" data-deld="${x.id}" data-name="${esc(x.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 function takeoffsHtml() {
   const d = P.detail;
@@ -169,6 +175,33 @@ function teamHtml() {
       <button class="btn">Add</button></form>
       <p class="muted small">Editors can upload and measure. Viewers can open and download. Owners also manage the team and can delete the project. Only people in your user list can be added.</p>` : ''}`;
 }
+function settingsHtml() {
+  const p = P.detail.project, st = p.settings || {};
+  return `${can('owner') ? `<form class="form" id="psForm">
+      <label class="row"><input type="checkbox" id="psAiOff" ${p.ai_off ? 'checked' : ''}> Switch the AI off for this project (confidential work)</label>
+      <label class="field">Do not deduct openings up to (m²)<input class="input" type="number" id="psThr" min="0" max="100" step="0.1" value="${st.openingThreshold ?? 0.5}"></label>
+      <label class="field">BOQ house style for AI descriptions<textarea class="input" id="psStyle" maxlength="1000" placeholder="e.g. NRM2 style. Start with the work, then material, size and location. Use 'Ditto' for repeated headings.">${esc(st.houseStyle || '')}</textarea></label>
+      <div class="actions left"><button class="btn primary">Save settings</button></div></form>`
+    : `<p class="muted small">AI: ${p.ai_off ? 'off for this project' : 'on'} · openings up to ${st.openingThreshold ?? 0.5} m² are not deducted.</p>`}
+    <h3 style="margin-top:12px">QS rules for this project</h3>
+    <p class="muted small">The AI reads these rules (and your company rules) before it plans or checks a take-off. Example: "Measure formwork to ground beams on sides only".</p>
+    <div id="kbList" class="loading">Loading…</div>
+    ${can('editor') ? `<form class="form" id="kbForm"><label class="field">Rule title<input class="input" id="kbTitle" maxlength="160" required></label>
+      <label class="field">Rule<textarea class="input" id="kbBody" maxlength="4000" required></textarea></label>
+      <div class="actions left"><button class="btn">Add rule</button></div></form>` : ''}`;
+}
+async function loadKB() {
+  const el = $('kbList'); if (!el) return;
+  try {
+    const { rules } = await api('GET', `/kb?projectId=${P.detail.project.id}`);
+    const mine = rules.filter(r => r.scope === 'project');
+    el.className = '';
+    el.innerHTML = (mine.length ? `<ul class="check-list">${mine.map(r => `<li><span class="grow"><strong>${esc(r.title)}</strong><br><span class="muted small">${esc(r.body)}</span></span>${can('editor') ? `<button class="btn small subtle danger-text" data-kbd="${r.id}">Delete</button>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">No project rules yet.</p>') +
+      `<p class="muted small">${rules.length - mine.length} company rule(s) also apply${App.isAdmin?.() ? ' (edit them in Admin)' : ''}.</p>`;
+    el.querySelectorAll('[data-kbd]').forEach(b => b.onclick = async () => { try { await api('DELETE', `/kb/${b.dataset.kbd}`); loadKB(); } catch (err) { status(err.message, 'bad'); } });
+  } catch (err) { el.textContent = err.message; }
+}
+
 function manageHtml() {
   return `<div class="row-actions"><div><strong>Export project</strong><div class="muted small">A ZIP with every model version, drawing, saved take-off and the activity log.</div></div>
     <button class="btn" id="pExport">Export ZIP</button></div>
@@ -183,6 +216,27 @@ function wireDetail() {
     P.open.has(b.dataset.sec) ? P.open.delete(b.dataset.sec) : P.open.add(b.dataset.sec); renderDetail();
   });
   if (P.open.has('activity')) loadActivity();
+  if (P.open.has('settings')) {
+    loadKB();
+    $('psForm') && ($('psForm').onsubmit = async (e) => {
+      e.preventDefault();
+      await act(() => api('PATCH', `/projects/${pid}/settings`, { aiOff: $('psAiOff').checked, openingThreshold: Number($('psThr').value), houseStyle: $('psStyle').value }), 'Project settings saved.');
+      applySettings(); App.computeDerived && S.data && App.computeDerived();
+    });
+    $('kbForm') && ($('kbForm').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await api('POST', '/kb', { scope: 'project', projectId: pid, title: $('kbTitle').value, body: $('kbBody').value }); $('kbTitle').value = ''; $('kbBody').value = ''; loadKB(); status('Rule added.', 'ok'); }
+      catch (err) { status(err.message, 'bad'); }
+    });
+  }
+  box().querySelectorAll('[data-view]').forEach(b => b.onclick = () => openDrawing(d.drawings.find(x => x.id === b.dataset.view)));
+  box().querySelectorAll('[data-sheets]').forEach(b => b.onclick = () => {
+    const v = d.models.flatMap(m => m.versions).find(x => x.id === b.dataset.sheets);
+    const list = v.stats.sheets;
+    if (list.length === 1) return openDrawing({ kind: 'sheet', versionId: v.id, index: list[0].index, name: list[0].name });
+    confirmBox({ title: '2D sheets', body: `<ul class="check-list">${list.map(sh => `<li><span class="grow">${esc(sh.name)}</span><button class="btn small" data-sh="${sh.index}">View</button></li>`).join('')}</ul>`, confirmLabel: 'Close' });
+    document.querySelectorAll('#dialog [data-sh]').forEach(x => x.onclick = () => { $('dlgNo').click(); const sh = list.find(y => y.index === +x.dataset.sh); openDrawing({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }); });
+  });
   $('pEdit') && ($('pEdit').onclick = editForm);
   // models
   $('upToggle') && ($('upToggle').onclick = () => { P.open.add('models'); P.showUpload = true; renderDetail(); $('upFile')?.focus(); });
@@ -200,7 +254,10 @@ function wireDetail() {
       } catch (err) { $('upErr').hidden = false; $('upErr').textContent = err.message; $('upGo').disabled = false; bar.hidden = true; }
     };
   }
-  box().querySelectorAll('[data-open]').forEach(b => b.onclick = () => App.openVersion(b.dataset.open));
+  box().querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
+    const m = d.models.find(x => x.versions.some(v => v.id === b.dataset.open)), v = m.versions.find(x => x.id === b.dataset.open);
+    App.openVersion(b.dataset.open, `${m.name} v${v.version} · ${v.file_name}`);
+  });
   box().querySelectorAll('[data-src]').forEach(b => b.onclick = () => dl(`/versions/${b.dataset.src}/source`, b.dataset.name));
   box().querySelectorAll('[data-re]').forEach(b => b.onclick = async () => { await api('POST', `/versions/${b.dataset.re}/reprocess`); openProject(pid, true); });
   box().querySelectorAll('[data-delv]').forEach(b => b.onclick = async () => {
@@ -308,7 +365,7 @@ async function restore(ids) {
   const all = (await api('GET', `/projects/${P.detail.project.id}/takeoffs`)).takeoffs;
   const list = all.filter(t => ids.includes(t.id));
   let n = 0;
-  for (const t of list) { try { await App.addToExcel(t.spec, { save: false }); n++; } catch (err) { status(`"${t.name}": ${err.message}`, 'bad'); return; } }
+  for (const t of list) { try { await App.addToExcel(t.spec, { save: false, takeoffId: t.id }); n++; } catch (err) { status(`"${t.name}": ${err.message}`, 'bad'); return; } }
   status(`${n} group${n === 1 ? '' : 's'} restored to the Take-off sheet.`, 'ok');
 }
 

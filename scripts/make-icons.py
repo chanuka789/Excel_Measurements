@@ -67,7 +67,54 @@ def group(d):
     d.polygon(u(16, 5, 26, 10.5, 26, 21.5, 16, 27, 6, 21.5, 6, 10.5), outline='white', width=W(2))
     d.line(u(6, 10.5, 16, 16, 26, 10.5), fill=AMBER, width=W(2)); d.line(u(16, 16, 16, 27), fill=AMBER, width=W(2))
 
-ICONS = dict(projects=projects, elements=elements, measure=measure, ai=ai, fit=fitv, showall=showall, isolate=isolate,
+def zones(d):
+    d.rectangle(u(3, 3, 15, 15), outline=BLUE, width=W(2)); d.rectangle(u(17, 3, 29, 15), outline=INK, width=W(2))
+    d.rectangle(u(3, 17, 29, 29), outline=AMBER, width=W(2))
+def window3d(d):
+    d.rounded_rectangle(u(2, 4, 30, 28), radius=W(2), outline=INK, width=W(2)); d.line(u(2, 9, 30, 9), fill=INK, width=W(2))
+    cube(d, 10, 12, 12, col=BLUE)
+def views(d): cube(d, 5, 4, 22, col=INK); d.polygon(u(5, 9.5, 16, 4, 27, 9.5, 16, 15), fill=BLUE)
+def section(d):
+    cube(d, 6, 6, 20, col=INK); d.line(u(1, 17, 31, 17), fill=(197, 15, 31, 255), width=W(2.4))
+def plan(d):
+    d.rectangle(u(3, 3, 29, 29), outline=INK, width=W(2)); d.line(u(3, 14, 18, 14, 18, 29), fill=INK, width=W(2)); d.line(u(18, 3, 18, 9), fill=INK, width=W(2))
+    d.line(u(22, 14, 29, 14), fill=INK, width=W(2)); d.rectangle(u(6, 17, 15, 26), fill=(15, 108, 189, 90))
+def saved(d): d.polygon(u(8, 3, 24, 3, 24, 29, 16, 22, 8, 29), outline=BLUE, width=W(2.2))
+def hide(d):
+    d.ellipse(u(2, 9, 30, 23), outline=INK, width=W(2)); d.ellipse(u(12, 12, 20, 20), fill=INK); d.line(u(4, 28, 28, 4), fill=(197, 15, 31, 255), width=W(2.6))
+def box(d):
+    for i in range(0, 24, 5): d.line(u(4 + i, 5, min(4 + i + 3, 28), 5), fill=INK, width=W(2)); d.line(u(4 + i, 23, min(4 + i + 3, 28), 23), fill=INK, width=W(2))
+    for i in range(0, 18, 5): d.line(u(4, 5 + i, 4, min(5 + i + 3, 23)), fill=INK, width=W(2)); d.line(u(28, 5 + i, 28, min(5 + i + 3, 23)), fill=INK, width=W(2))
+    d.polygon(u(17, 14, 29, 26, 24, 26.5, 22, 31), fill=BLUE)
+def colour(d):
+    d.ellipse(u(3, 5, 19, 21), fill=(15, 108, 189, 200)); d.ellipse(u(13, 5, 29, 21), fill=(242, 169, 0, 200)); d.ellipse(u(8, 13, 24, 29), fill=(16, 124, 16, 200))
+def status_(d):
+    d.rectangle(u(3, 4, 13, 14), fill=GREEN); d.rectangle(u(17, 4, 27, 14), fill=(197, 15, 31, 255)); d.rectangle(u(3, 18, 13, 28), fill=GREEN); d.rectangle(u(17, 18, 27, 28), fill=(135, 100, 184, 255))
+def aicheck(d):
+    d.ellipse(u(3, 3, 29, 29), outline=GREEN, width=W(2.4)); d.line(u(9, 16, 14, 21, 23, 11), fill=GREEN, width=W(2.8))
+    d.polygon(u(25, 1, 26.3, 4.5, 30, 5.5, 26.3, 6.5, 25, 10, 23.7, 6.5, 20, 5.5, 23.7, 4.5), fill=AMBER)
+def compare(d):
+    cube(d, 2, 8, 14, col=INK); cube(d, 16, 8, 14, col=BLUE, fill=(16, 124, 16, 120))
+def updatei(d):
+    d.rectangle(u(3, 3, 21, 27), outline=GREEN, width=W(2))
+    for y in (9, 15, 21): d.line(u(3, y, 21, y), fill=GREEN, width=W(1.5))
+    d.arc(u(14, 12, 30, 28), 180, 450, fill=BLUE, width=W(2.4)); d.polygon(u(13, 17, 15, 22, 19, 18), fill=BLUE)
+def boq(d):
+    d.rectangle(u(3, 3, 29, 29), outline=INK, width=W(2)); d.rectangle(u(3, 3, 29, 9), fill=BLUE)
+    for y in (14, 19, 24): d.line(u(6, y, 26, y), fill=INK, width=W(1.6))
+    d.line(u(20, 9, 20, 29), fill=INK, width=W(1.5))
+def pdf(d):
+    d.polygon(u(6, 2, 20, 2, 27, 9, 27, 30, 6, 30), outline=INK, width=W(2)); d.line(u(20, 2, 20, 9, 27, 9), fill=INK, width=W(2))
+    d.rectangle(u(2, 15, 22, 25), fill=(197, 15, 31, 255))
+def review(d):
+    d.ellipse(u(3, 3, 22, 22), outline=INK, width=W(2.4)); d.line(u(19, 19, 29, 29), fill=INK, width=W(3)); d.line(u(8, 12, 12, 16, 18, 9), fill=GREEN, width=W(2.4))
+def templates(d):
+    d.rounded_rectangle(u(5, 3, 27, 29), radius=W(2), outline=INK, width=W(2)); d.rectangle(u(9, 8, 23, 13), fill=BLUE)
+    for y in (18, 23): d.line(u(9, y, 23, y), fill=INK, width=W(1.6))
+
+ICONS = dict(zones=zones, window=window3d, views=views, section=section, plan=plan, saved=saved, hide=hide, box=box, colour=colour,
+             status=status_, aicheck=aicheck, compare=compare, update=updatei, boq=boq, pdf=pdf, review=review, templates=templates,
+             projects=projects, elements=elements, measure=measure, ai=ai, fit=fitv, showall=showall, isolate=isolate,
              clear=clear, fromexcel=fromexcel, refresh=refresh, admin=admin, group=group)
 for name, fn in ICONS.items():
     im = canvas(); fn(ImageDraw.Draw(im))

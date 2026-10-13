@@ -64,6 +64,37 @@ const MIGRATIONS = [
      project_id UUID, action TEXT NOT NULL, detail JSONB);
    CREATE INDEX IF NOT EXISTS audit_project ON audit (project_id, at DESC);
    CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value JSONB);`,
+  // 2: viewer, measurement, revisions, output and AI (phases 2-5)
+  `CREATE TABLE IF NOT EXISTS views (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+     version_id UUID REFERENCES model_versions(id) ON DELETE SET NULL, name TEXT NOT NULL, state JSONB NOT NULL,
+     created_by INT REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+   CREATE TABLE IF NOT EXISTS templates (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), scope TEXT NOT NULL DEFAULT 'user',
+     project_id UUID REFERENCES projects(id) ON DELETE CASCADE, owner_id INT REFERENCES users(id) ON DELETE CASCADE,
+     name TEXT NOT NULL, discipline TEXT, description TEXT, spec JSONB NOT NULL, builtin BOOLEAN NOT NULL DEFAULT false,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+   CREATE UNIQUE INDEX IF NOT EXISTS templates_builtin ON templates (name) WHERE builtin;
+   CREATE TABLE IF NOT EXISTS zones (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+     name TEXT NOT NULL, color TEXT, ids JSONB NOT NULL DEFAULT '[]', created_by INT REFERENCES users(id),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE (project_id, name));
+   CREATE TABLE IF NOT EXISTS kb_rules (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), scope TEXT NOT NULL DEFAULT 'company',
+     project_id UUID REFERENCES projects(id) ON DELETE CASCADE, title TEXT NOT NULL, body TEXT NOT NULL, tags TEXT,
+     created_by INT REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+   CREATE TABLE IF NOT EXISTS ai_usage (
+     id BIGSERIAL PRIMARY KEY, user_id INT REFERENCES users(id) ON DELETE SET NULL, project_id UUID, kind TEXT NOT NULL,
+     provider TEXT, model TEXT, tokens_in INT NOT NULL DEFAULT 0, tokens_out INT NOT NULL DEFAULT 0, ok BOOLEAN NOT NULL DEFAULT true,
+     at TIMESTAMPTZ NOT NULL DEFAULT now());
+   CREATE INDEX IF NOT EXISTS ai_usage_user ON ai_usage (user_id, at DESC);
+   CREATE TABLE IF NOT EXISTS exports (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+     kind TEXT NOT NULL, name TEXT NOT NULL, size BIGINT NOT NULL DEFAULT 0, storage_key TEXT NOT NULL,
+     created_by INT REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+   ALTER TABLE projects ADD COLUMN IF NOT EXISTS ai_off BOOLEAN NOT NULL DEFAULT false;
+   ALTER TABLE projects ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}';
+   ALTER TABLE takeoffs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`,
 ];
 
 export async function migrate() {

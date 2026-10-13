@@ -9,7 +9,8 @@
     "worker": "node worker.js",
     "hash-password": "node scripts/hash-password.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js && python3 -m unittest discover -s tests -p 'test_*.py'",
-    "icons": "python3 scripts/make-icons.py"
+    "icons": "python3 scripts/make-icons.py",
+    "manifest": "python3 scripts/make-manifest.py"
   },
   "engines": {
     "node": ">=20"
@@ -22,7 +23,10 @@
     "dwf-viewer": "0.6.7",
     "express": "4.21.2",
     "multer": "1.4.5-lts.1",
+    "pdfjs-dist": "4.10.38",
+    "pdfkit": "0.15.2",
     "pg": "8.13.1",
-    "three": "0.160.0"
+    "three": "0.160.0",
+    "three-mesh-bvh": "0.7.8"
   }
 }

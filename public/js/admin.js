@@ -1,5 +1,6 @@
 // Admin tab: system status, users (from APP_USERS), password hash tool, backup, activity log.
-import { $, esc, api, fmtBytes, fmtDate, status } from './core.js';
+import { $, esc, App, api, fmtBytes, fmtDate, status } from './core.js';
+import { S } from './state.js';
 
 export async function showAdmin() {
   const box = $('adminBody');
@@ -46,6 +47,9 @@ export async function showAdmin() {
         <div id="hashOut"></div>
       </section>
 
+      <section class="card" id="aiAdmin"><h3>AI assistant</h3><div class="loading">Loading…</div></section>
+      <section class="card" id="kbAdmin"><h3>Company QS rules</h3><div class="loading">Loading…</div></section>
+
       <section class="card">
         <h3>Recent activity</h3>
         <div class="tscroll"><table class="tbl"><thead><tr><th>When</th><th>Who</th><th>Project</th><th>Action</th></tr></thead><tbody>
@@ -68,5 +72,73 @@ export async function showAdmin() {
         };
       } catch (err) { status(err.message, 'bad'); }
     };
+    renderAIAdmin(); renderKBAdmin();
   } catch (err) { box.innerHTML = `<div class="msg bad">${esc(err.message)}</div>`; }
+}
+
+async function renderAIAdmin() {
+  const box = $('aiAdmin'); if (!box) return;
+  let a; try { a = await api('GET', '/admin/ai'); } catch (err) { box.innerHTML = `<h3>AI assistant</h3><div class="msg bad">${esc(err.message)}</div>`; return; }
+  const ev = a.evaluation;
+  box.innerHTML = `<h3>AI assistant</h3>
+    ${a.providers.length ? `<form id="aiForm" class="form">
+      <label class="row"><input type="checkbox" id="aiOn" ${a.enabled ? 'checked' : ''}> AI assistant on for everyone</label>
+      <div class="two"><label class="field">Provider<select class="input" id="aiProv">${a.providers.map(p => `<option value="${esc(p.id)}" ${p.id === a.provider ? 'selected' : ''}>${esc(p.label)} (${esc(p.model)})</option>`).join('')}</select></label>
+      <label class="field">Model name (optional override)<input class="input" id="aiModel" placeholder="as the provider names it" value=""></label></div>
+      <label class="field">Requests per user per day<input class="input" type="number" id="aiLimit" min="1" max="100000" value="${a.dailyLimit}"></label>
+      <div class="actions left"><button class="btn primary">Save AI settings</button></div></form>
+      <p class="muted small">Providers come from Railway variables: <code>AI_API_KEY</code> (+ <code>AI_BASE_URL</code>, <code>AI_MODEL</code>), <code>DEEPSEEK_API_KEY</code>, <code>OPENROUTER_API_KEY</code> (+ <code>OPENROUTER_MODEL</code>, e.g. a Meta Muse Spark model id), or <code>AI_PROVIDERS</code> (JSON list). A project owner can switch the AI off for one project.</p>`
+      : '<div class="msg bad">No AI provider is set up. Add AI_API_KEY (and AI_BASE_URL, AI_MODEL) in Railway.</div>'}
+    <h4>QS test set</h4>
+    <p class="muted small">Runs 50 real QS requests through the AI on a model and scores the plans (pass mark 45 of 50). Run it after changing provider or model. It uses about 50 AI requests and takes several minutes.</p>
+    <div class="actions left"><button class="btn" id="aiEval" ${S.versionId ? '' : 'disabled'}>Run the test set on the open model</button>${S.versionId ? '' : '<span class="muted small">Open a project model first (the structural sample is the reference).</span>'}</div>
+    <div id="aiEvalOut">${ev ? evalHtml(ev) : ''}</div>
+    ${a.usage.length ? `<h4>Use in the last 30 days</h4><table class="tbl"><thead><tr><th>User</th><th class="num">Requests</th><th class="num">Tokens</th></tr></thead><tbody>${a.usage.map(u => `<tr><td>${esc(u.name)}</td><td class="num">${u.requests}</td><td class="num">${u.tokens.toLocaleString()}</td></tr>`).join('')}</tbody></table>` : ''}`;
+  $('aiForm') && ($('aiForm').onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api('PUT', '/admin/ai', { enabled: $('aiOn').checked, provider: $('aiProv').value, model: $('aiModel').value || null, dailyLimit: Number($('aiLimit').value) }); status('AI settings saved.', 'ok'); renderAIAdmin(); }
+    catch (err) { status(err.message, 'bad'); }
+  });
+  $('aiEval').onclick = async () => {
+    try { await api('POST', '/admin/ai/eval', { versionId: S.versionId }); status('The QS test set is running. This page updates as results come in.', 'ok'); pollEval(); }
+    catch (err) { status(err.message, 'bad'); }
+  };
+  if (ev && ev.status !== 'done') pollEval();
+}
+let evalTimer = null;
+function pollEval() {
+  clearTimeout(evalTimer);
+  evalTimer = setTimeout(async () => {
+    try { const a = await api('GET', '/admin/ai'); const el = $('aiEvalOut'); if (!el) return; el.innerHTML = evalHtml(a.evaluation); if (a.evaluation?.status !== 'done') pollEval(); } catch { /* stop polling */ }
+  }, 5000);
+}
+function evalHtml(ev) {
+  if (!ev) return '';
+  const fails = (ev.results || []).filter(r => !r.pass);
+  return `<div class="kpis"><div class="kpi ${ev.passed >= 45 ? 'add' : 'rem'}"><b>${ev.passed ?? 0}/${ev.total ?? 50}</b><span>passed</span></div><div class="kpi"><b>${ev.done ?? 0}</b><span>run</span></div></div>
+    <p class="muted small">${esc(ev.status)} · ${esc(ev.provider || '')} ${esc(ev.aiModel || '')} · model ${esc(ev.model || '')}${ev.finishedAt ? ' · ' + fmtDate(ev.finishedAt) : ''}</p>
+    ${fails.length ? `<details class="box"><summary>Requests that did not pass (${fails.length})</summary><ul class="check-list">${fails.map(r => `<li><span class="grow"><strong>${esc(r.request)}</strong><br><span class="muted small">${esc((r.reasons || []).join('; '))}</span></span></li>`).join('')}</ul></details>` : ''}`;
+}
+
+async function renderKBAdmin() {
+  const box = $('kbAdmin'); if (!box) return;
+  let rules; try { rules = (await api('GET', '/kb')).rules.filter(r => r.scope === 'company'); } catch (err) { box.innerHTML = `<h3>Company QS rules</h3><div class="msg bad">${esc(err.message)}</div>`; return; }
+  box.innerHTML = `<h3>Company QS rules</h3>
+    <p class="muted small">Your measurement conventions. The AI reads the relevant rules for every request and check. Start rules marked "House rule" are defaults: check them against your standard (NRM2, POMI or your own) and edit.</p>
+    <ul class="check-list">${rules.map(r => `<li><span class="grow"><strong>${esc(r.title)}</strong><br><span class="muted small">${esc(r.body)}</span></span><button class="btn small" data-kbe="${r.id}">Edit</button><button class="btn small subtle danger-text" data-kbx="${r.id}">Delete</button></li>`).join('')}</ul>
+    <form id="kbAdd" class="form"><label class="field">Title<input class="input" id="kbT" maxlength="160" required></label>
+      <label class="field">Rule<textarea class="input" id="kbB" maxlength="4000" required></textarea></label>
+      <label class="field">Keywords (optional)<input class="input" id="kbK" maxlength="300" placeholder="formwork beams soffit"></label>
+      <div class="actions left"><button class="btn">Add rule</button></div></form>`;
+  box.querySelectorAll('[data-kbx]').forEach(b => b.onclick = async () => { try { await api('DELETE', `/kb/${b.dataset.kbx}`); renderKBAdmin(); } catch (err) { status(err.message, 'bad'); } });
+  box.querySelectorAll('[data-kbe]').forEach(b => b.onclick = () => {
+    const r = rules.find(x => x.id === b.dataset.kbe); $('kbT').value = r.title; $('kbB').value = r.body; $('kbK').value = r.tags || '';
+    $('kbAdd').dataset.edit = r.id; $('kbAdd').querySelector('button').textContent = 'Save rule'; $('kbT').focus();
+  });
+  $('kbAdd').onsubmit = async (e) => {
+    e.preventDefault();
+    const body = { title: $('kbT').value, body: $('kbB').value, tags: $('kbK').value, scope: 'company' };
+    try { if (e.target.dataset.edit) await api('PATCH', `/kb/${e.target.dataset.edit}`, body); else await api('POST', '/kb', body); status('Rule saved.', 'ok'); renderKBAdmin(); }
+    catch (err) { status(err.message, 'bad'); }
+  };
 }

@@ -10,35 +10,11 @@ import * as store from './storage.js';
 import { enqueue } from './jobs.js';
 import { backupDatabase, dataKey } from './processing.js';
 import { login, logout, requireUser, requireAdmin, hashPassword, syncUsers, publicUser } from './auth.js';
+import { json, wrap, clean, safeName, uuidOk, HttpError, fail, need, versionProject, RANK } from './http.js';
+import { registerFeatures } from './features.js';
 
 export const api = express.Router();
 const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 500 * 1024 * 1024, files: 20 } });
-const json = express.json({ limit: '8mb' });
-const RANK = { viewer: 1, editor: 2, owner: 3 };
-const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
-const clean = (s, n = 200) => String(s ?? '').trim().slice(0, n);
-const safeName = (s) => clean(s, 160).replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_') || 'file';
-const uuidOk = (s) => /^[0-9a-f-]{36}$/i.test(String(s));
-
-class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
-const fail = (status, msg) => { throw new HttpError(status, msg); };
-
-async function roleIn(user, projectId) {
-  if (!uuidOk(projectId)) return null;
-  if (user.role === 'admin') return (await one(`SELECT 1 FROM projects WHERE id=$1`, [projectId])) ? 'owner' : null;
-  return (await one(`SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2`, [projectId, user.id]))?.role || null;
-}
-async function need(req, projectId, min) {
-  const r = await roleIn(req.user, projectId);
-  if (!r) fail(404, 'Project not found, or you do not have access to it.');
-  if (RANK[r] < RANK[min]) fail(403, `You need ${min} access to this project for that.`);
-  return r;
-}
-async function versionProject(versionId) {
-  if (!uuidOk(versionId)) return null;
-  return one(`SELECT v.*, m.project_id, m.name AS model_name FROM model_versions v JOIN models m ON m.id=v.model_id WHERE v.id=$1`, [versionId]);
-}
-
 // ---------------------------------------------------------------- auth
 api.post('/auth/login', json, wrap(async (req, res) => {
   const r = await login(req.body?.email, req.body?.password, req.get('user-agent'));
@@ -166,6 +142,15 @@ api.get('/versions/:vid/model', wrap(async (req, res) => {
   if (v.status !== 'ready') fail(409, 'This model version is not ready yet.');
   res.set({ 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' });
   (await store.getStream(dataKey(v.storage_key, 'model.json.gz'))).pipe(res);
+}));
+api.get('/versions/:vid/geometry', wrap(async (req, res) => {
+  const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
+  await need(req, v.project_id, 'viewer');
+  if (v.status !== 'ready') fail(409, 'This model version is not ready yet.');
+  const key = dataKey(v.storage_key, 'geometry.bin.gz');
+  if (!(await store.exists(key))) fail(404, 'This version was processed with an older format. Press "Try again" to reprocess it.');
+  res.set({ 'Content-Type': 'application/octet-stream', 'Content-Encoding': 'gzip', 'Cache-Control': 'private, max-age=86400' });
+  (await store.getStream(key)).pipe(res);
 }));
 api.get('/versions/:vid/source', wrap(async (req, res) => {
   const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
@@ -303,6 +288,8 @@ api.get('/admin/system', requireAdmin, wrap(async (req, res) => {
       (SELECT count(*) FROM drawings)::int AS drawings, (SELECT coalesce(sum(size),0) FROM model_versions)::bigint + (SELECT coalesce(sum(size),0) FROM drawings)::bigint AS bytes`) });
 }));
 api.post('/admin/backup', requireAdmin, wrap(async (req, res) => { res.json({ key: await backupDatabase() }); }));
+
+registerFeatures(api);
 
 // errors
 api.use((err, req, res, _next) => {

@@ -1,0 +1,648 @@
+{
+ "model": "Structural sample (KEO SIDMV structural DWFx)",
+ "cases": [
+  {
+   "id": "q01",
+   "request": "Concrete volume of all beams",
+   "expect": {
+    "categories": [
+     "Structural Framing"
+    ],
+    "properties_any": [
+     [
+      "Volume",
+      "Geo volume"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q02",
+   "request": "Total concrete in columns",
+   "expect": {
+    "categories": [
+     "Structural Columns"
+    ],
+    "properties_any": [
+     [
+      "Volume",
+      "Geo volume"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q03",
+   "request": "Concrete to suspended slabs",
+   "expect": {
+    "categories": [
+     "Floors"
+    ],
+    "properties_any": [
+     [
+      "Volume",
+      "Geo volume"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q04",
+   "request": "Concrete volume of RC walls and upstands",
+   "expect": {
+    "categories": [
+     "Walls"
+    ],
+    "properties_any": [
+     [
+      "Volume",
+      "Geo volume"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q05",
+   "request": "Concrete in foundations and pile caps",
+   "expect": {
+    "categories": [
+     "Structural Foundations"
+    ],
+    "properties_any": [
+     [
+      "Volume",
+      "Geo volume"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q06",
+   "request": "Measure all in-situ concrete by element type",
+   "expect": {
+    "categories": [
+     "Structural Framing",
+     "Structural Columns",
+     "Floors",
+     "Walls",
+     "Structural Foundations"
+    ],
+    "properties_any": [
+     [
+      "Volume",
+      "Geo volume"
+     ]
+    ],
+    "min_cats": 3
+   }
+  },
+  {
+   "id": "q07",
+   "request": "Formwork to beams: soffit and both sides less slab thickness",
+   "expect": {
+    "categories": [
+     "Structural Framing"
+    ],
+    "formula_any": [
+     "slab|Geo bottom|soffit"
+    ],
+    "properties_any": [
+     [
+      "Cut Length",
+      "Geo bottom area",
+      "Geo side area",
+      "Length"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q08",
+   "request": "Calculate beam formwork using the exact geometry faces",
+   "expect": {
+    "categories": [
+     "Structural Framing"
+    ],
+    "properties_any": [
+     [
+      "Geo bottom area",
+      "Geo side area"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q09",
+   "request": "Formwork to columns",
+   "expect": {
+    "categories": [
+     "Structural Columns"
+    ],
+    "properties_any": [
+     [
+      "Geo side area",
+      "type_dim",
+      "Perimeter"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q10",
+   "request": "Soffit formwork to slabs",
+   "expect": {
+    "categories": [
+     "Floors"
+    ],
+    "properties_any": [
+     [
+      "Geo bottom area",
+      "Area"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q11",
+   "request": "Edge formwork to slabs",
+   "expect": {
+    "categories": [
+     "Floors"
+    ],
+    "properties_any": [
+     [
+      "Geo side area",
+      "Perimeter"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q12",
+   "request": "Formwork to both faces of walls",
+   "expect": {
+    "categories": [
+     "Walls"
+    ],
+    "properties_any": [
+     [
+      "Geo side area",
+      "Area",
+      "Length"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q13",
+   "request": "Formwork to sides of foundations",
+   "expect": {
+    "categories": [
+     "Structural Foundations"
+    ],
+    "properties_any": [
+     [
+      "Geo side area",
+      "type_dim",
+      "Perimeter"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q14",
+   "request": "Reinforcement to beams at 150 kg/m3",
+   "expect": {
+    "categories": [
+     "Structural Framing"
+    ],
+    "properties_any": [
+     [
+      "Volume",
+      "Geo volume"
+     ]
+    ],
+    "formula_any": [
+     "150|ratio|kg"
+    ],
+    "constant_any": [
+     150
+    ]
+   }
+  },
+  {
+   "id": "q15",
+   "request": "Rebar in columns using 200 kg per m3",
+   "expect": {
+    "categories": [
+     "Structural Columns"
+    ],
+    "formula_any": [
+     "ratio|kg|200"
+    ],
+    "constant_any": [
+     200
+    ]
+   }
+  },
+  {
+   "id": "q16",
+   "request": "Reinforcement to slabs 100 kg/m3 in tonnes",
+   "expect": {
+    "categories": [
+     "Floors"
+    ],
+    "formula_any": [
+     "1000|t"
+    ],
+    "constant_any": [
+     100
+    ]
+   }
+  },
+  {
+   "id": "q17",
+   "request": "Reinforcement in foundations at 90 kg/m3",
+   "expect": {
+    "categories": [
+     "Structural Foundations"
+    ],
+    "constant_any": [
+     90
+    ]
+   }
+  },
+  {
+   "id": "q18",
+   "request": "Blinding 50 mm under foundations",
+   "expect": {
+    "categories": [
+     "Structural Foundations"
+    ],
+    "properties_any": [
+     [
+      "Geo bottom area",
+      "Area",
+      "type_dim",
+      "Geo plan area"
+     ]
+    ],
+    "constant_any": [
+     0.05
+    ]
+   }
+  },
+  {
+   "id": "q19",
+   "request": "Waterproofing to foundations in contact with ground",
+   "expect": {
+    "categories": [
+     "Structural Foundations"
+    ],
+    "properties_any": [
+     [
+      "Geo bottom area",
+      "Geo side area"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q20",
+   "request": "Blinding under ground beams 75mm thick",
+   "expect": {
+    "categories": [
+     "Structural Framing",
+     "Structural Foundations"
+    ],
+    "constant_any": [
+     0.075
+    ]
+   }
+  },
+  {
+   "id": "q21",
+   "request": "Count columns by type",
+   "expect": {
+    "categories": [
+     "Structural Columns"
+    ],
+    "properties_any": [
+     [
+      "count"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q22",
+   "request": "Number of beams by size",
+   "expect": {
+    "categories": [
+     "Structural Framing"
+    ],
+    "properties_any": [
+     [
+      "count"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q23",
+   "request": "Total length of beams by type",
+   "expect": {
+    "categories": [
+     "Structural Framing"
+    ],
+    "properties_any": [
+     [
+      "Cut Length",
+      "Length"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q24",
+   "request": "Count of pile caps / foundations by type",
+   "expect": {
+    "categories": [
+     "Structural Foundations"
+    ],
+    "properties_any": [
+     [
+      "count"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q25",
+   "request": "Length of walls by type",
+   "expect": {
+    "categories": [
+     "Walls"
+    ],
+    "properties_any": [
+     [
+      "Length"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q26",
+   "request": "Slab areas by type",
+   "expect": {
+    "categories": [
+     "Floors"
+    ],
+    "properties_any": [
+     [
+      "Area",
+      "Geo top area",
+      "Geo plan area",
+      "Geo bottom area"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q27",
+   "request": "Beam concrete split by level",
+   "expect": {
+    "categories": [
+     "Structural Framing"
+    ],
+    "group_by": "level"
+   }
+  },
+  {
+   "id": "q28",
+   "request": "Column concrete grouped by level",
+   "expect": {
+    "categories": [
+     "Structural Columns"
+    ],
+    "group_by": "level"
+   }
+  },
+  {
+   "id": "q29",
+   "request": "Slab concrete per level",
+   "expect": {
+    "categories": [
+     "Floors"
+    ],
+    "group_by": "level"
+   }
+  },
+  {
+   "id": "q30",
+   "request": "Measure the selected elements: concrete volume and formwork",
+   "expect": {
+    "use_ticked": true,
+    "ticked": "Structural Framing"
+   }
+  },
+  {
+   "id": "q31",
+   "request": "Volume of the ticked elements",
+   "expect": {
+    "use_ticked": true,
+    "ticked": "Structural Columns"
+   }
+  },
+  {
+   "id": "q32",
+   "request": "Structural steel members by section with length",
+   "expect": {
+    "categories": [
+     "Structural Framing"
+    ],
+    "properties_any": [
+     [
+      "Cut Length",
+      "Length",
+      "count"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q33",
+   "request": "Concrete and formwork to ground beams, no soffit formwork because they sit on blinding",
+   "expect": {
+    "categories": [
+     "Structural Framing",
+     "Structural Foundations"
+    ]
+   }
+  },
+  {
+   "id": "q34",
+   "request": "Formwork to upstand walls both sides",
+   "expect": {
+    "categories": [
+     "Walls"
+    ],
+    "properties_any": [
+     [
+      "Geo side area",
+      "Area",
+      "Length"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q35",
+   "request": "Wastage 5% on concrete to columns",
+   "expect": {
+    "categories": [
+     "Structural Columns"
+    ],
+    "constant_any": [
+     0.05,
+     5,
+     1.05
+    ]
+   }
+  },
+  {
+   "id": "q36",
+   "request": "Column concrete with 2.5% wastage added",
+   "expect": {
+    "categories": [
+     "Structural Columns"
+    ],
+    "constant_any": [
+     0.025,
+     2.5,
+     1.025
+    ]
+   }
+  },
+  {
+   "id": "q37",
+   "request": "Formwork to beams assuming 150 mm slab",
+   "expect": {
+    "categories": [
+     "Structural Framing"
+    ],
+    "constant_any": [
+     0.15
+    ]
+   }
+  },
+  {
+   "id": "q38",
+   "request": "Formwork to beams assuming 200mm slab and measure soffit separately from sides",
+   "expect": {
+    "categories": [
+     "Structural Framing"
+    ],
+    "min_formulas": 2
+   }
+  },
+  {
+   "id": "q39",
+   "request": "Stairs: count and concrete volume",
+   "expect": {
+    "categories": [
+     "Stairs",
+     "Runs",
+     "Landings"
+    ]
+   }
+  },
+  {
+   "id": "q40",
+   "request": "Concrete volume compare Revit value with geometry value for slabs",
+   "expect": {
+    "categories": [
+     "Floors"
+    ],
+    "properties_any": [
+     [
+      "Volume"
+     ],
+     [
+      "Geo volume"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "q41",
+   "request": "Measure it",
+   "expect": {
+    "ask": true
+   }
+  },
+  {
+   "id": "q42",
+   "request": "Do the take-off",
+   "expect": {
+    "ask": true
+   }
+  },
+  {
+   "id": "q43",
+   "request": "Price the BOQ",
+   "expect": {
+    "ask": true
+   }
+  },
+  {
+   "id": "q44",
+   "request": "Count all doors by type",
+   "expect": {
+    "no_groups": true
+   }
+  },
+  {
+   "id": "q45",
+   "request": "Length of pipes by diameter",
+   "expect": {
+    "no_groups": true
+   }
+  },
+  {
+   "id": "q46",
+   "request": "Area of ceilings by room",
+   "expect": {
+    "no_groups": true
+   }
+  },
+  {
+   "id": "q47",
+   "request": "Plaster to internal walls in the kitchen",
+   "expect": {
+    "no_groups": true
+   }
+  },
+  {
+   "id": "q48",
+   "request": "Window areas by orientation",
+   "expect": {
+    "no_groups": true
+   }
+  },
+  {
+   "id": "q49",
+   "request": "Measure the curtain wall glazing",
+   "expect": {
+    "no_groups": true
+   }
+  },
+  {
+   "id": "q50",
+   "request": "Cable trays length",
+   "expect": {
+    "no_groups": true
+   }
+  }
+ ]
+}
