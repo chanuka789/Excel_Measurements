@@ -98,6 +98,15 @@ table.q td.v { text-align: right; font-variant-numeric: tabular-nums; white-spac
 .card .note { color: var(--ink-soft); font-size: 12px; margin: 4px 0; }
 .aimsg { margin: 8px 0; }
 
+#app { position: relative; }
+#props { position: absolute; inset: 0 0 0 auto; width: min(100%, 420px); background: #fff; border-left: 3px solid var(--brand);
+  box-shadow: -4px 0 12px rgba(29,39,48,.15); overflow: auto; padding: 10px 12px; z-index: 5; }
+#props table.q { table-layout: fixed; }
+#props table.q td { white-space: normal !important; word-break: break-word; vertical-align: top; }
+#props table.q td:first-child { width: 48%; color: var(--ink-soft); }
+#props .ph { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+#props h4, #tab-measure h4 { margin: 12px 0 4px; font: 600 13px "Barlow Semi Condensed", sans-serif; }
+code { font: 12px Consolas, "Courier New", monospace; background: #f1f3f5; padding: 1px 4px; border-radius: 3px; }
 #status { font-size: 12px; color: var(--ink-soft); padding: 4px 12px 6px; border-top: 1px solid var(--line); min-height: 24px; flex: none; }
 #status.err { color: var(--danger); }
 </style>
@@ -158,13 +167,14 @@ table.q td.v { text-align: right; font-variant-numeric: tabular-nums; white-spac
 
   <div class="panel" id="tab-ai" role="tabpanel">
     <label class="field">Describe what to measure
-      <textarea id="aiAsk" placeholder="e.g. Measure all internal walls on the first floor, area and length, grouped by wall type"></textarea>
+      <textarea id="aiAsk" placeholder="e.g. Calculate formwork to concrete beams on the first floor (soffit and sides, less slab thickness)"></textarea>
     </label>
-    <div class="row"><button class="primary" id="aiGo">Ask AI</button><span class="hint">The AI picks the elements and quantities. The add-in calculates the numbers from the model.</span></div>
+    <div class="row"><button class="primary" id="aiGo">Ask AI</button><span class="hint">The AI works out the method and formulas. The add-in calculates from the model and writes live Excel formulas. Right-click any element to see its properties.</span></div>
     <div id="aiOut"></div>
   </div>
 
   <div id="status" role="status"></div>
+  <aside id="props" hidden aria-label="Element properties"></aside>
 </section>
 
 <script type="module" src="taskpane.js"></script>

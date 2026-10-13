@@ -16,8 +16,13 @@ deploys on every push to `main`).
    Perimeter, ...). Tick the ones you need, name the group, choose sub-totals by Type or Level,
    then **Add to Excel take-off**. Each group is added below the last one (G1, G2, ...) with SUBTOTAL formulas.
 5. Selecting rows in the Take-off sheet highlights those elements in 3D; selecting a G-title row highlights the group.
-6. **AI** tab: e.g. "measure internal walls on the first floor, area and length by type". Review the proposed
-   groups, then **Add to Excel**.
+6. **AI** tab: e.g. "calculate formwork to beams on the first floor". The AI works out the QS method:
+   inputs (model properties or sizes from the type name), assumptions (e.g. slab thickness) and formulas
+   (e.g. soffit + 2 x (depth - slab) x length). The card shows the method, editable assumptions and totals.
+   **Add to Excel** writes the group with live formulas: assumptions go in yellow cells that every row refers
+   to, formula columns have green headers.
+7. **Measure** tab also lets you add your own formula columns using the `{keys}` shown next to each quantity.
+8. **Right-click** an element in 3D (or in the tree) to see all its properties and quantities.
 
 ## Units and accuracy
 - Lengths are converted from mm to metres; areas m2, volumes m3.
