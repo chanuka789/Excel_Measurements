@@ -3,6 +3,7 @@ import zlib from 'zlib';
 import { promisify } from 'util';
 import * as store from './storage.js';
 import { dataKey } from './processing.js';
+import { matchFilter } from '../public/js/filter.js';
 
 const gunzip = promisify(zlib.gunzip);
 const cache = new Map();          // versionId -> { data, at }
@@ -27,17 +28,7 @@ export async function loadModelData(v) {
 export const forgetModelData = (vid) => cache.delete(vid);
 
 /** Filter elements the same way the add-in does (used by the AI agent and templates). */
-export function applyFilter(elements, f = {}, ticked = []) {
-  if (f.use_ticked) { const t = new Set(ticked); return elements.filter(e => t.has(e.id)); }
-  const lc = (a) => (Array.isArray(a) ? a : a ? [a] : []).map(s => String(s).toLowerCase());
-  const [cat, fam, typ, inc, exc, lev] = [lc(f.category), lc(f.family), lc(f.type), lc(f.type_contains), lc(f.type_excludes), lc(f.level)];
-  return elements.filter(e => {
-    const t = String(e.type).toLowerCase();
-    return (!cat.length || cat.includes(String(e.cat).toLowerCase())) && (!fam.length || fam.includes(String(e.fam).toLowerCase())) &&
-      (!typ.length || typ.includes(t)) && (!inc.length || inc.some(s => t.includes(s))) &&
-      (!exc.length || !exc.some(s => t.includes(s))) && (!lev.length || lev.includes(String(e.level || '').toLowerCase()));
-  });
-}
+export const applyFilter = (elements, f = {}, ticked = []) => matchFilter(elements, f, ticked);
 
 /** Compact model overview for the AI: categories, families, types with counts and quantity names. */
 export function overview(data, { maxTypes = 400 } = {}) {

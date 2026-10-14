@@ -145,3 +145,39 @@ test('QS setup: editors set the rule set and assumptions; values are checked', a
   const p = (await call('GET', `/api/projects/${P.id}`, { token: T.other })).data.project;
   assert.equal(p.settings.qs.wpUpturn, 0.3);
 });
+
+test('window link: one-time claim gives the app window its own session; messages go both ways through the server', async () => {
+  const { id, claim } = (await call('POST', '/api/link', { token: T.user, body: {} })).data;
+  assert.ok(id && claim);
+  // a wrong code, then the right one (once only)
+  assert.equal((await call('POST', '/api/link/claim', { body: { id, claim: 'x'.repeat(claim.length) } })).status, 401);
+  const c = await call('POST', '/api/link/claim', { body: { id, claim } });
+  assert.equal(c.status, 200); assert.equal(c.data.user.email, 'user@test.com');
+  assert.equal((await call('POST', '/api/link/claim', { body: { id, claim } })).status, 401);
+  const winToken = c.data.token;
+  assert.notEqual(winToken, T.user);
+  // another user cannot use the link
+  assert.equal((await call('POST', `/api/link/${id}/send`, { token: T.other, body: { side: 'pane', msg: { type: 'x' } } })).status, 404);
+  // the pane sends before the window listens: queued, then delivered when the window connects
+  assert.equal((await call('POST', `/api/link/${id}/send`, { token: T.user, body: { side: 'pane', msg: { type: 'init', n: 1 } } })).data.delivered, false);
+  const ctrl = new AbortController();
+  const res = await fetch(`${base}/api/link/${id}/stream?side=win`, { headers: { Authorization: 'Bearer ' + winToken }, signal: ctrl.signal });
+  assert.equal(res.status, 200);
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = '';
+  const next = async (type) => {
+    for (let k = 0; k < 20; k++) {
+      let i; while ((i = buf.indexOf('\n\n')) >= 0) { const b = buf.slice(0, i); buf = buf.slice(i + 2); const d = b.split('\n').find(l => l.startsWith('data: ')); if (d) { const m = JSON.parse(d.slice(6)); if (m.type === type) return m; } }
+      const { value, done } = await reader.read(); if (done) return null; buf += dec.decode(value, { stream: true });
+    }
+    return null;
+  };
+  assert.equal((await next('init')).n, 1);
+  assert.equal((await call('POST', `/api/link/${id}/send`, { token: T.user, body: { side: 'pane', msg: { type: 'state', n: 2 } } })).data.delivered, true);
+  assert.equal((await next('state')).n, 2);
+  assert.equal((await call('POST', `/api/link/${id}/send`, { token: T.user, body: { side: 'pane', msg: 'bad' } })).status, 400);
+  assert.equal((await call('DELETE', `/api/link/${id}`, { token: T.user })).status, 200);
+  assert.ok(await next('closed'));
+  ctrl.abort();
+  assert.equal((await call('POST', `/api/link/${id}/send`, { token: winToken, body: { side: 'win', msg: { type: 'x' } } })).status, 404);
+});

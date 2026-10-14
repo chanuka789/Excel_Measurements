@@ -5,19 +5,10 @@ import { esc, api } from './core.js';
 import { evaluate, fmt } from './engine.js';
 import { RULE_SETS, KIND_LABEL, DEFAULT_RATES, qsSetup, guessGroundLevel } from './rules.js';
 import { ITEMS, itemIds, itemSpecs, LIMITS_TEXT } from './qsitems.js';
+import { filterIds } from './filter.js';
 
 /** applyFilter over a list of elements (same rules as the task pane's). */
-export function filterOn(E, f = {}, ticked = []) {
-  if (f.use_ticked) return [...ticked];
-  const lc = (x) => (Array.isArray(x) ? x : x ? [x] : []).map(s => String(s).toLowerCase());
-  const [cat, fam, typ, inc, exc, lev] = [lc(f.category), lc(f.family), lc(f.type), lc(f.type_contains), lc(f.type_excludes), lc(f.level)];
-  return E.filter(e => {
-    const t = `${e.type} ${e.fam}`.toLowerCase();
-    return (!cat.length || cat.includes(String(e.cat).toLowerCase())) && (!fam.length || fam.includes(String(e.fam).toLowerCase())) &&
-      (!typ.length || typ.includes(String(e.type).toLowerCase())) && (!inc.length || inc.some(s => t.includes(s))) &&
-      (!exc.length || !exc.some(s => t.includes(s))) && (!lev.length || lev.includes(String(e.level || '').toLowerCase()));
-  }).map(e => e.id);
-}
+export const filterOn = (E, f = {}, ticked = []) => filterIds(E, f, ticked);
 
 /**
  * ctx: { host, E(), byId(), ticked() -> ids, project() -> { project, my_role }, onProjectChanged(p),

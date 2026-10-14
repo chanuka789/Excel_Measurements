@@ -4,6 +4,7 @@ import { dimsOf, keyOf, evaluate as evaluateSpec, fmt } from './engine.js';
 import { S } from './state.js';
 import { selectIds, update } from './model.js';
 import { mountQs } from './qsui.js';
+import { filterIds } from './filter.js';
 
 export const evaluate = (spec) => evaluateSpec(spec, S.byId);
 
@@ -215,17 +216,7 @@ function saveTemplateDialog(spec) {
 }
 
 // ================================================================== plan groups (AI and templates) to specs
-export function applyFilter(f = {}) {
-  if (f.use_ticked) return [...S.ticked];
-  const lc = (a) => (Array.isArray(a) ? a : a ? [a] : []).map(s => String(s).toLowerCase());
-  const [cat, fam, typ, inc, exc, lev] = [lc(f.category), lc(f.family), lc(f.type), lc(f.type_contains), lc(f.type_excludes), lc(f.level)];
-  return S.E.filter(e => {
-    const t = e.type.toLowerCase();
-    return (!cat.length || cat.includes(e.cat.toLowerCase())) && (!fam.length || fam.includes(e.fam.toLowerCase())) &&
-      (!typ.length || typ.includes(t)) && (!inc.length || inc.some(s => t.includes(s))) &&
-      (!exc.length || !exc.some(s => t.includes(s))) && (!lev.length || lev.includes((e.level || '').toLowerCase()));
-  }).map(e => e.id);
-}
+export function applyFilter(f = {}) { return filterIds(S.E, f, [...S.ticked], S.zoneOf); }
 export function specFromPlanGroup(g) {
   const ids = applyFilter(g.filter);
   let inputs = (g.inputs || []).map(i => ({ key: keyOf(i.key || i.name || i.label), label: i.label || i.name || i.key, unit: i.unit || (i.source === 'count' ? 'nr' : 'm'),

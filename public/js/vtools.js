@@ -79,7 +79,7 @@ export class Toolbar {
       case 'xray': v.setXray(!v.state.xray); break;
       case 'edges': v.setEdges(!v.edgesWanted); break;
       case 'shot': this.picture(); break;
-      case 'window': h.openWindow(); break;
+      case 'window': if (h.openAppWindow) this.openPop('window', b); else h.openWindow(); break;
       default: this.openPop(t, b);
     }
     this.sync();
@@ -97,6 +97,13 @@ export class Toolbar {
   head(title) { return `<h4>${esc(title)}<button class="close" aria-label="Close">×</button></h4>`; }
   wireClose(p) { p.querySelector('.close').onclick = () => this.closePop(); }
 
+  pop_window(p) {
+    p.innerHTML = this.head('Large window') + `<div class="vpop-list">
+      <button data-w="normal"><strong>3D window</strong><br><span class="hint">Inside Excel. Maximise and Restore buttons on its top bar.</span></button>
+      <button data-w="app"><strong>App window</strong><br><span class="hint">A separate browser window you can minimise, maximise and move to another screen. Stays linked with Excel.</span></button></div>`;
+    this.wireClose(p);
+    p.querySelectorAll('[data-w]').forEach(x => x.onclick = () => { this.closePop(); x.dataset.w === 'app' ? this.host.openAppWindow() : this.host.openWindow(); });
+  }
   pop_views(p) {
     const views = [['top', 'Top'], ['front', 'Front'], ['right', 'Right'], ['back', 'Back'], ['left', 'Left'], ['bottom', 'Bottom'], ['iso', 'Isometric']];
     p.innerHTML = this.head('Views') + `<div class="list">${views.map(([k, l], i) => `<button class="item" data-v="${k}">${l}<span class="muted">${i + 1}</span></button>`).join('')}</div>

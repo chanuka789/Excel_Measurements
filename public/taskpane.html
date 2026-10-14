@@ -93,7 +93,7 @@
     <div class="nomodel empty" hidden>Open a model version from the Project tab, then ask the AI to measure it.</div>
     <div class="withmodel">
       <label class="field">Describe what to measure
-        <textarea id="aiAsk" placeholder="e.g. Formwork to concrete beams on Level 1: soffit and both sides, less the slab thickness"></textarea>
+        <textarea id="aiAsk" placeholder="e.g. Measure the slabs by NRM2 with formwork by propping height, then build the NRM1 elemental summary. The AI shows a plan; nothing changes until you press Run."></textarea>
       </label>
       <div class="chips" id="aiChips">
         <button data-ask="Formwork to all concrete beams: soffit plus both sides less slab thickness">Beam formwork</button>
@@ -102,6 +102,9 @@
         <button data-ask="Count all doors and windows by type">Doors and windows</button>
         <button data-ask="Foundations: concrete, blinding 50 mm, formwork to sides and waterproofing">Foundations</button>
         <button data-ask="Measure the selected elements in the most useful way for a QS">Selected elements</button>
+        <button data-ask="Measure the whole structure by the project rules (concrete, formwork, reinforcement, waterproofing) and add it to Excel">Whole structure</button>
+        <button data-ask="Build the summary by level, the NRM2 summary and the NRM1 elemental summary">Summaries</button>
+        <button data-ask="Create a folder Structure with one dimension group per element type (volume)">Dimension groups</button>
       </div>
       <div class="row"><button class="primary" id="aiGo">Ask AI</button><span class="hint" id="aiStatus">The AI works out the method, tests it on the model and shows its working. The add-in calculates every number and writes live Excel formulas.</span></div>
       <div id="aiOut"></div>

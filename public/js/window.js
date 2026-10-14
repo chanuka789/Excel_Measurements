@@ -2,24 +2,41 @@
 // the middle, drawings and properties on the right. Selection, isolate and hide stay linked with the task pane (and
 // through it with the Take-off sheet). Schedules are written to Excel by the task pane.
 import { $, esc, api, session, status } from './core.js';
+import { LinkChannel } from './link.js';
 import { Viewer, parseBin, fromLegacy } from './viewer.js';
 import { Toolbar } from './vtools.js';
 import { fmt, dimsOf } from './engine.js';
 import { openDrawing, canView } from './drawings.js';
 import { menu, closeMenu, dialog } from './wui.js';
-import { initTree, onProjectLoaded, refresh as refreshTree, importObjects, createGroupFor, currentGroup, onScheduleDone } from './wtree.js';
+import { initTree, onProjectLoaded, refresh as refreshTree, loadTree, importObjects, createGroupFor, currentGroup, onScheduleDone } from './wtree.js';
+import { initPanel, renderPanel, loadZones } from './wpanel.js';
 
-const W = { ticked: new Set(), hidden: new Set(), isolated: false, level: '', byId: new Map(), E: [], colorMap: null, catColor: new Map(),
+const W = { zones: [], zoneOf: new Map(), inExcel: true, ticked: new Set(), hidden: new Set(), isolated: false, level: '', byId: new Map(), E: [], colorMap: null, catColor: new Map(),
   projectId: null, versionId: null, levels: [], side: 'drawings', project: null, mode: 'pane', groupColor: null, drawing: null, measure: null, label: '' };
 const PALETTE = ['#8a9aa6', '#c98a2b', '#2f6fa3', '#b5473a', '#6b5b8c', '#7a8a5a', '#3f8f8a', '#a8794f', '#5d6f8f', '#9a5d7a', '#6f8f3f', '#4f7fa8', '#b0905a', '#7d7d7d'];
 let office = false, V, TB, started = false;
 
 // ------------------------------------------------------------------ messaging with the task pane
+// dialog: Office dialog (messageParent); pop-up: window.opener; app: server link (a normal window with minimise/maximise)
+const HASH = new URLSearchParams(location.hash.slice(1));
+const MODE = HASH.get('link') ? 'app' : HASH.get('dlg') ? 'dialog' : 'popup';
+let link = null;
 function send(msg) {
   try {
-    if (office) Office.context.ui.messageParent(JSON.stringify(msg));
+    if (link) link.send(msg);
+    else if (office) Office.context.ui.messageParent(JSON.stringify(msg));
     else window.opener?.postMessage(msg, location.origin);
   } catch { /* pane closed */ }
+}
+const pending = new Map(); let reqN = 0;
+/** Ask the task pane to do something only it can do (write to Excel). Resolves with its answer. */
+export function askPane(cmd, data = {}, timeout = 180000) {
+  const id = ++reqN;
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => { pending.delete(id); reject(new Error('The task pane did not answer. Is the add-in still open in Excel?')); }, timeout);
+    pending.set(id, { resolve, reject, t });
+    send({ type: 'pane', id, cmd, ...data });
+  });
 }
 function receive(m) {
   if (!m || typeof m !== 'object') return;
@@ -28,10 +45,42 @@ function receive(m) {
   else if (m.type === 'colors') { W.colorMap = m.map ? new Map(m.map) : null; W.mode = m.mode || 'category'; paint(); }
   else if (m.type === 'model' && m.versionId && m.versionId !== W.versionId) init({ ...m, token: session.get()?.token, projectId: W.projectId });
   else if (m.type === 'scheduleDone') onScheduleDone(m);
+  else if (m.type === 'paneReply' && pending.has(m.id)) {
+    const p = pending.get(m.id); pending.delete(m.id); clearTimeout(p.t);
+    m.ok ? p.resolve(m.result) : p.reject(new Error(m.error || 'The task pane could not do that.'));
+  } else if (m.type === 'paneEvent') {
+    if (m.what === 'tree') loadTree().catch(() => {});
+    else if (m.what === 'zones') loadZones();
+    else if (m.what === 'project' && W.projectId) api('GET', `/projects/${W.projectId}`).then(p => { W.project = p; if (PANEL_TABS.includes(W.side)) renderSide(); }).catch(() => {});
+    onPaneEvent?.(m);
+  }
+  else if (m.type === 'closed') ended('The task pane closed this window. You can close it.');
+}
+let onPaneEvent = null;
+export const setPaneEventHandler = (f) => { onPaneEvent = f; };
+function ended(text) {
+  $('vload').hidden = false; $('vload').textContent = text;
+  $('wSub').textContent = 'Not linked to Excel.';
+}
+/** The app window gets its own session from a one-time code in the URL fragment, then removes it from the address. */
+async function startLink() {
+  const id = HASH.get('link'), claim = HASH.get('claim');
+  session.useMemory(null);
+  history.replaceState(null, '', location.pathname + location.search);
+  const r = await fetch('api/link/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, claim }) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { ended(data.error || 'This window link has expired. Open the app window again from the Excel task pane.'); return false; }
+  session.set({ token: data.token, user: data.user });
+  link = new LinkChannel(id, 'win', {
+    onMessage: (m) => { if (m.type === 'peer') { if (m.side === 'pane') $('wSub').textContent = m.online ? 'Linked with Excel: selections show in both.' : 'Excel task pane is closed or offline. Waiting…'; return; } receive(m); },
+    onState: (st) => { if (st === 'ended') ended('The link with Excel has ended. Open the app window again from the task pane.'); },
+  });
+  link.start();
+  return true;
 }
 
 async function init(m) {
-  if (m.token) session.set({ ...(session.get() || {}), token: m.token });
+  if (m.token && !link) session.set({ ...(session.get() || {}), token: m.token });
   const newProject = m.projectId && m.projectId !== W.projectId;
   W.projectId = m.projectId || W.projectId; W.versionId = m.versionId; W.label = m.label || 'Model';
   W.ticked = new Set(m.ticked || []); W.hidden = new Set(m.hidden || []); W.isolated = Boolean(m.isolated); W.level = m.level || '';
@@ -50,7 +99,10 @@ async function init(m) {
     levels(g);
     paint(); V.fit();
     $('vload').hidden = true;
+    if (m.view) applyCarry(m.view);
+    W.inExcel = m.inExcel !== false; W.winMode = m.mode || MODE;
     if (W.projectId && (newProject || !W.project)) { try { W.project = await api('GET', `/projects/${W.projectId}`); } catch { W.project = null; } }
+    await loadZones();
     renderSide();
     await onProjectLoaded();
   } catch (err) { $('vload').textContent = 'Could not load the model: ' + err.message; }
@@ -199,9 +251,11 @@ function showSidePanel(on) {
   $('wside').hidden = !on; $('wgrip').hidden = !on; $('wmain').classList.toggle('split', on);
   $('wSide').setAttribute('aria-pressed', String(on)); V.resize();
 }
+const PANEL_TABS = ['measure', 'ai', 'zones', 'checks', 'output'];
 function renderSide() {
   const body = $('wbody'); if ($('wside').hidden) return;
   document.querySelectorAll('[data-st]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.st === W.side)));
+  if (PANEL_TABS.includes(W.side)) { renderPanel(); return; }
   if (W.side === 'props') {
     const id = [...W.ticked][0], e = W.byId.get(id);
     if (!e) { body.innerHTML = '<p class="hint">Select an element to see its properties.</p>'; return; }
@@ -272,16 +326,45 @@ function start() {
   V.setTheme();
   initTree({ W, V, send, host: HOST, paint, setIds, showOnly, hideIds, isolate, setGroupColors, openVersion,
     openDrawing: openDrawingSide, lastMeasure: () => W.measure });
+  initPanel({ W, get V() { return V; }, askPane, send, setIds, isolate, hideIds, showAll, paint, loadTree });
 }
 start();
-window.__win = { W, get V() { return V; } };       // used by the automated browser tests
-const ready = typeof Office !== 'undefined' ? Office.onReady().catch(() => ({})) : Promise.resolve({});
-ready.then(() => {
-  office = typeof Office !== 'undefined' && Boolean(Office.context?.ui?.messageParent) && !window.opener;
-  if (office) {
-    try { Office.context.ui.addHandlerAsync(Office.EventType.DialogParentMessageReceived, (arg) => { try { receive(JSON.parse(arg.message)); } catch { /* ignore */ } }); } catch { /* DialogApi 1.2 missing */ }
+window.__win = { W, get V() { return V; }, setIds };       // used by the automated browser tests
+const ready = MODE !== 'app' && typeof Office !== 'undefined' ? Office.onReady().catch(() => ({})) : Promise.resolve({});
+ready.then(async () => {
+  if (MODE === 'app') { if (!(await startLink())) return; }
+  else {
+    office = typeof Office !== 'undefined' && Boolean(Office.context?.ui?.messageParent) && !window.opener;
+    if (office) {
+      try { Office.context.ui.addHandlerAsync(Office.EventType.DialogParentMessageReceived, (arg) => { try { receive(JSON.parse(arg.message)); } catch { /* ignore */ } }); } catch { /* DialogApi 1.2 missing */ }
+    }
   }
+  windowButtons();
   send({ type: 'ready' });
-  if (!window.opener && !office) { $('vload').textContent = 'Open this window from the task pane (3D window button).'; }
+  if (MODE !== 'app' && !window.opener && !office) { $('vload').textContent = 'Open this window from the task pane (3D window button).'; }
 });
+/** Maximise / Restore re-open the Office dialog at the other size (Office has no resize call); "App window" moves to a
+ * normal browser window that has minimise and maximise. The view is carried over. */
+function windowButtons() {
+  const box = $('wWin'); if (!box) return;
+  const carry = () => ({ camera: V?.getViewState?.(), side: $('wside').hidden ? null : W.side, left: !$('wleft').hidden });
+  const reopen = (mode) => { send({ type: 'reopen', mode, view: carry() }); };
+  if (MODE === 'dialog') {
+    const max = HASH.get('dlg') === 'max';
+    box.innerHTML = `<button class="btn small" id="wMax" title="${max ? 'Back to the normal size' : 'Fill the screen'}">${max ? 'Restore' : 'Maximise'}</button>
+      <button class="btn small" id="wApp" title="Open in a separate browser window that you can minimise, maximise and move to another screen">App window</button>`;
+    $('wMax').onclick = () => reopen(max ? 'normal' : 'max');
+    $('wApp').onclick = () => reopen('app');
+  } else if (MODE === 'app') {
+    box.innerHTML = `<button class="btn small" id="wFull" title="Full screen (Esc to leave)">Full screen</button>`;
+    $('wFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); };
+  }
+}
+/** Restore the view carried from the previous window. */
+function applyCarry(v) {
+  if (!v) return;
+  if (v.camera) V.setViewState(v.camera);
+  if (v.left === false && !$('wleft').hidden) $('wLeft').click();
+  if (v.side) { W.side = v.side; showSidePanel(true); renderSide(); }
+}
 export { refreshTree };

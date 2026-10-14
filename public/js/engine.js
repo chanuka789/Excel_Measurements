@@ -47,6 +47,6 @@ export function evaluate(spec, byId) {
   }
   return { rows, tot, missing };
 }
-export const unitFmt = (u) => u === 'nr' ? '#,##0' : u === 'm' ? '#,##0.000' : '#,##0.00';
+export const unitFmt = (u) => u === 'nr' ? '#,##0' : u === 'm' || u === 't' ? '#,##0.000' : '#,##0.00';
 export const fmt = (v, u) => (u === 'm' ? v.toFixed(3) : u === '' ? (Number.isInteger(v) ? String(v) : v.toFixed(2)) : v.toFixed(2))
   .replace(/\B(?=(\d{3})+(?!\d))/g, ',');

@@ -13,6 +13,7 @@ import { login, logout, requireUser, requireAdmin, hashPassword, syncUsers, publ
 import { json, wrap, clean, safeName, uuidOk, HttpError, fail, need, versionProject, RANK } from './http.js';
 import { registerFeatures } from './features.js';
 import { registerDims } from './dims.js';
+import { registerLink } from './link.js';
 import { loginGuard, loginFailed, loginSucceeded, apiLimit } from './security.js';
 import { recordError } from './monitor.js';
 
@@ -302,6 +303,7 @@ api.post('/admin/backup', requireAdmin, wrap(async (req, res) => { res.json({ ke
 
 registerFeatures(api);
 registerDims(api);
+registerLink(api);
 
 // ---------------------------------------------------------------- error monitoring
 const clientErrors = new Map();     // per user, per hour: stop a looping page from flooding the log

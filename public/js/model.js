@@ -1,6 +1,7 @@
 // The open model: 3D viewer, element browser, selection (with undo), hide/isolate, colour by,
 // zones, level plans, properties, saved views and the large 3D window.
 import { $, esc, App, api, session, status } from './core.js';
+import { LinkChannel } from './link.js';
 import { Viewer, parseBin, fromLegacy } from './viewer.js';
 import { Toolbar } from './vtools.js';
 import { dimsOf, fmt } from './engine.js';
@@ -55,6 +56,7 @@ export function initModel() {
     $('viewer').style.height = Math.max(180, $('viewer').offsetHeight + d) + 'px'; e.preventDefault();
   };
   window.addEventListener('message', onWindowMessage);
+  window.addEventListener('pagehide', () => { if (win?.link) win.link.close(true); });
 }
 export const viewer = () => V;
 export const toolbar = () => TB;
@@ -106,6 +108,7 @@ const HOST = {
   async deleteView(v) { try { await api('DELETE', `/views/${v.id}`); status('View deleted.', 'ok'); } catch (err) { status(err.message, 'bad'); } },
   status,
   openWindow: () => openWindow(),
+  openAppWindow: () => openWindow('app'),
   async insertPicture(dataUrl) {
     if (!S.inExcel) throw new Error('not in Excel');
     await Excel.run(async (ctx) => {
@@ -422,6 +425,7 @@ export async function loadZones() {
   const pid = App.currentProjectId?.();
   if (pid && S.versionId) { try { S.zones = (await api('GET', `/projects/${pid}/zones`)).zones; } catch { /* zones are optional */ } }
   S.zones.forEach(z => (z.ids || []).forEach(id => { if (!S.zoneOf.has(id)) S.zoneOf.set(id, z.name); }));
+  S.E.forEach(e => { e.zone = S.zoneOf.get(e.id) || ''; });
   renderZones();
 }
 const ZONE_COLORS = ['#0078d4', '#e3008c', '#00b7c3', '#ca5010', '#498205', '#8764b8', '#986f0b', '#c239b3', '#038387', '#bf0077'];
@@ -451,40 +455,83 @@ async function saveZone(name, color) {
   } catch (err) { status(err.message, 'bad'); }
 }
 
-// ================================================================== large 3D window (Office dialog or browser window)
-function openWindow() {
+// ================================================================== large 3D window
+// Three ways: an Office dialog (Excel), a browser pop-up (add-in opened in a browser), or the app window: a normal
+// browser window with real minimise / maximise, linked to this pane through the server (LinkChannel).
+const WIN_SIZES = { normal: { height: 85, width: 80 }, max: { height: 99.5, width: 99.5 } };
+let winCarry = null;                  // view state carried into the next window when it is re-opened (Maximise, Restore, App window)
+export async function openWindow(mode = 'normal', carry = null) {
   if (!S.versionId) { status('The 3D window works with models saved in a project. Upload the DWFx to a project first.', 'bad'); return; }
-  const url = new URL('viewer.html', location.href).href;
+  winCarry = carry;
+  closeWindow();
+  const base = new URL('viewer.html', location.href).href;
+  if (mode === 'app') return openAppWindow(base);
   if (typeof Office !== 'undefined' && Office.context?.ui?.displayDialogAsync && S.inExcel) {
-    Office.context.ui.displayDialogAsync(url, { height: 85, width: 80, displayInIframe: false }, (r) => {
+    const size = mode === 'max' ? 'max' : 'normal';
+    Office.context.ui.displayDialogAsync(`${base}#dlg=${size}`, { ...WIN_SIZES[size], displayInIframe: false }, (r) => {
       if (r.status !== Office.AsyncResultStatus.Succeeded) { status('Could not open the 3D window: ' + (r.error?.message || ''), 'bad'); return; }
       const dlg = r.value;
-      win = { office: dlg };
+      win = { office: dlg, size };
       dlg.addEventHandler(Office.EventType.DialogMessageReceived, (m) => { try { onWindowMessage({ data: JSON.parse(m.message), office: true }); } catch { /* ignore */ } });
-      dlg.addEventHandler(Office.EventType.DialogEventReceived, () => { win = null; });
+      dlg.addEventHandler(Office.EventType.DialogEventReceived, () => { if (win?.office === dlg) win = null; });
     });
   } else {
-    const w = window.open(url, 'dwfx3d', 'width=1400,height=900');
+    const w = window.open(base, 'dwfx3d', 'width=1400,height=900');
     if (!w) { status('Your browser blocked the window. Allow pop-ups for this site.', 'bad'); return; }
     win = { browser: w };
   }
   status('3D window opening. Selections stay linked with this pane and the sheet.');
 }
+async function openAppWindow(base) {
+  let link;
+  try { link = await api('POST', '/link'); } catch (err) { status('Could not open the app window: ' + err.message, 'bad'); return; }
+  const ch = new LinkChannel(link.id, 'pane', {
+    onMessage: (m) => {
+      if (m.type === 'peer') { if (m.side === 'win' && !m.online && win?.link === ch) status('The app window is closed or offline. It reconnects by itself when it comes back.'); return; }
+      onWindowMessage({ data: m, office: true });
+    },
+    onState: (st) => { if (st === 'ended' && win?.link === ch) win = null; },
+  });
+  ch.start();
+  win = { link: ch };
+  const url = `${base}#link=${encodeURIComponent(link.id)}&claim=${encodeURIComponent(link.claim)}`;
+  try {
+    if (typeof Office !== 'undefined' && Office.context?.ui?.openBrowserWindow && S.inExcel) Office.context.ui.openBrowserWindow(url);
+    else if (!window.open(url, '_blank')) throw new Error('blocked');
+    status('App window opening in your browser. You can minimise, maximise or move it to a second screen; it stays linked with Excel.', 'ok');
+  } catch {
+    status('Could not open the browser. Allow pop-ups for this site, then try again.', 'bad'); ch.close(true); win = null;
+  }
+}
+function closeWindow() {
+  if (!win) return;
+  try {
+    if (win.office) win.office.close();
+    else if (win.browser && !win.browser.closed) win.browser.close();
+    else if (win.link) win.link.close(true);
+  } catch { /* already closed */ }
+  win = null;
+}
+export const windowOpen = () => Boolean(win);
 function sendToWindow(msg) {
   if (!win) return;
   const text = JSON.stringify(msg);
   try {
     if (win.office) win.office.messageChild?.(text);
+    else if (win.link) win.link.send(msg);
     else if (win.browser && !win.browser.closed) win.browser.postMessage(msg, location.origin);
     else win = null;
   } catch { /* window gone */ }
 }
+App.sendToWindow = sendToWindow;
 function onWindowMessage(ev) {
   if (!ev.office && ev.origin && ev.origin !== location.origin) return;
   const m = ev.data; if (!m || typeof m !== 'object' || !m.type) return;
   if (m.type === 'ready') {
     sendToWindow({ type: 'init', token: session.get()?.token, versionId: S.versionId, label: S.label, projectId: App.currentProjectId?.(),
-      ticked: [...S.ticked], hidden: [...S.hidden], isolated: S.isolated, level: S.level, colorMode: S.colorBy, colorMap: S.colorMap ? [...S.colorMap] : null });
+      ticked: [...S.ticked], hidden: [...S.hidden], isolated: S.isolated, level: S.level, colorMode: S.colorBy, colorMap: S.colorMap ? [...S.colorMap] : null,
+      view: winCarry, mode: win?.link ? 'app' : win?.office ? win.size : 'browser', inExcel: S.inExcel });
+    winCarry = null;
   } else if (m.type === 'pick') {
     snapshot(); if (!m.add) S.ticked.clear(); (m.ids || []).forEach(id => S.ticked.add(id));
     if (m.ids?.length === 1) revealInTree(m.ids[0]);
@@ -498,6 +545,11 @@ function onWindowMessage(ev) {
   } else if (m.type === 'props' && S.byId.has(m.id)) showProps(m.id);
   else if (m.type === 'openVersion' && m.versionId && m.versionId !== S.versionId) { followWindow = true; openVersion(m.versionId, m.label || '').finally(() => { followWindow = false; }); }
   else if (m.type === 'addSchedule') addSchedules(m);
+  else if (m.type === 'reopen') openWindow(m.mode, m.view || null);
+  else if (m.type === 'closeMe') closeWindow();
+  else if (m.type === 'pane') App.onWindowRequest?.(m, sendToWindow);
+  else if (m.type === 'projectChanged') { Promise.resolve(App.refreshProject?.()).catch(() => {}).then(() => App.renderQs?.()); }
+  else if (m.type === 'zonesChanged') loadZones();
 }
 let followWindow = false;
 /** The 3D window asks for dimension groups as Excel schedules (only the task pane can write to the workbook). */
@@ -521,4 +573,11 @@ async function addSchedules(m) {
     const tot = groups.map(g => { const t = groupTotal(g, S.byId); return `${g.name} ${fmt(t.total, t.unit === 'nr' ? '' : t.unit)} ${t.unit}`; }).join('; ');
     reply(true, S.inExcel ? `Added to Excel: ${tables.join(', ')} (${tot}).` : `Added to the take-off list (${tot}). Open the add-in in Excel to write the sheet.`);
   } catch (err) { reply(false, err.message); }
+}
+/** Open the version the window works on (the pane follows the window), then resolve. */
+export async function followVersion(vid, label = '') {
+  if (!vid || vid === S.versionId) return;
+  followWindow = true;
+  try { await openVersion(vid, label); } finally { followWindow = false; }
+  if (vid !== S.versionId) throw new Error('The task pane could not open the same model version.');
 }

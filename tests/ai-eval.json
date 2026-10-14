@@ -643,6 +643,1732 @@
    "expect": {
     "no_groups": true
    }
+  },
+  {
+   "id": "q051",
+   "request": "Use POMI for this project",
+   "expect": {
+    "actions": [
+     {
+      "do": "set_rules",
+      "rule_set": "POMI"
+     }
+    ],
+    "max_actions": 2
+   }
+  },
+  {
+   "id": "q052",
+   "request": "Switch the measurement rules to NRM2",
+   "expect": {
+    "actions": [
+     {
+      "do": "set_rules",
+      "rule_set": "NRM2"
+     }
+    ],
+    "max_actions": 2
+   },
+   "state": {
+    "ruleSet": "POMI"
+   }
+  },
+  {
+   "id": "q053",
+   "request": "We are preparing a cost plan, use NRM1",
+   "expect": {
+    "actions": [
+     {
+      "do": "set_rules",
+      "rule_set": "NRM1"
+     }
+    ]
+   }
+  },
+  {
+   "id": "q054",
+   "request": "This is a Gulf project with a POMI bill: set the rules and measure the columns",
+   "expect": {
+    "actions": [
+     {
+      "do": "set_rules",
+      "rule_set": "POMI"
+     },
+     {
+      "do": "measure_item",
+      "item": "st-columns"
+     }
+    ],
+    "order": [
+     "set_rules",
+     "measure_item"
+    ]
+   }
+  },
+  {
+   "id": "q055",
+   "request": "Which measurement rules are we using? Do not change anything.",
+   "expect": {
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q056",
+   "request": "Set the ground level to 0.00 and the waterproofing upturn to 300 mm",
+   "expect": {
+    "actions": [
+     {
+      "do": "qs_setup",
+      "ground_level": 0,
+      "wp_upturn": 0.3
+     }
+    ]
+   }
+  },
+  {
+   "id": "q057",
+   "request": "Foundation sides are cast against earth on this job",
+   "expect": {
+    "actions": [
+     {
+      "do": "qs_setup",
+      "earth_faced": true
+     }
+    ]
+   }
+  },
+  {
+   "id": "q058",
+   "request": "Use 120 kg/m3 reinforcement for slabs and 200 for columns",
+   "expect": {
+    "actions": [
+     {
+      "do": "qs_setup"
+     }
+    ]
+   }
+  },
+  {
+   "id": "q059",
+   "request": "No waterproofing to the roof slabs on this project",
+   "expect": {
+    "actions": [
+     {
+      "do": "qs_setup",
+      "wp_roof": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "q060",
+   "request": "Change the roof upturn to 450 mm and measure the roof slabs",
+   "expect": {
+    "actions": [
+     {
+      "do": "qs_setup",
+      "roof_upturn": 0.45
+     },
+     {
+      "do": "measure_item",
+      "item": "st-roofslabs"
+     }
+    ],
+    "order": [
+     "qs_setup",
+     "measure_item"
+    ]
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q061",
+   "request": "Show me only the columns",
+   "expect": {
+    "actions": [
+     {
+      "do": "isolate",
+      "categories": [
+       "Structural Columns"
+      ]
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q062",
+   "request": "Select all the pile caps",
+   "expect": {
+    "actions": [
+     {
+      "do": "select"
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q063",
+   "request": "Hide the walls",
+   "expect": {
+    "actions": [
+     {
+      "do": "hide",
+      "categories": [
+       "Walls"
+      ]
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q064",
+   "request": "Show everything again",
+   "expect": {
+    "actions": [
+     {
+      "do": "show_all"
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q065",
+   "request": "Top view please",
+   "expect": {
+    "actions": [
+     {
+      "do": "view",
+      "view": "top"
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q066",
+   "request": "Colour the model by level",
+   "expect": {
+    "actions": [
+     {
+      "do": "color_by",
+      "mode": "level"
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q067",
+   "request": "Show which elements are not measured yet",
+   "expect": {
+    "actions": [
+     {
+      "do": "color_by",
+      "mode": "measured"
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q068",
+   "request": "Isolate the steel beams",
+   "expect": {
+    "actions": [
+     {
+      "do": "isolate",
+      "categories": [
+       "Structural Framing"
+      ]
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q069",
+   "request": "Select the ground floor slabs and turn to an isometric view",
+   "expect": {
+    "actions": [
+     {
+      "do": "select",
+      "categories": [
+       "Floors"
+      ]
+     },
+     {
+      "do": "view",
+      "view": "iso"
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q070",
+   "request": "Create a folder called Substructure",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_folder",
+      "name": "Substructure"
+     }
+    ],
+    "no_deletes": true
+   }
+  },
+  {
+   "id": "q071",
+   "request": "Make folders Substructure and Superstructure",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_folder",
+      "name": "Substructure"
+     },
+     {
+      "do": "create_folder",
+      "name": "Superstructure"
+     }
+    ]
+   }
+  },
+  {
+   "id": "q072",
+   "request": "Create a folder Frame inside Superstructure",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_folder",
+      "name": "Frame",
+      "parent": "Superstructure"
+     }
+    ]
+   },
+   "state": {
+    "folders": [
+     {
+      "name": "Superstructure",
+      "parent": ""
+     }
+    ]
+   }
+  },
+  {
+   "id": "q073",
+   "request": "Create a dimension group \"Columns concrete\" with the volume of all columns",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_dim_group",
+      "mtype": "Volume",
+      "categories": [
+       "Structural Columns"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q074",
+   "request": "Make a dimension group counting the piles",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_dim_group",
+      "mtype": "Count",
+      "categories": [
+       "Structural Foundations"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q075",
+   "request": "Put one dimension group per structural element type (volume) in a new folder Structure",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_folder",
+      "name": "Structure"
+     },
+     {
+      "do": "create_dim_group",
+      "folder": "Structure"
+     }
+    ],
+    "order": [
+     "create_folder",
+     "create_dim_group"
+    ]
+   }
+  },
+  {
+   "id": "q076",
+   "request": "Add the selected elements to the dimension group Beams",
+   "expect": {
+    "actions": [
+     {
+      "do": "import_objects",
+      "group": "Beams"
+     }
+    ]
+   },
+   "state": {
+    "groups": [
+     {
+      "name": "Beams",
+      "type": "Volume",
+      "folder": "",
+      "elements": 10
+     }
+    ]
+   }
+  },
+  {
+   "id": "q077",
+   "request": "Add all ground beams to the Beams dimension group",
+   "expect": {
+    "actions": [
+     {
+      "do": "import_objects",
+      "group": "Beams",
+      "categories": [
+       "Structural Framing"
+      ]
+     }
+    ]
+   },
+   "state": {
+    "groups": [
+     {
+      "name": "Beams",
+      "type": "Volume",
+      "folder": "",
+      "elements": 10
+     }
+    ]
+   }
+  },
+  {
+   "id": "q078",
+   "request": "Create a length dimension group for the beams using Cut Length",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_dim_group",
+      "mtype": "Length",
+      "categories": [
+       "Structural Framing"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q079",
+   "request": "Create an area dimension group of the slabs",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_dim_group",
+      "mtype": "Area",
+      "categories": [
+       "Floors"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q080",
+   "request": "Create a folder Walls and a dimension group \"RC walls\" in it with the in-situ walls",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_folder",
+      "name": "Walls"
+     },
+     {
+      "do": "create_dim_group",
+      "folder": "Walls",
+      "categories": [
+       "Walls"
+      ]
+     }
+    ],
+    "order": [
+     "create_folder",
+     "create_dim_group"
+    ]
+   }
+  },
+  {
+   "id": "q081",
+   "request": "Organise the take-off: a folder per level",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_folder"
+     }
+    ],
+    "no_deletes": true
+   }
+  },
+  {
+   "id": "q082",
+   "request": "Create a dimension group for the precast walls",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_dim_group",
+      "categories": [
+       "Walls"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q083",
+   "request": "Create a zone for each level",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_zone"
+     }
+    ],
+    "no_deletes": true
+   }
+  },
+  {
+   "id": "q084",
+   "request": "Make a zone called Canopy from the steel members",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_zone",
+      "name": "Canopy"
+     }
+    ]
+   }
+  },
+  {
+   "id": "q085",
+   "request": "Create zone Roof with the roof slabs",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_zone",
+      "name": "Roof",
+      "categories": [
+       "Floors"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q086",
+   "request": "Create a zone from the selected elements called Annex",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_zone",
+      "name": "Annex"
+     }
+    ]
+   }
+  },
+  {
+   "id": "q087",
+   "request": "Zone the foundations as Substructure",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_zone",
+      "name": "Substructure",
+      "categories": [
+       "Structural Foundations"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q088",
+   "request": "Create zones Villa (ground floor) and Roof (roof level)",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_zone",
+      "name": "Villa"
+     },
+     {
+      "do": "create_zone",
+      "name": "Roof"
+     }
+    ]
+   }
+  },
+  {
+   "id": "q089",
+   "request": "Colour the model by zone after creating a zone Ground for the ground floor elements",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_zone",
+      "name": "Ground"
+     },
+     {
+      "do": "color_by",
+      "mode": "zone"
+     }
+    ],
+    "order": [
+     "create_zone",
+     "color_by"
+    ]
+   }
+  },
+  {
+   "id": "q090",
+   "request": "Which zones do we have?",
+   "expect": {
+    "no_writes": true
+   },
+   "state": {
+    "zones": [
+     {
+      "name": "Villa",
+      "elements": 200
+     }
+    ]
+   }
+  },
+  {
+   "id": "q091",
+   "request": "Measure the columns by the rules",
+   "expect": {
+    "items_any": [
+     "st-columns",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q092",
+   "request": "Concrete, formwork and reinforcement to the beams",
+   "expect": {
+    "items_any": [
+     "st-beams",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q093",
+   "request": "Measure the suspended slabs with formwork by propping height",
+   "expect": {
+    "items_any": [
+     "st-slabs",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q094",
+   "request": "Measure the pile caps including waterproofing",
+   "expect": {
+    "items_any": [
+     "st-pilecaps",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q095",
+   "request": "Measure the piles",
+   "expect": {
+    "items_any": [
+     "st-piles",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q096",
+   "request": "Measure the ground beams",
+   "expect": {
+    "items_any": [
+     "st-groundbeams",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q097",
+   "request": "Measure the ground-bearing slabs",
+   "expect": {
+    "items_any": [
+     "st-groundslab",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q098",
+   "request": "Measure the roof slabs including roof waterproofing",
+   "expect": {
+    "items_any": [
+     "st-roofslabs",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q099",
+   "request": "Measure the RC walls",
+   "expect": {
+    "items_any": [
+     "st-walls",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q100",
+   "request": "Measure the stairs",
+   "expect": {
+    "items_any": [
+     "st-stairs",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q101",
+   "request": "Structural steel tonnage",
+   "expect": {
+    "items_any": [
+     "st-steel",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q102",
+   "request": "Count the precast units",
+   "expect": {
+    "items_any": [
+     "st-precast",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q103",
+   "request": "Measure the whole structure by NRM2 and add everything to Excel",
+   "expect": {
+    "items_any": [
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q104",
+   "request": "Excavation for the foundations",
+   "expect": {
+    "items_any": [
+     "sb-excavation"
+    ]
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q105",
+   "request": "Blinding under the foundations, 75 mm",
+   "expect": {
+    "items_any": [
+     "sb-blinding"
+    ]
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q106",
+   "request": "Hardcore and DPM under the ground slabs",
+   "expect": {
+    "items_any": [
+     "sb-hardcore",
+     "sb-dpm"
+    ]
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q107",
+   "request": "Measure the beams on the first floor only",
+   "expect": {
+    "actions": [
+     {
+      "do": "measure_item",
+      "item": "st-beams"
+     }
+    ]
+   }
+  },
+  {
+   "id": "q108",
+   "request": "Measure the selected elements by the rules",
+   "expect": {
+    "actions": [
+     {
+      "do": "measure_item"
+     }
+    ]
+   }
+  },
+  {
+   "id": "q109",
+   "request": "Reinforcement to the columns at 220 kg/m3",
+   "expect": {
+    "actions": [
+     {
+      "do": "measure_item",
+      "item": "st-columns"
+     }
+    ],
+    "cite": true
+   }
+  },
+  {
+   "id": "q110",
+   "request": "Measure the foundations by POMI",
+   "expect": {
+    "items_any": [
+     "st-pilecaps",
+     "st-piles",
+     "st-footings",
+     "st-all"
+    ],
+    "cite": true
+   },
+   "state": {
+    "ruleSet": "POMI",
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q111",
+   "request": "Build a summary by level",
+   "expect": {
+    "actions": [
+     {
+      "do": "build_summaries",
+      "kinds": [
+       "summary"
+      ],
+      "by": "level"
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q112",
+   "request": "Create the NRM1 elemental summary with GIFA 1250 m2",
+   "expect": {
+    "actions": [
+     {
+      "do": "build_summaries",
+      "kinds": [
+       "NRM1"
+      ],
+      "gifa": 1250
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q113",
+   "request": "Make an NRM2 summary sheet",
+   "expect": {
+    "actions": [
+     {
+      "do": "build_summaries",
+      "kinds": [
+       "NRM2"
+      ]
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q114",
+   "request": "Summarise the quantities by zone",
+   "expect": {
+    "actions": [
+     {
+      "do": "build_summaries",
+      "by": "zone"
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ],
+    "zones": [
+     {
+      "name": "Villa",
+      "elements": 200
+     }
+    ]
+   }
+  },
+  {
+   "id": "q115",
+   "request": "POMI summary please",
+   "expect": {
+    "actions": [
+     {
+      "do": "build_summaries",
+      "kinds": [
+       "POMI"
+      ]
+     }
+    ]
+   },
+   "state": {
+    "ruleSet": "POMI",
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q116",
+   "request": "Build all summaries: by level, NRM2 and NRM1",
+   "expect": {
+    "actions": [
+     {
+      "do": "build_summaries"
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q117",
+   "request": "Create a new sheet \"Concrete check\" listing concrete per element type with a total, using formulas",
+   "expect": {
+    "actions": [
+     {
+      "do": "new_sheet"
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q118",
+   "request": "Make a sheet \"Rates\" with a yellow rate column for concrete, formwork and rebar and amounts by formula",
+   "expect": {
+    "actions": [
+     {
+      "do": "new_sheet"
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q119",
+   "request": "Create a sheet showing formwork to concrete ratio (m2 per m3) for the beams",
+   "expect": {
+    "actions": [
+     {
+      "do": "new_sheet"
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q120",
+   "request": "Build the BOQ sheet",
+   "expect": {
+    "actions": [
+     {
+      "do": "build_boq"
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q121",
+   "request": "Build the BOQ with AI descriptions",
+   "expect": {
+    "actions": [
+     {
+      "do": "build_boq",
+      "ai_descriptions": true
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q122",
+   "request": "Measure the slabs and then build the summary by level",
+   "expect": {
+    "actions": [
+     {
+      "do": "measure_item",
+      "item": "st-slabs"
+     },
+     {
+      "do": "build_summaries"
+     }
+    ],
+    "order": [
+     "measure_item",
+     "build_summaries"
+    ]
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q123",
+   "request": "Measure the whole structure and create the NRM1 elemental summary",
+   "expect": {
+    "actions": [
+     {
+      "do": "measure_item"
+     },
+     {
+      "do": "build_summaries",
+      "kinds": [
+       "NRM1"
+      ]
+     }
+    ],
+    "order": [
+     "measure_item",
+     "build_summaries"
+    ]
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q124",
+   "request": "Create a sheet \"Steel\" with the steel tonnage by formula from the take-off",
+   "expect": {
+    "actions": [
+     {
+      "do": "new_sheet"
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G4",
+      "name": "Structural steel",
+      "elements": 45,
+      "keys": [
+       "Steel_t"
+      ],
+      "columns": [
+       "Structural steel members (t)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q125",
+   "request": "Rebuild the summaries after the changes",
+   "expect": {
+    "actions": [
+     {
+      "do": "build_summaries"
+     }
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ],
+    "workbook": {
+     "inExcel": true,
+     "sheets": [
+      "Take-off",
+      "Quantities",
+      "Summary"
+     ],
+     "groups": [
+      {
+       "ref": "G1",
+       "name": "Beams",
+       "elements": 99,
+       "keys": [
+        "Conc_thin",
+        "FW"
+       ],
+       "columns": [
+        "Concrete (m3)"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "q126",
+   "request": "Check the model for missing data",
+   "expect": {
+    "actions": [
+     {
+      "do": "run_checks",
+      "check": "missing"
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q127",
+   "request": "Are there overlapping elements that would be double counted?",
+   "expect": {
+    "actions": [
+     {
+      "do": "run_checks",
+      "check": "overlaps"
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q128",
+   "request": "Run all model checks",
+   "expect": {
+    "actions": [
+     {
+      "do": "run_checks"
+     }
+    ],
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q129",
+   "request": "Is anything missing before I price? Just check, do not change anything",
+   "expect": {
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q130",
+   "request": "Measure the waterproofing to the basement walls",
+   "expect": {
+    "ask": true,
+    "no_writes": true
+   },
+   "state": {
+    "groundLevel": null
+   }
+  },
+  {
+   "id": "q131",
+   "request": "Waterproofing below ground for all walls and foundations",
+   "expect": {
+    "ask": true,
+    "no_writes": true
+   },
+   "state": {
+    "groundLevel": null
+   }
+  },
+  {
+   "id": "q132",
+   "request": "Excavation to the foundations",
+   "expect": {
+    "ask": true,
+    "no_writes": true
+   },
+   "state": {
+    "groundLevel": null
+   }
+  },
+  {
+   "id": "q133",
+   "request": "Create the summary",
+   "expect": {
+    "ask": true
+   },
+   "state": {
+    "workbook": {
+     "inExcel": true,
+     "sheets": [
+      "Take-off"
+     ],
+     "groups": []
+    }
+   }
+  },
+  {
+   "id": "q134",
+   "request": "Put these in a zone",
+   "expect": {
+    "ask": true,
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q135",
+   "request": "Add them to the group",
+   "expect": {
+    "ask": true,
+    "no_writes": true
+   },
+   "state": {
+    "groups": [
+     {
+      "name": "Beams",
+      "type": "Volume",
+      "folder": "",
+      "elements": 10
+     },
+     {
+      "name": "Columns",
+      "type": "Volume",
+      "folder": "",
+      "elements": 5
+     }
+    ]
+   }
+  },
+  {
+   "id": "q136",
+   "request": "Price the elemental summary",
+   "expect": {
+    "ask": true,
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q137",
+   "request": "Use the other rules",
+   "expect": {
+    "ask": true,
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q138",
+   "request": "Delete the zone Annex",
+   "expect": {
+    "actions": [
+     {
+      "do": "delete_zone",
+      "name": "Annex"
+     }
+    ]
+   },
+   "state": {
+    "zones": [
+     {
+      "name": "Annex",
+      "elements": 20
+     }
+    ]
+   }
+  },
+  {
+   "id": "q139",
+   "request": "Remove the dimension group Old beams",
+   "expect": {
+    "actions": [
+     {
+      "do": "delete_dim_group",
+      "name": "Old beams"
+     }
+    ]
+   },
+   "state": {
+    "groups": [
+     {
+      "name": "Old beams",
+      "type": "Volume",
+      "folder": "",
+      "elements": 3
+     }
+    ]
+   }
+  },
+  {
+   "id": "q140",
+   "request": "Delete the folder Temp",
+   "expect": {
+    "actions": [
+     {
+      "do": "delete_folder",
+      "name": "Temp"
+     }
+    ]
+   },
+   "state": {
+    "folders": [
+     {
+      "name": "Temp",
+      "parent": ""
+     }
+    ]
+   }
+  },
+  {
+   "id": "q141",
+   "request": "Delete the Summary sheet",
+   "expect": {
+    "actions": [
+     {
+      "do": "delete_sheet",
+      "name": "Summary"
+     }
+    ]
+   },
+   "state": {
+    "workbook": {
+     "inExcel": true,
+     "sheets": [
+      "Take-off",
+      "Quantities",
+      "Summary"
+     ],
+     "groups": [
+      {
+       "ref": "G1",
+       "name": "Beams",
+       "elements": 99,
+       "keys": [
+        "Conc_thin",
+        "FW"
+       ],
+       "columns": [
+        "Concrete (m3)"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "q142",
+   "request": "Tidy up the folders",
+   "expect": {
+    "no_deletes": true
+   },
+   "state": {
+    "folders": [
+     {
+      "name": "Temp",
+      "parent": ""
+     },
+     {
+      "name": "Structure",
+      "parent": ""
+     }
+    ]
+   }
+  },
+  {
+   "id": "q143",
+   "request": "How is formwork to slab soffits measured under NRM2? Explain, do not measure",
+   "expect": {
+    "no_writes": true,
+    "cite": true
+   }
+  },
+  {
+   "id": "q144",
+   "request": "How do you calculate the waterproofing to basement walls? Do not change anything",
+   "expect": {
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q145",
+   "request": "What reinforcement rate are you using for beams? Just tell me",
+   "expect": {
+    "no_writes": true
+   }
+  },
+  {
+   "id": "q146",
+   "request": "Set POMI, create a folder Structure, measure the columns and beams, then build the POMI summary",
+   "expect": {
+    "actions": [
+     {
+      "do": "set_rules",
+      "rule_set": "POMI"
+     },
+     {
+      "do": "create_folder",
+      "name": "Structure"
+     },
+     {
+      "do": "measure_item"
+     },
+     {
+      "do": "build_summaries",
+      "kinds": [
+       "POMI"
+      ]
+     }
+    ],
+    "order": [
+     "set_rules",
+     "measure_item",
+     "build_summaries"
+    ]
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q147",
+   "request": "Ground level is 0.0. Measure the pile caps with waterproofing and build the NRM2 summary",
+   "expect": {
+    "actions": [
+     {
+      "do": "measure_item",
+      "item": "st-pilecaps"
+     },
+     {
+      "do": "build_summaries",
+      "kinds": [
+       "NRM2"
+      ]
+     }
+    ],
+    "order": [
+     "measure_item",
+     "build_summaries"
+    ],
+    "cite": true
+   }
+  },
+  {
+   "id": "q148",
+   "request": "Isolate the roof slabs, measure them and colour by measured status",
+   "expect": {
+    "actions": [
+     {
+      "do": "isolate"
+     },
+     {
+      "do": "measure_item",
+      "item": "st-roofslabs"
+     },
+     {
+      "do": "color_by",
+      "mode": "measured"
+     }
+    ]
+   },
+   "state": {
+    "groundLevel": 0
+   }
+  },
+  {
+   "id": "q149",
+   "request": "Create zones for ground floor and first floor, then a summary by zone",
+   "expect": {
+    "actions": [
+     {
+      "do": "create_zone"
+     },
+     {
+      "do": "build_summaries",
+      "by": "zone"
+     }
+    ],
+    "order": [
+     "create_zone",
+     "build_summaries"
+    ]
+   },
+   "state": {
+    "tables": [
+     {
+      "ref": "G1",
+      "name": "Beams",
+      "elements": 99,
+      "keys": [
+       "Conc_thin",
+       "FW"
+      ],
+      "columns": [
+       "Concrete (m3)"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "q150",
+   "request": "Measure the beams in a custom table: formwork soffit plus sides less 200 mm slab",
+   "expect": {
+    "min_groups": 1,
+    "categories": [
+     "Structural Framing"
+    ]
+   }
   }
- ]
+ ],
+ "note": "Cases q01-q50 test take-off plans; q051-q150 test app actions (rules, view, folders, dimension groups, zones, measure items, summaries, sheets, checks, questions, deletes). Pass target: 95%."
 }

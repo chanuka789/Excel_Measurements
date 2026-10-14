@@ -9,6 +9,7 @@ import { initMeasure, renderTemplates } from './js/measure.js';
 import { initExcel, onExcelSelect, addToExcel } from './js/excel.js';
 import { initAI, refreshAIStatus } from './js/aiclient.js';
 import { initReview, renderReview } from './js/review.js';
+import { initPaneHost } from './js/panehost.js';
 
 // ================================================================== tabs
 const MODEL_TABS = ['elements', 'measure', 'ai', 'review'];
@@ -170,7 +171,7 @@ function registerRibbon() {
 window.__ribbon = RIBBON;
 
 // ================================================================== start
-initModel(); initMeasure(); initExcel(); initAI(); initReview();
+initModel(); initMeasure(); initExcel(); initAI(); initReview(); initPaneHost();
 const officeReady = (typeof Office !== 'undefined') ? Office.onReady().catch(() => ({ host: null })) : Promise.resolve({ host: null });
 officeReady.then(async (info) => {
   S.inExcel = typeof Office !== 'undefined' && info?.host === Office.HostType.Excel;

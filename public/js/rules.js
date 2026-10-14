@@ -174,3 +174,24 @@ export function steelMass(type) {
   const m = /(?:UKB|UKC|UB|UC|PFC)\s*\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\s*[x×]\s*(\d+(?:\.\d+)?)/i.exec(type || '');
   return m ? Number(m[1]) : null;
 }
+
+/** What the AI must know about how the app measures structure (the data each calculation uses). */
+export const QS_KNOWLEDGE = `How the app measures structural concrete work (all quantities come from the exact 3D geometry, worked out per element):
+- Element kinds (kindOf): pile, pilecap, footing, raft, groundbeam, beam, column, slab (suspended), groundslab (on ground), roofslab (exposed top), wall, stair. Material: insitu, precast, steel, timber, masonry (from "Structural Material" or the type name).
+- Concrete: "Net volume" = geometry volume less overlaps with higher-priority elements (column > wall > beam > slab), so nothing is counted twice.
+  NRM2: horizontal work (slabs, beams, foundations) and vertical work (walls, columns), each split at 300 mm thick ("Thickness (geometry)"); stairs as sloping work.
+  POMI: classes by element (foundations, beds, suspended slabs, beams, columns, walls, staircases), thickness stated.
+- Formwork = faces of the concrete that are not in contact with other concrete or with the ground:
+  "FW soffit" (undersides with nothing touching; split by propping height "FW soffit 0-3 m", "FW soffit 3-4.5 m", then 1.5 m stages, measured from the surface below; NRM2 only),
+  "FW sides" (all free vertical faces), "FW narrow length" (length of edges/sides not over 500 mm high: NRM2 measures these in metres), "FW wide sides" (over 500 mm, m2),
+  "FW sloping soffit", "FW sloping top" (top surfaces sloping over 15 degrees). Faces on the ground ("Area on ground") get no formwork.
+  Foundation sides: formwork unless the project says "cast against earth" (yellow cell Earth = 1).
+- Reinforcement: allowance = concrete volume x rate (kg/m3 by element kind, project QS setup) / 1000 tonnes, until a bar bending schedule is available.
+  From a bar schedule: mass = number x length x d^2/162 kg/m (d in mm). Keep the rate as a yellow constant.
+- Waterproofing: under foundations and ground slabs = "Area on ground" (flat); walls below ground = outer face area ("Outer face area") from its bottom to ground level + upturn:
+  A x MAX(0, MIN(1, (GL + Upturn - bottom) / (top - bottom))); foundation sides when the project asks; roofs = "Top exposed" area (flat) + "Exposed perimeter" x roof upturn (upstands, m).
+  Ground level (GL) comes from the project QS setup (or the most common top of ground slabs); if it is unknown and waterproofing below ground is asked, ASK for the ground level.
+- Substructure: excavation = area on ground x (GL - bottom level); blinding = area on ground (x thickness); hardcore and DPM under ground slabs = area on ground.
+- NRM1 elements: 1.1.1 standard foundations (footings, pile caps, rafts, ground beams), 1.1.2 piling, 1.1.3 lowest floor (ground slabs), 2.1 frame (columns, beams), 2.2 upper floors (slabs),
+  2.3 roof (roof slabs), 2.4 stairs, 2.5 external walls, 2.7 internal walls. Element unit quantities: floor areas for floors, roof area for roofs.
+- Some rule details are marked "to confirm" (written from secondary sources): say so when you use them.`;

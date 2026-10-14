@@ -181,6 +181,7 @@ async function renderUpdateList() {
       } catch (err) { status(`"${it.name}": ${err.message}`, 'bad'); return; }
     }
     if (log.length) await writeChangeLog(log);
+    await App.refreshSummaries?.().catch(() => {});
     status(`${chosen.length} group${chosen.length > 1 ? 's' : ''} updated${log.length ? '; see the Change log sheet' : ''}.`, 'ok');
     App.refreshProject?.(); renderUpdateList();
   };
@@ -192,7 +193,16 @@ async function renderOutput() {
   const p = App.currentProject?.();
   let groups = [];
   try { groups = await getGroups(); } catch (err) { box.innerHTML = `<div class="msg bad">${esc(err.message)}</div>`; return; }
-  box.innerHTML = `<h3>BOQ sheet</h3>
+  box.innerHTML = `<h3>Summary sheets</h3>
+    ${S.inExcel ? (groups.length ? `<p class="hint">All built with formulas from the take-off: a Quantities register (SUMIFS), then the summaries you tick. Rates, allowances and GIFA you type are kept when you rebuild.</p>
+      <div class="row wrap"><label><input type="checkbox" data-sm="summary" checked> Summary by level / zone</label>
+        <label><input type="checkbox" data-sm="NRM2"> NRM2 summary</label><label><input type="checkbox" data-sm="POMI"> POMI summary</label>
+        <label><input type="checkbox" data-sm="NRM1"> NRM1 elemental summary</label></div>
+      <div class="row wrap"><label>Split by <select class="input" id="smBy" style="width:auto"><option value="level" ${S.summaryBy !== 'zone' && S.summaryBy !== 'none' ? 'selected' : ''}>Level</option><option value="zone" ${S.summaryBy === 'zone' ? 'selected' : ''}>Zone (tables with a Zone column)</option><option value="none" ${S.summaryBy === 'none' ? 'selected' : ''}>No split</option></select></label>
+        <label>GIFA m² <input class="input" id="smGifa" type="number" min="0" step="any" style="width:100px" placeholder="optional"></label></div>
+      <div class="row"><button class="btn primary" id="smRun">Build summary sheets</button></div>` : '<p class="hint">Add take-off groups first.</p>')
+      : '<p class="hint">Summary sheets are built inside Excel.</p>'}
+    <h3 style="margin-top:14px">BOQ sheet</h3>
     ${S.inExcel ? (groups.length ? `<p class="hint">Choose the quantities that become BOQ items. Each quantity links to its take-off total, so the BOQ updates when the take-off changes. Rates you have typed are kept when you rebuild.</p>
       <div class="tscroll"><ul class="check-list">${groups.map((g, gi) => g.labels.filter(l => g.totals[l] != null).map((l, li) => `<li><input type="checkbox" data-bq="${gi}|${li}" ${defaultTick(g, l) ? 'checked' : ''} aria-label="${esc(g.ref + ' ' + l)}">
         <span class="grow">${esc(g.ref)} ${esc(g.name)} · <strong>${esc(l)}</strong></span><span class="muted small">${fmt(Number(g.totals[l]) || 0)}</span></li>`).join('')).join('')}</ul></div>
@@ -208,29 +218,48 @@ async function renderOutput() {
   $('bqRun') && ($('bqRun').onclick = async () => {
     const picks = [...box.querySelectorAll('[data-bq]:checked')].map(c => c.dataset.bq.split('|').map(Number));
     if (!picks.length) { status('Tick at least one quantity.', 'bad'); return; }
-    const items = picks.map(([gi, li], k) => {
-      const g = groups[gi], l = g.labels.filter(x => g.totals[x] != null)[li];
-      const mcols = [...(g.method?.inputs || []), ...(g.method?.formulas || [])];
-      const byPos = mcols[g.labels.indexOf(l)];       // headings follow the method's column order
-      const col = byPos && `${byPos.label} (${byPos.unit})` === l ? byPos : mcols.find(c => `${c.label} (${c.unit})` === l);
-      const unit = (g.units[l] || '').replace('m2', 'm²').replace('m3', 'm³');
-      return { item: `${g.ref}.${String.fromCharCode(97 + picks.filter(([x], j) => x === gi && j < k).length)}`, group: g, label: l, unit, heading: g.name,
-        nameKey: col ? `TO_${g.ref}_${col.key}`.replace(/[^A-Za-z0-9_]/g, '_') : `'Take-off'!$${colLetter((g.dataStart ?? 7) + g.labels.indexOf(l))}$${g.totalRow}`,
-        description: `${g.name}: ${l.replace(/ \([^)]*\)$/, '')}` };
-    });
-    try {
-      if ($('bqAI').checked) {
-        status('The AI is writing the BOQ descriptions…');
-        const res = await api('POST', '/ai/describe', { projectId: App.currentProjectId?.(), items: items.map(it => ({ ref: it.item, group: it.group.name, quantity: it.label, unit: it.unit, categories: cats(it.group.ids), types: types(it.group.ids), method: it.group.method?.note || '', assumptions: it.group.constants.map(c => `${c.label} ${c.value} ${c.unit}`) })) });
-        const by = new Map(res.items.map(x => [String(x.ref), x]));
-        items.forEach(it => { const d = by.get(it.item); if (d) { it.description = d.description || it.description; it.heading = d.heading || it.heading; } });
-      }
-      await buildBOQ(items);
-      status(`BOQ sheet built with ${items.length} item${items.length > 1 ? 's' : ''}, linked to the take-off totals.`, 'ok');
-    } catch (err) { status(err.message, 'bad'); }
+    try { await boqFrom(groups, picks, $('bqAI').checked); } catch (err) { status(err.message, 'bad'); }
+  });
+  $('smRun') && ($('smRun').onclick = async () => {
+    const kinds = [...box.querySelectorAll('[data-sm]:checked')].map(c => c.dataset.sm);
+    const by = $('smBy').value; S.summaryBy = by;
+    const gifa = Number($('smGifa').value) || null;
+    $('smRun').disabled = true;
+    try { await App.buildSummaries({ kinds, by, gifa }); } catch (err) { status(err.message, 'bad'); } finally { $('smRun').disabled = false; }
   });
   $('apRun') && ($('apRun').onclick = () => auditPdf(groups, $('apPics').checked));
   if (p) loadExports();
+}
+/** BOQ items from ticked group columns ([groupIndex, labelIndex]); optional AI descriptions. */
+async function boqFrom(groups, picks, ai) {
+  const items = picks.map(([gi, li], k) => {
+    const g = groups[gi], l = g.labels.filter(x => g.totals[x] != null)[li];
+    const mcols = [...(g.method?.inputs || []), ...(g.method?.formulas || [])];
+    const byPos = mcols[g.labels.indexOf(l)];       // headings follow the method's column order
+    const col = byPos && `${byPos.label} (${byPos.unit})` === l ? byPos : mcols.find(c => `${c.label} (${c.unit})` === l);
+    const unit = (g.units[l] || '').replace('m2', 'm²').replace('m3', 'm³');
+    return { item: `${g.ref}.${String.fromCharCode(97 + picks.filter(([x], j) => x === gi && j < k).length)}`, group: g, label: l, unit, heading: g.name,
+      nameKey: col ? `TO_${g.ref}_${col.key}`.replace(/[^A-Za-z0-9_]/g, '_') : `'Take-off'!$${colLetter((g.dataStart ?? 7) + g.labels.indexOf(l))}$${g.totalRow}`,
+      description: `${g.name}: ${l.replace(/ \([^)]*\)$/, '')}${col?.rule?.ref ? ` (${col.rule.ref})` : ''}` };
+  });
+  if (ai) {
+    status('The AI is writing the BOQ descriptions…');
+    const res = await api('POST', '/ai/describe', { projectId: App.currentProjectId?.(), items: items.map(it => ({ ref: it.item, group: it.group.name, quantity: it.label, unit: it.unit, categories: cats(it.group.ids), types: types(it.group.ids), method: it.group.method?.note || '', assumptions: it.group.constants.map(c => `${c.label} ${c.value} ${c.unit}`) })) });
+    const by = new Map(res.items.map(x => [String(x.ref), x]));
+    items.forEach(it => { const d = by.get(it.item); if (d) { it.description = d.description || it.description; it.heading = d.heading || it.heading; } });
+  }
+  await buildBOQ(items);
+  status(`BOQ sheet built with ${items.length} item${items.length > 1 ? 's' : ''}, linked to the take-off totals.`, 'ok');
+  return { items: items.length };
+}
+/** BOQ with the default choice of quantities (final results only); used by the 3D window and the AI. */
+export async function buildBoqDefault({ ai = false } = {}) {
+  if (!S.inExcel) throw new Error('The BOQ sheet is built inside Excel.');
+  const groups = await getGroups();
+  const picks = [];
+  groups.forEach((g, gi) => g.labels.filter(l => g.totals[l] != null).forEach((l, li) => { if (defaultTick(g, l)) picks.push([gi, li]); }));
+  if (!picks.length) throw new Error('There are no take-off totals for a BOQ yet.');
+  return boqFrom(groups, picks, ai);
 }
 const colLetter = (n) => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - 1 - m) / 26; } return s; };
 /** Tick final results only: formula columns no other formula uses (soffit + sides = total: only the total), or
@@ -286,4 +315,5 @@ async function loadExports() {
 export function initReview() {
   App.renderReview = renderReview;
   App.addGroupToExcel = addToExcel;
+  App.buildBoqDefault = buildBoqDefault;
 }

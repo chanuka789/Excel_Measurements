@@ -91,7 +91,7 @@ async function renderAIAdmin() {
       <p class="muted small">Providers come from Railway variables: <code>AI_API_KEY</code> (+ <code>AI_BASE_URL</code>, <code>AI_MODEL</code>), <code>DEEPSEEK_API_KEY</code>, <code>OPENROUTER_API_KEY</code> (+ <code>OPENROUTER_MODEL</code>, e.g. a Meta Muse Spark model id), or <code>AI_PROVIDERS</code> (JSON list). A project owner can switch the AI off for one project.</p>`
       : '<div class="msg bad">No AI provider is set up. Add AI_API_KEY (and AI_BASE_URL, AI_MODEL) in Railway.</div>'}
     <h4>QS test set</h4>
-    <p class="muted small">Runs 50 real QS requests through the AI on a model and scores the plans (pass mark 45 of 50). Run it after changing provider or model. It uses about 50 AI requests and takes several minutes.</p>
+    <p class="muted small">Runs 150 real QS requests through the AI on a model and scores the plans and app actions (target 95%: 143 of 150). Run it after changing provider or model. It uses about 150 AI requests and can take half an hour.</p>
     <div class="actions left"><button class="btn" id="aiEval" ${S.versionId ? '' : 'disabled'}>Run the test set on the open model</button>${S.versionId ? '' : '<span class="muted small">Open a project model first (the structural sample is the reference).</span>'}</div>
     <div id="aiEvalOut">${ev ? evalHtml(ev) : ''}</div>
     ${a.usage.length ? `<h4>Use in the last 30 days</h4><table class="tbl"><thead><tr><th>User</th><th class="num">Requests</th><th class="num">Tokens</th></tr></thead><tbody>${a.usage.map(u => `<tr><td>${esc(u.name)}</td><td class="num">${u.requests}</td><td class="num">${u.tokens.toLocaleString()}</td></tr>`).join('')}</tbody></table>` : ''}`;
@@ -116,7 +116,7 @@ function pollEval() {
 function evalHtml(ev) {
   if (!ev) return '';
   const fails = (ev.results || []).filter(r => !r.pass);
-  return `<div class="kpis"><div class="kpi ${ev.passed >= 45 ? 'add' : 'rem'}"><b>${ev.passed ?? 0}/${ev.total ?? 50}</b><span>passed</span></div><div class="kpi"><b>${ev.done ?? 0}</b><span>run</span></div></div>
+  return `<div class="kpis"><div class="kpi ${(ev.passed ?? 0) >= Math.ceil((ev.total || 150) * 0.95) ? 'add' : 'rem'}"><b>${ev.passed ?? 0}/${ev.total ?? 150}</b><span>passed</span></div><div class="kpi"><b>${ev.done ?? 0}</b><span>run</span></div></div>
     <p class="muted small">${esc(ev.status)} · ${esc(ev.provider || '')} ${esc(ev.aiModel || '')} · model ${esc(ev.model || '')}${ev.finishedAt ? ' · ' + fmtDate(ev.finishedAt) : ''}</p>
     ${fails.length ? `<details class="box"><summary>Requests that did not pass (${fails.length})</summary><ul class="check-list">${fails.map(r => `<li><span class="grow"><strong>${esc(r.request)}</strong><br><span class="muted small">${esc((r.reasons || []).join('; '))}</span></span></li>`).join('')}</ul></details>` : ''}`;
 }

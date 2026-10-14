@@ -9,6 +9,7 @@ import { loadModelData, applyFilter } from './modeldata.js';
 import { runAgent, specFromGroup, aiConfig } from './ai.js';
 import { templatesFor } from './features.js';
 import { evaluate } from '../public/js/engine.js';
+import { actionKind } from '../public/js/actdefs.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -17,9 +18,42 @@ export async function loadCases() {
 }
 
 /** Score one AI result. Returns { pass, reasons[] }. */
+const WRITE = new Set(['write', 'delete']);
+/** Does a plan action match an expected one? Strings match without case (or as a part), arrays match any value. */
+function actionMatches(a, want, data, ticked) {
+  if (a.do !== want.do) return false;
+  for (const [k, v] of Object.entries(want)) {
+    if (['do', 'categories', 'filter_levels'].includes(k)) continue;
+    const got = a[k];
+    if (Array.isArray(v)) { const g = Array.isArray(got) ? got.map(String) : [String(got ?? '')]; if (!v.some(x => g.some(y => y.toLowerCase() === String(x).toLowerCase()))) return false; }
+    else if (typeof v === 'string') { if (!String(got ?? '').toLowerCase().includes(v.toLowerCase())) return false; }
+    else if (typeof v === 'number') { if (Math.abs(Number(got) - v) > 1e-6) return false; }
+    else if (typeof v === 'boolean') { if (Boolean(got) !== v) return false; }
+  }
+  if (want.categories) {
+    const els = applyFilter(data.elements, a.filter || {}, ticked);
+    if (!els.length || els.some(e => !want.categories.includes(e.cat))) return false;
+  }
+  return true;
+}
+function scoreActions(x, plan, data, ticked, why) {
+  const acts = plan?.actions || [];
+  for (const want of x.actions || []) if (!acts.some(a => actionMatches(a, want, data, ticked))) why.push(`missing action ${want.do}${Object.keys(want).length > 1 ? ' ' + JSON.stringify(want) : ''}`);
+  if (x.items_any && !acts.some(a => a.do === 'measure_item' && x.items_any.includes(a.item))) why.push('expected a measure item: ' + x.items_any.join(' / '));
+  if (x.no_writes && acts.some(a => WRITE.has(actionKind(a)))) why.push('planned changes it should not make');
+  if (x.no_deletes && acts.some(a => actionKind(a) === 'delete')) why.push('planned a delete that was not asked for');
+  if (x.cite && !(plan?.rules_used || []).length && !acts.some(a => a.rule)) why.push('did not say which measurement rule it used');
+  if (x.order) { const pos = x.order.map(d => acts.findIndex(a => a.do === d)); if (pos.some(p => p < 0) || pos.some((p, i) => i && p < pos[i - 1])) why.push('actions in the wrong order: expected ' + x.order.join(' > ')); }
+  if (x.max_actions && acts.length > x.max_actions) why.push(`too many actions (${acts.length})`);
+}
 export function scoreCase(c, plan, data, ticked = []) {
   const x = c.expect || {}, why = [];
   const groups = plan?.groups || [];
+  if (x.actions || x.items_any || x.no_writes || x.no_deletes || x.cite || x.order) {
+    scoreActions(x, plan, data, ticked, why);
+    if (x.ask && !plan?.question) why.push('should have asked a question');
+    if (!x.min_groups && !x.categories) return { pass: !why.length, reasons: why };
+  }
   if (x.ask || x.no_groups) {
     if (groups.length && x.ask) why.push('should have asked a question instead of guessing');
     if (groups.length && x.no_groups) {
@@ -63,6 +97,12 @@ export function scoreCase(c, plan, data, ticked = []) {
   return { pass: !why.length, reasons: why };
 }
 
+/** The project the test pretends to be in (rules, set-up, folders, groups, zones, workbook). */
+function evalState(c) {
+  const st = c.state || {};
+  return { ruleSet: st.ruleSet || 'NRM2', setup: { ruleSet: st.ruleSet || 'NRM2', groundLevel: st.groundLevel ?? null, wpUpturn: 0.15, roofUpturn: 0.3, wpUnderGround: true, wpFoundationSides: false, wpRoof: true, earthFaced: false, rates: {} },
+    folders: st.folders || [], groups: st.groups || [], zones: st.zones || [], workbook: st.workbook || { inExcel: true, sheets: ['Take-off'], groups: st.tables || [] } };
+}
 /** Job handler: run the whole set and store the result in settings.ai_eval. */
 export async function runEvaluation({ versionId, userId }) {
   const v = await versionProject(versionId);
@@ -79,8 +119,8 @@ export async function runEvaluation({ versionId, userId }) {
   for (const c of set.cases) {
     const ticked = c.expect?.ticked ? data.elements.filter(e => e.cat === c.expect.ticked).map(e => e.id) : [];
     try {
-      const out = await runAgent({ user, projectId: null, request: c.request, data, ticked, templates, cfg });
-      results.push({ id: c.id, request: c.request, ...scoreCase(c, out.plan, data, ticked), groups: (out.plan.groups || []).map(g => g.name), message: out.plan.message || '', steps: out.steps.length });
+      const out = await runAgent({ user, projectId: null, request: c.request, data, ticked, templates, cfg, state: evalState(c) });
+      results.push({ id: c.id, request: c.request, ...scoreCase(c, out.plan, data, ticked), groups: (out.plan.groups || []).map(g => g.name), actions: (out.plan.actions || []).map(a => a.do), message: out.plan.message || '', steps: out.steps.length });
     } catch (err) {
       results.push({ id: c.id, request: c.request, pass: false, reasons: ['error: ' + err.message] });
     }

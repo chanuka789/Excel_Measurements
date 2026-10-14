@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { pool, migrate, one } from './src/db.js';
 import { api } from './src/api.js';
+import { registerLinkClaim } from './src/link.js';
 import { syncUsers } from './src/auth.js';
 import { readModel } from './src/processing.js';
 import { AI } from './src/ai.js';
@@ -49,6 +50,7 @@ api.post('/model', upload.single('model'), async (req, res) => {
     res.status(500).json({ error: String(err.stderr || err.message || err).trim().split('\n').pop().slice(0, 500) });
   } finally { fs.rm(job, { recursive: true, force: true }).catch(() => {}); }
 });
+registerLinkClaim(app);
 app.use('/api', api);
 
 export async function start(port = process.env.PORT || 3000) {

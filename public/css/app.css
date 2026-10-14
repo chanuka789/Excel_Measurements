@@ -319,3 +319,19 @@ details.box > summary { cursor: pointer; font-weight: 600; }
 .qs-consts { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; margin: 6px 0; }
 .rates { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; font-size: 12px; }
 .rates label { display: flex; flex-direction: column; gap: 2px; }
+.vpop-list { display: flex; flex-direction: column; gap: 6px; max-width: 280px; }
+.vpop-list button { text-align: left; padding: 8px; border: 1px solid var(--stroke2); border-radius: var(--r-l); background: var(--bg); cursor: pointer; color: var(--fg); }
+.vpop-list button:hover { border-color: var(--brand); }
+/* AI plan checklist */
+.ai-actions ol.plan { list-style: none; padding: 0; margin: 6px 0; }
+.ai-actions li.pa { padding: 6px 4px; border-bottom: 1px solid var(--stroke2); }
+.ai-actions li.pa label { display: flex; gap: 6px; align-items: baseline; }
+.ai-actions li.pa .pi { width: 14px; text-align: center; color: var(--fg3); }
+.ai-actions li.pa.ok .pi { color: #107c10; } .ai-actions li.pa.bad .pi { color: #d13438; }
+.ai-actions li.pa.skip { opacity: .6; }
+.ai-actions li.pa .pt { flex: 1; }
+.ai-actions li.pa.delete .pt { color: #a4262c; }
+.badge.bad { background: #fde7e9; color: #a4262c; }
+.bad-text { color: #a4262c; }
+ul.rules-used { margin: 4px 0; padding-left: 16px; font-size: 12px; }
+ul.rules-used li { margin: 3px 0; }

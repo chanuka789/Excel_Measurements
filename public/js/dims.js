@@ -14,8 +14,8 @@ export const PREFERRED = {
   Area: ['Area', 'Geo top area', 'Face area (L x H)', 'Geo surface area'],
   Volume: ['Volume', 'Geo volume'],
 };
-export const DETAILS = [['cat', 'Category'], ['fam', 'Family'], ['type', 'Type'], ['level', 'Level'], ['mark', 'Mark']];
-export const DEFAULT_DETAILS = DETAILS.map(d => d[0]);
+export const DETAILS = [['cat', 'Category'], ['fam', 'Family'], ['type', 'Type'], ['level', 'Level'], ['mark', 'Mark'], ['zone', 'Zone']];
+export const DEFAULT_DETAILS = ['cat', 'fam', 'type', 'level', 'mark'];
 export const detailLabel = (d) => (d.startsWith('p:') ? d.slice(2) : (DETAILS.find(x => x[0] === d) || [d, d])[1]);
 export const detailValue = (e, d) => (d.startsWith('p:') ? e.props?.[d.slice(2)] ?? '' : e[d] ?? '');
 

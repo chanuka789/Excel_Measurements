@@ -7,6 +7,7 @@ import { S } from './state.js';
 import { evaluate } from './measure.js';
 import { update } from './model.js';
 import { DEFAULT_DETAILS, detailLabel, detailValue, sameElements, mergeSpecs } from './dims.js';
+import { STYLE, QSHEET, SUMMARY, NRM1SHEET, setSheet, buildRegister, buildSummary, buildRuleSummary, buildNrm1, buildCustom } from './summaries.js';
 
 export const SHEET = 'Take-off', META = '_dwfx', BOQ = 'BOQ', LOG = 'Change log';
 const colL = (n) => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - 1 - m) / 26; } return s; };
@@ -176,6 +177,7 @@ export async function addToExcel(spec, { save = true, takeoffId = null, merge = 
     S.rowsById = null;
     status(`Added ${ref} "${spec.name}" to the ${SHEET} sheet${id ? ' and saved it to the project' : ''}.`, 'ok');
   } catch (err) { status('Excel error: ' + err.message, 'bad'); throw err; }
+  await refreshSummaries().catch(() => {});
   if (S.colorBy === 'measured') App.setColorMode?.('measured');
   return ref;
 }
@@ -189,6 +191,7 @@ async function mergeIntoGroup(g, spec, { save }) {
   } else if (!id && save) id = await saveTakeoff(merged, { quiet: true });
   try { await updateGroupInPlace(g.ref, merged, { keepAssumptions: true, takeoffId: id }); }
   catch (err) { status('Excel error: ' + err.message, 'bad'); throw err; }
+  await refreshSummaries().catch(() => {});
   const added = merged.formulas.length + merged.inputs.length - g.meta.method.formulas.length - g.meta.method.inputs.length;
   status(`"${spec.name}" uses the same ${spec.ids.length} elements as ${g.ref}, so it was added to that table (${added} new column${added === 1 ? '' : 's'}).`, 'ok');
   if (S.colorBy === 'measured') App.setColorMode?.('measured');
@@ -239,9 +242,17 @@ export async function readGroups() {
             : Math.max(2, V[j].findIndex((h, k) => k >= 2 && /\([^()]*\)$/.test(String(h))));
           if (g.dataStart < 2) g.dataStart = 7;
           g.labels = V[j].slice(g.dataStart).map(String).filter(Boolean);
+          g.detailHeads = V[j].slice(2, g.dataStart).map(String);
+          g.levelCol = g.detailHeads.indexOf('Level') >= 0 ? 2 + g.detailHeads.indexOf('Level') : -1;
+          g.zoneCol = g.detailHeads.indexOf('Zone') >= 0 ? 2 + g.detailHeads.indexOf('Zone') : -1;
+          g.levels = new Set(); g.zones = new Set();
         }
         else if (!a && !g.headRow && b && !b.startsWith('Method:')) g.constants.push({ label: b, value: V[j][2], unit: String(V[j][3] || ''), address: `C${j + 1}` });
-        else if (a.startsWith(g.ref + '.') && typeof V[j][1] === 'number') g.ids.push(V[j][1]);
+        else if (a.startsWith(g.ref + '.')) {
+          if (typeof V[j][1] === 'number') g.ids.push(V[j][1]);
+          if (g.levelCol >= 0) g.levels.add(String(V[j][g.levelCol] ?? ''));
+          if (g.zoneCol >= 0) g.zones.add(String(V[j][g.zoneCol] ?? ''));
+        }
         else if (b.startsWith('Total ') && g.headRow) { g.totalRow = j + 1; g.labels.forEach((l, k) => { const v = V[j][g.dataStart + k]; if (v !== '' && v != null) g.totals[l] = v; }); }
         if (b.startsWith('Method:')) g.note = b.slice(8);
       }
@@ -419,6 +430,118 @@ export async function selectFromExcel() {
   });
 }
 
+// ================================================================== summary sheets (all formulas)
+/** Write a layout from summaries.js with the formatting standard. The sheet is replaced; yellow inputs are kept by the caller. */
+export async function writeLayout(L, { activate = true, after = SHEET } = {}) {
+  const width = Math.max(...L.rows.map(r => r.length), 1);
+  const rows = L.rows.map(r => { const o = Array(width).fill(''); r.forEach((v, i) => { o[i] = v ?? ''; }); return o; });
+  const end = rows.length, last = colL(width - 1);
+  await Excel.run(async (ctx) => {
+    const old = ctx.workbook.worksheets.getItemOrNullObject(L.name); await ctx.sync();
+    if (!old.isNullObject) { old.delete(); await ctx.sync(); }
+    const sh = ctx.workbook.worksheets.add(L.name);
+    try { const ref = ctx.workbook.worksheets.getItemOrNullObject(after); await ctx.sync(); if (!ref.isNullObject) { ref.load('position'); await ctx.sync(); sh.position = ref.position + 1; } } catch { /* order is cosmetic */ }
+    sh.getRange(`A1:${last}${end}`).formulas = rows;
+    const all = sh.getRange(`A1:${last}${end}`);
+    all.format.font.set({ name: STYLE.font, size: STYLE.size, color: STYLE.color, bold: false, italic: false });
+    (L.widths || []).forEach((w, i) => { sh.getRange(`${colL(i)}:${colL(i)}`).format.columnWidth = w; });
+    if (L.numFmt) sh.getRange(`A1:${last}${end}`).numberFormat = rows.map((r, ri) => r.map((v, ci) => L.numFmt(ri, ci) || 'General'));
+    const paint = (rg, st) => { if (st.fill) rg.format.fill.color = st.fill; const f = {}; ['bold', 'italic', 'color', 'size'].forEach(k => { if (st[k] != null) f[k] = st[k]; }); rg.format.font.set(f); };
+    L.kinds.forEach((k, i) => {
+      const row = sh.getRange(`A${i + 1}:${last}${i + 1}`);
+      if (k === 'title') paint(sh.getRange(`A${i + 1}:${last}${i + 1}`), STYLE.title);
+      else if (k === 'note') paint(row, STYLE.note);
+      else if (k === 'head') { paint(row, STYLE.head); row.format.wrapText = true; row.format.verticalAlignment = 'Center'; }
+      else if (k === 'section') paint(row, STYLE.section);
+      else if (k === 'group') paint(row, STYLE.group);
+      else if (k === 'subtotal') paint(row, STYLE.subtotal);
+      else if (k === 'total') paint(row, STYLE.total);
+      else if (k === 'gifa') row.format.font.bold = true;
+    });
+    (L.inputs || []).forEach(([r, c]) => paint(sh.getRange(`${colL(c)}${r}`), STYLE.input));
+    const B = Excel.BorderIndex, h = L.headRow || 1;
+    [B.edgeTop, B.edgeBottom, B.edgeLeft, B.edgeRight, B.insideHorizontal, B.insideVertical].forEach(ed => {
+      const bd = sh.getRange(`A${h}:${last}${end}`).format.borders.getItem(ed); bd.style = 'Continuous'; bd.color = STYLE.grid; });
+    sh.getRange(`A${h + 1}:${last}${end}`).format.verticalAlignment = 'Top';
+    (L.hidden || []).forEach(c => { sh.getRange(`${colL(c)}:${colL(c)}`).columnHidden = true; });
+    sh.freezePanes.freezeRows(h);
+    if (activate) { sh.activate(); sh.getRange('A1').select(); }
+    await ctx.sync();
+  });
+}
+/** Values of the yellow cells of a summary sheet, by row code (column A), so a rebuild keeps rates and allowances. */
+async function readKeep(name, pick) {
+  const keep = new Map();
+  await Excel.run(async (ctx) => {
+    const sh = ctx.workbook.worksheets.getItemOrNullObject(name); await ctx.sync();
+    if (sh.isNullObject) return;
+    const u = sh.getUsedRangeOrNullObject(true); u.load('values'); await ctx.sync();
+    if (u.isNullObject) return;
+    u.values.forEach(v => { const k = String(v[0] || ''); if (!k) return; const x = pick(k, v); if (typeof x === 'number') keep.set(k, x); });
+  });
+  return keep;
+}
+async function sheetExists(name) {
+  return Excel.run(async (ctx) => { const s = ctx.workbook.worksheets.getItemOrNullObject(name); await ctx.sync(); return !s.isNullObject; });
+}
+/**
+ * Build summary sheets. kinds: any of 'register', 'summary', 'NRM2', 'POMI', 'NRM1'. by: 'level' | 'zone' | 'none'.
+ * The Quantities register is always rebuilt first (every summary reads it).
+ */
+export async function buildSummaries({ kinds = ['summary'], by = 'level', gifa = null, quiet = false } = {}) {
+  if (!S.inExcel) throw new Error('Open the add-in in Excel to build summary sheets.');
+  const groups = await readGroups();
+  if (!groups.length) throw new Error(`Add take-off tables to the ${SHEET} sheet first.`);
+  const reg = buildRegister(groups, { by });
+  await writeLayout(reg.layout, { activate: false });
+  const order = (S.levelZ || []).map(l => l.name);
+  const made = [QSHEET];
+  if (kinds.includes('summary')) { await writeLayout(buildSummary(reg.entries, { by, order }), { activate: false, after: QSHEET }); made.push(SUMMARY); }
+  for (const set of ['NRM2', 'POMI']) {
+    if (!kinds.includes(set)) continue;
+    const keep = await readKeep(setSheet(set), (k, v) => v[6]);
+    await writeLayout(buildRuleSummary(reg.entries, set, { keep }), { activate: false, after: QSHEET }); made.push(setSheet(set));
+  }
+  if (kinds.includes('NRM1')) {
+    const keep = await readKeep(NRM1SHEET, (k, v) => (k === 'GIFA' ? v[4] : k.startsWith('ALLOW@') ? v[6] : v[5]));
+    await writeLayout(buildNrm1(reg.entries, { keep, gifa }), { activate: false, after: QSHEET }); made.push(NRM1SHEET);
+  }
+  await Excel.run(async (ctx) => { const sh = ctx.workbook.worksheets.getItem(made[made.length - 1]); sh.activate(); await ctx.sync(); }).catch(() => {});
+  if (!quiet) status(`Built ${made.join(', ')} from ${reg.entries.length} quantity rows${reg.skipped.length ? ` (${reg.skipped.join(', ')} not linked to a method, left out)` : ''}.`, 'ok');
+  return { sheets: made, rows: reg.entries.length, skipped: reg.skipped, by };
+}
+/** Rebuild the summaries that exist, after the take-off changed (keeps rates, GIFA and allowances). */
+export async function refreshSummaries() {
+  if (!S.inExcel || !(await sheetExists(QSHEET))) return null;
+  const kinds = [];
+  if (await sheetExists(SUMMARY)) kinds.push('summary');
+  for (const k of ['NRM2', 'POMI']) if (await sheetExists(setSheet(k))) kinds.push(k);
+  if (await sheetExists(NRM1SHEET)) kinds.push('NRM1');
+  return buildSummaries({ kinds, by: S.summaryBy || 'level', quiet: true });
+}
+/** A sheet the user asked for (through the AI), from a definition; formulas are checked first. */
+export async function buildCustomSheet(def) {
+  if (!S.inExcel) throw new Error('Open the add-in in Excel to create sheets.');
+  const names = new Set();
+  await Excel.run(async (ctx) => { const n = ctx.workbook.names; n.load?.('items/name'); await ctx.sync(); (n.items || []).forEach(x => names.add(x.name)); }).catch(() => {});
+  const L = buildCustom(def, { names });
+  const exists = await sheetExists(L.name);
+  await writeLayout(L);
+  status(`${exists ? 'Rebuilt' : 'Created'} the "${L.name}" sheet (${L.rows.length - 4} rows).`, 'ok');
+  return { sheet: L.name, rows: L.rows.length - 4, replaced: exists };
+}
+export async function deleteSheet(name) {
+  await Excel.run(async (ctx) => { const s = ctx.workbook.worksheets.getItemOrNullObject(name); await ctx.sync(); if (!s.isNullObject) { s.delete(); await ctx.sync(); } });
+}
+/** Short description of the workbook for the AI: sheets and take-off groups. */
+export async function workbookState() {
+  if (!S.inExcel) return { inExcel: false, groups: S.takeoff.map((g, i) => ({ ref: 'L' + (i + 1), name: g.name, elements: g.ids.length })) };
+  const groups = await readGroups();
+  const sheets = await Excel.run(async (ctx) => { const w = ctx.workbook.worksheets; w.load('items/name,items/visibility'); await ctx.sync(); return (w.items || []).filter(x => x.visibility !== 'VeryHidden').map(x => x.name); }).catch(() => []);
+  return { inExcel: true, sheets, groups: groups.map(g => ({ ref: g.ref, name: g.name, elements: g.ids.length, columns: g.labels.slice(0, 30),
+    keys: [...(g.meta?.method?.inputs || []), ...(g.meta?.method?.formulas || [])].map(c => c.key), totals: g.totals })) };
+}
+
 export function initExcel() {
-  Object.assign(App, { addToExcel, addToList, saveTakeoff, goToRows, loadMeasured, readGroups, selectFromExcel });
+  Object.assign(App, { addToExcel, addToList, saveTakeoff, goToRows, loadMeasured, readGroups, selectFromExcel, buildSummaries, refreshSummaries, buildCustomSheet, deleteSheet, workbookState });
 }

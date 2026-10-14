@@ -13,6 +13,7 @@ import { compareModels } from './compare.js';
 import { auditPdf } from './report.js';
 import { aiConfig, runAgent, runSummaryPlan, runCheck, runDescribe, aiUsage, logAI, seedRules } from './ai.js';
 import { enqueue } from './jobs.js';
+import { qsSetup } from '../public/js/rules.js';
 
 const bigJson = express.json({ limit: '40mb' });
 
@@ -30,6 +31,22 @@ export async function templatesFor(user, projectId) {
   return q(`SELECT id, scope, project_id, owner_id, name, discipline, description, spec, builtin, created_at FROM templates
             WHERE builtin OR scope='company' OR (scope='user' AND owner_id=$1) OR (scope='project' AND project_id=$2)
             ORDER BY builtin DESC, discipline NULLS LAST, name`, [user.id, uuidOk(projectId) ? projectId : null]);
+}
+
+/** What the AI may know about the project when it plans actions. */
+async function projectState(pid, workbook) {
+  const [p, folders, groups, zones] = await Promise.all([
+    one(`SELECT settings FROM projects WHERE id=$1`, [pid]),
+    q(`SELECT id, parent_id, name FROM folders WHERE project_id=$1 AND kind='dim' ORDER BY name`, [pid]),
+    q(`SELECT g.name, g.mtype, g.folder_id, (SELECT count(*)::int FROM dim_items i WHERE i.group_id=g.id) AS items FROM dim_groups g WHERE g.project_id=$1 ORDER BY g.name LIMIT 300`, [pid]),
+    q(`SELECT name, jsonb_array_length(ids) AS elements FROM zones WHERE project_id=$1 ORDER BY name`, [pid]),
+  ]);
+  const setup = qsSetup(p?.settings || {});
+  const fname = new Map(folders.map(f => [f.id, f.name]));
+  const wb = workbook && typeof workbook === 'object' ? { inExcel: Boolean(workbook.inExcel), sheets: (workbook.sheets || []).slice(0, 60).map(String),
+    groups: (workbook.groups || []).slice(0, 200).map(g => ({ ref: String(g.ref || ''), name: String(g.name || '').slice(0, 200), elements: Number(g.elements) || 0, keys: (g.keys || []).slice(0, 40), columns: (g.columns || []).slice(0, 40) })) } : null;
+  return { ruleSet: setup.ruleSet, setup, folders: folders.map(f => ({ name: f.name, parent: fname.get(f.parent_id) || '' })),
+    groups: groups.map(g => ({ name: g.name, type: g.mtype, folder: fname.get(g.folder_id) || '', elements: g.items })), zones, workbook: wb };
 }
 
 export function registerFeatures(api) {
@@ -278,7 +295,8 @@ export function registerFeatures(api) {
         const data = await loadModelData(v);
         const templates = await templatesFor(req.user, v.project_id);
         await logAI(req.user, v.project_id, request);
-        res.json(await runAgent({ user: req.user, projectId: v.project_id, request, data, ticked: Array.isArray(ticked) ? ticked.map(Number) : [], templates }));
+        const state = await projectState(v.project_id, req.body?.workbook);
+        res.json(await runAgent({ user: req.user, projectId: v.project_id, request, data, ticked: Array.isArray(ticked) ? ticked.map(Number) : [], templates, state }));
       } else {
         if (!summary) fail(400, 'Missing model summary.');
         res.json(await runSummaryPlan({ user: req.user, request, summary }));

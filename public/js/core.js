@@ -4,9 +4,11 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp
 export const App = {};             // modules register functions here (selectTab, openVersion, addToExcel, ...)
 
 const KEY = 'dwfxSession';
+let memory = null;                 // the app window keeps its own session in memory, so it never replaces the pane's
 export const session = {
-  get() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } },
-  set(v) { try { v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY); } catch { /* storage blocked */ } },
+  get() { if (memory) return memory.v; try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } },
+  set(v) { if (memory) { memory.v = v; return; } try { v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY); } catch { /* storage blocked */ } },
+  useMemory(v) { memory = { v }; },
 };
 
 export class ApiError extends Error { constructor(status, msg) { super(msg); this.status = status; } }

@@ -62,13 +62,18 @@ export async function login(email, password, userAgent) {
   // same work whether or not the user exists, to avoid revealing which emails are valid
   const ok = u ? await verifyPasswordAsync(password, u.pw_hash) : (await verifyPasswordAsync(password, 'scrypt$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='), false);
   if (!u || !ok || !u.active) return null;
-  const token = crypto.randomBytes(32).toString('base64url');
-  await q(`INSERT INTO sessions (token_hash, user_id, expires_at, user_agent) VALUES ($1,$2, now() + make_interval(days => $3), $4)`,
-    [sha(token), u.id, SESSION_DAYS, String(userAgent || '').slice(0, 200)]);
+  const token = await createSession(u.id, userAgent);
   await q(`UPDATE users SET last_login=now() WHERE id=$1`, [u.id]);
   await q(`DELETE FROM sessions WHERE expires_at < now()`);
   await audit(u.id, null, 'login');
   return { token, user: publicUser(u) };
+}
+/** A new session token for a user (sign-in, or the app window linked to a signed-in task pane). */
+export async function createSession(userId, userAgent, days = SESSION_DAYS) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  await q(`INSERT INTO sessions (token_hash, user_id, expires_at, user_agent) VALUES ($1,$2, now() + make_interval(days => $3), $4)`,
+    [sha(token), userId, days, String(userAgent || '').slice(0, 200)]);
+  return token;
 }
 export const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role });
 
