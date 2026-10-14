@@ -159,7 +159,7 @@ let TPL = [];
 export async function renderTemplates() {
   const box = $('tplBody'); if (!box) return;
   box.innerHTML = '<div class="loading">Loading templates…</div>';
-  try { TPL = (await api('GET', '/templates' + (App.currentProjectId?.() ? `?projectId=${App.currentProjectId()}` : ''))).templates; }
+  try { TPL = (await api('GET', '/templates' + (App.currentProjectId?.() ? `?projectId=${App.currentProjectId()}` : ''))).templates.filter(t => t.spec?.kind !== 'smart-schedule'); }
   catch (err) { box.innerHTML = `<div class="msg bad">${esc(err.message)}</div>`; return; }
   const groups = new Map();
   TPL.forEach((t, i) => { const k = t.builtin ? `${t.discipline} pack` : t.scope === 'project' ? 'This project' : t.scope === 'company' ? 'Company' : 'My templates'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push([t, i]); });

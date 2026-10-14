@@ -43,7 +43,8 @@
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Sections">
-    <button role="tab" aria-selected="true" data-tab="project">Project</button>
+    <button role="tab" aria-selected="true" data-tab="project">Project & Models</button>
+    <button role="tab" aria-selected="false" data-tab="smart">Smart Takeoff</button>
     <button role="tab" aria-selected="false" data-tab="elements">Elements</button>
     <button role="tab" aria-selected="false" data-tab="measure">Measure <span class="count" id="selCount"></span></button>
     <button role="tab" aria-selected="false" data-tab="ai">AI</button>
@@ -61,6 +62,7 @@
   </div>
 
   <section class="panel on" id="tab-project" role="tabpanel"><div id="projectBody"></div></section>
+  <section class="panel" id="tab-smart" role="tabpanel"><div id="smartBody"></div></section>
 
   <section class="panel" id="tab-elements" role="tabpanel">
     <div class="nomodel empty" hidden>Open a model version from the Project tab to browse its elements.</div>

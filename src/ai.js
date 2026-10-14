@@ -109,7 +109,7 @@ export async function searchRules(text, projectId, limit = 6) {
 // ------------------------------------------------------------------ prompts
 const PLAN_SCHEMA = `{"message": "short plain-English summary of what you measured and the key assumptions",
  "question": "only when the request is unclear or data is missing: ONE short question for the QS (then no groups and no write actions)",
- "rules_used": [{"ref": "e.g. NRM2 11.15", "use": "what this rule decided in the plan"}],
+ "rules_used": [{"ref": "e.g. NRM2 WS11 / item 16", "use": "what this rule decided in the plan"}],
  "actions": [{"do": "action name", "...": "arguments", "why": "short reason", "rule": "rule ref when a measurement rule applies"}],
  "groups": [{
    "name": "take-off group name, e.g. 'Formwork to RC beams - First floor'",

@@ -28,6 +28,10 @@ export function structuralSpecs(ids, byId, opts = {}) {
   const out = [];
   for (const [kind, els] of groups) {
     const spec = kind === 'steel' ? steelSpec(els, set) : kind === 'precast' ? precastSpec(els, set) : concreteSpec(kind, els, set, setup, gl);
+    if (spec && els.some(e => e.qsEstimatedQuantities?.length)) {
+      spec.note += ' Some quantities use geometry/dimension fallbacks; confirm formed interfaces and measurements.';
+      spec.formulas.forEach(f => { if (f.rule) f.rule.confirm = true; });
+    }
     if (spec) out.push({ kind, spec: { ...spec, name: (opts.name ? opts.name + ' - ' : '') + spec.name, ids: els.map(e => e.id), ruleSet: set, parts: [(opts.name ? opts.name + ' - ' : '') + spec.name] } });
   }
   return out;
@@ -61,11 +65,10 @@ function concreteSpec(kind, els, set, setup, gl) {
   B.inputs.push({ key: 'Count', label: 'Count', unit: 'nr', source: 'count', sum: true });
   const V = has(els, 'Net volume') ? input('Net volume', 'Net volume', 'm3') : has(els, 'Geo volume') ? input('Geo volume', 'Geo volume', 'm3') : input('Volume', 'Volume', 'm3');
   const thick = input('Thickness (geometry)', 'Thickness', 'm', false);
-  { const t = B.inputs.find(i => i.name === 'Thickness (geometry)'); if (t) t.blankAsZero = true; }   // no thickness: 'not exceeding 300' (as Excel does with a blank cell)
   const horizontal = ['slab', 'roofslab', 'groundslab', 'beam', 'groundbeam', 'footing', 'pilecap', 'raft'].includes(kind);
   const vertical = ['column', 'wall'].includes(kind);
   const earth = () => constant('Earth', 'Foundation sides cast against earth (1 = yes, 0 = formwork)', setup.earthFaced ? 1 : 0, '');
-  const anyThin = els.some(e => (e.q?.['Thickness (geometry)']?.[0] ?? 1) <= 0.3 + 1e-9), anyThick = els.some(e => (e.q?.['Thickness (geometry)']?.[0] ?? 0) > 0.3 + 1e-9);
+  const anyThin = els.some(e => e.q?.['Thickness (geometry)']?.[0] != null && e.q['Thickness (geometry)'][0] <= 0.3 + 1e-9), anyThick = els.some(e => e.q?.['Thickness (geometry)']?.[0] > 0.3 + 1e-9);
 
   // ---------------- concrete
   if (set === 'NRM2') {
@@ -80,6 +83,12 @@ function concreteSpec(kind, els, set, setup, gl) {
       const thin = horizontal ? 'conc.hz.thin' : 'conc.vt.thin', thk = horizontal ? 'conc.hz.thick' : 'conc.vt.thick';
       if (anyThin) formula('Conc_thin', R[thin].title, 'm3', `IF(${thick}<=0.3, ${V}, 0)`, meta(thin));
       if (anyThick) formula('Conc_thick', R[thk].title, 'm3', `IF(${thick}>0.3, ${V}, 0)`, meta(thk));
+      const unknown = els.filter(e => e.q?.['Thickness (geometry)']?.[0] == null);
+      if (unknown.length) {
+        B.inputs.push({ key: 'Unclassified_volume', label: 'Concrete volume with unknown thickness', unit: 'm3', source: 'map', map: Object.fromEntries(els.map(e => [e.id,
+          unknown.includes(e) ? e.q?.['Net volume']?.[0] ?? e.q?.['Geo volume']?.[0] ?? e.q?.Volume?.[0] ?? null : 0])), sum: false });
+        formula('Conc_unknown', 'Concrete; thickness unknown (review)', 'm3', '{Unclassified_volume}', meta(thin, { confirm: true, title: 'Concrete; thickness unknown (review)' }));
+      }
     }
   } else if (set === 'POMI') {
     const ck = { footing: 'conc.fdn', pilecap: 'conc.fdn', raft: 'conc.fdn', groundbeam: 'conc.fdn', pile: 'conc.fdn', groundslab: 'conc.bed', slab: 'conc.slab', roofslab: 'conc.slab',
@@ -101,7 +110,8 @@ function concreteSpec(kind, els, set, setup, gl) {
   };
   const notEarth = () => `(1 - ${earth()})`;
   if (['slab', 'roofslab'].includes(kind)) {
-    if (set === 'NRM2') { for (const b of BAND_ORDER) fw(`FW soffit ${b} m`, 'fw.soffit', bandText(b)); }
+    if (set === 'NRM2') { for (const b of BAND_ORDER) fw(`FW soffit ${b} m`, 'fw.soffit', bandText(b));
+      if (!BAND_ORDER.some(b => has(els, `FW soffit ${b} m`))) fw('FW soffit', 'fw.soffit', 'propping height unknown (review)'); }
     else fw('FW soffit', 'fw.soffit');
     fw('FW sloping soffit', 'fw.soffit.slope');
     if (set === 'NRM2') { fw('FW narrow length', 'fw.edge.narrow'); fw('FW wide sides', 'fw.edge.wide'); }

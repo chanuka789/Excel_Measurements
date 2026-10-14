@@ -10,17 +10,19 @@ Live: https://dwfx-addin-production.up.railway.app (Railway project `excel-measu
 ## Using it
 After adding the add-in, Excel shows a **DWFx Measure** tab on the ribbon:
 
-| Group | Buttons |
+| Workflow button | What it opens |
 |---|---|
-| Project | Projects, Refresh |
-| Model | Elements, Zones, 3D window |
-| 3D view | Fit view, Views, Section box, Level plan, Saved views |
-| Select | Isolate, Hide, Show all, Box select, Clear selection, Select from Excel |
-| Measure | Measure, Templates, Distance and area, Colour by, Measured status |
-| AI | Ask AI, Check take-off |
-| Revisions | Compare revisions, Update take-off |
-| Output | Build BOQ, Audit PDF, Model checks, Admin |
-| Help | Help and training videos |
+| Project & Models | Projects, models, PDFs, settings and templates |
+| Launch Viewer | Linked 3D/2D window; camera and visibility tools remain on the canvas |
+| Smart Takeoff | Filter & Select → Classify & Review → Export / Link |
+| BOQ & Schedules | Schedule exports, draft BOQs and elemental supporting detail |
+| AI Audit | Existing take-off AI checks and review tools |
+
+**Smart Takeoff (v0.6)** adds checked POMI, NRM 1 and NRM 2 heading catalogues, all heading-order combinations, separate quantity-basis selection, schedule column presets, conditional allocations, source-backed draft exports and one-to-many model links. Legacy Elements / Measure / AI / Review tabs remain available.
+
+Generated BOQs are **drafts requiring QS validation**, not a claim that every measurement clause has been encoded. Exact heading references do not prove correct quantity deductions. See [the full plan](docs/QS_AUTOMATION_PLAN.md) and [implementation status](docs/IMPLEMENTATION_STATUS.md). The NRM 1 output aggregates component costs and explicit allowances; it does not automatically invent element unit quantities or fees.
+
+Run `npm run standards` after updating the source-checked JSON catalogues. Run `npm run manifest` after changing ribbon definitions. Reload or sideload the v0.6 manifest in Excel to see the five ribbon controls.
 
 1. **Sign in** with the email and password your administrator gave you.
 2. **Project** tab: create a project, upload DWFx models (the same model name makes a new version), drawings

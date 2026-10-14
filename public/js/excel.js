@@ -8,6 +8,7 @@ import { evaluate } from './measure.js';
 import { update } from './model.js';
 import { DEFAULT_DETAILS, detailLabel, detailValue, sameElements, mergeSpecs } from './dims.js';
 import { STYLE, QSHEET, SUMMARY, NRM1SHEET, setSheet, buildRegister, buildSummary, buildRuleSummary, buildNrm1, buildCustom } from './summaries.js';
+import { elementKey } from './standards.js';
 
 export const SHEET = 'Take-off', META = '_dwfx', BOQ = 'BOQ', LOG = 'Change log';
 const colL = (n) => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - 1 - m) / 26; } return s; };
@@ -390,6 +391,17 @@ export async function loadMeasured() {
 export async function goToRows(ids) {
   const map = await rowsById();
   const rows = ids.flatMap(id => map.get(id) || []).slice(0, 80);
+  if (!rows.length && S.inExcel) {
+    await Excel.run(async ctx => {
+      const registry = ctx.workbook.worksheets.getItemOrNullObject('Smart Links'); await ctx.sync(); if (registry.isNullObject) return;
+      const used = registry.getUsedRangeOrNullObject(true); used.load('values'); await ctx.sync(); if (used.isNullObject) return;
+      const links = used.values.slice(4).filter(r => ids.includes(r[2]) && String(r[3]) === String(S.versionId || '') && r[4] && r[5] && r[1] === elementKey(S.byId.get(r[2]) || {}, { projectId: App.currentProjectId?.() || '', modelId: S.versionId || S.label || 'quick-open' }));
+      const name = links[0]?.[4]; if (!name) return;
+      const sh = ctx.workbook.worksheets.getItem(name), matching = [...new Set(links.filter(r => r[4] === name).map(r => r[5]))].slice(0, 80);
+      S.quiet = Date.now(); sh.activate(); sh.getRanges(matching.map(r => `C${r}:I${r}`).join(',')).select(); await ctx.sync();
+    }).catch(() => {});
+    return;
+  }
   if (!rows.length) return;
   S.quiet = Date.now();
   await Excel.run(async (ctx) => {
@@ -403,8 +415,14 @@ export async function onExcelSelect(ev) {
     await Excel.run(async (ctx) => {
       const sh = ctx.workbook.worksheets.getItem(ev.worksheetId);
       sh.load('name'); const rng = sh.getRange(ev.address); rng.load('rowIndex,rowCount'); await ctx.sync();
-      if (sh.name !== SHEET) return;
       const first = rng.rowIndex + 1, last = Math.min(rng.rowIndex + rng.rowCount, first + 5000);
+      if (sh.name !== SHEET) {
+        const links = ctx.workbook.worksheets.getItemOrNullObject('Smart Links'); await ctx.sync(); if (links.isNullObject) return;
+        const used = links.getUsedRangeOrNullObject(true); used.load('values'); await ctx.sync(); if (used.isNullObject) return;
+        const ids = new Set(used.values.slice(4).filter(row => row[4] === sh.name && row[5] >= first && row[5] <= last && String(row[3]) === String(S.versionId || '') && row[1] === elementKey(S.byId.get(row[2]) || {}, { projectId: App.currentProjectId?.() || '', modelId: S.versionId || S.label || 'quick-open' })).map(row => row[2]).filter(id => S.byId.has(id)));
+        if (ids.size) { S.ticked = ids; update(); App.viewer?.()?.fit([...ids].filter(id => App.viewer().hasGeometry(id))); status(`${ids.size} elements highlighted from the linked schedule/BOQ.`); }
+        return;
+      }
       const v = sh.getRange(`A${first}:B${last}`); v.load('values'); await ctx.sync();
       const ids = new Set();
       v.values.forEach(([, b]) => { if (typeof b === 'number' && S.byId.has(b)) ids.add(b); });
@@ -436,10 +454,13 @@ export async function writeLayout(L, { activate = true, after = SHEET } = {}) {
   const width = Math.max(...L.rows.map(r => r.length), 1);
   const rows = L.rows.map(r => { const o = Array(width).fill(''); r.forEach((v, i) => { o[i] = v ?? ''; }); return o; });
   const end = rows.length, last = colL(width - 1);
+  if (end > 1048576 || width > 16384 || rows.some(r => r.some(v => typeof v === 'string' && v.length > 32767))) throw new Error('Export exceeds Excel row, column or cell limits.');
   await Excel.run(async (ctx) => {
     const old = ctx.workbook.worksheets.getItemOrNullObject(L.name); await ctx.sync();
-    if (!old.isNullObject) { old.delete(); await ctx.sync(); }
-    const sh = ctx.workbook.worksheets.add(L.name);
+    const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const sh = ctx.workbook.worksheets.add('__qs_' + stamp);
+    let backup = null, previous = null, copied = false;
+    try {
     try { const ref = ctx.workbook.worksheets.getItemOrNullObject(after); await ctx.sync(); if (!ref.isNullObject) { ref.load('position'); await ctx.sync(); sh.position = ref.position + 1; } } catch { /* order is cosmetic */ }
     sh.getRange(`A1:${last}${end}`).formulas = rows;
     const all = sh.getRange(`A1:${last}${end}`);
@@ -465,8 +486,34 @@ export async function writeLayout(L, { activate = true, after = SHEET } = {}) {
     sh.getRange(`A${h + 1}:${last}${end}`).format.verticalAlignment = 'Top';
     (L.hidden || []).forEach(c => { sh.getRange(`${colL(c)}:${colL(c)}`).columnHidden = true; });
     sh.freezePanes.freezeRows(h);
-    if (activate) { sh.activate(); sh.getRange('A1').select(); }
+    await ctx.sync(); // Stage and format successfully before changing the destination.
+    let destination = sh;
+    if (!old.isNullObject) {
+      const used = old.getUsedRangeOrNullObject(true); used.load('rowIndex,columnIndex,rowCount,columnCount'); await ctx.sync();
+      if (!used.isNullObject) {
+        previous = [used.rowIndex, used.columnIndex, used.rowCount, used.columnCount];
+        backup = ctx.workbook.worksheets.add('__qsb_' + stamp);
+        backup.getRangeByIndexes(...previous).copyFrom(used, Excel.RangeCopyType.all); await ctx.sync();
+      }
+      copied = true;
+      if (!used.isNullObject) used.clear();
+      old.getRange(`A1:${last}${end}`).copyFrom(sh.getRange(`A1:${last}${end}`), Excel.RangeCopyType.all);
+      (L.widths || []).forEach((w, i) => { old.getRange(`${colL(i)}:${colL(i)}`).format.columnWidth = w; });
+      old.getRange(`A:${last}`).columnHidden = false;
+      (L.hidden || []).forEach(c => { old.getRange(`${colL(c)}:${colL(c)}`).columnHidden = true; });
+      old.freezePanes.freezeRows(h); destination = old; await ctx.sync(); sh.delete();
+    } else sh.name = L.name;
+    if (activate) { destination.activate(); destination.getRange('A1').select(); }
     await ctx.sync();
+    copied = false; // The destination is committed; cleanup failure must not roll it back.
+    if (backup) { try { backup.delete(); await ctx.sync(); } catch { /* retain recoverable backup */ } }
+    } catch (error) {
+      try {
+        if (copied && backup && previous) { old.getUsedRange().clear(); old.getRangeByIndexes(...previous).copyFrom(backup.getRangeByIndexes(...previous), Excel.RangeCopyType.all); }
+        sh.delete(); if (backup) backup.delete(); await ctx.sync();
+      } catch { /* retain the original error; staging sheets remain recoverable if Office rejects cleanup */ }
+      throw error;
+    }
   });
 }
 /** Values of the yellow cells of a summary sheet, by row code (column A), so a rebuild keeps rates and allowances. */

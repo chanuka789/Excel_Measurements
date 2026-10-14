@@ -1,38 +1,15 @@
 """Writes manifest.xml: the DWFx Measure ribbon tab (shared runtime). Run: python3 scripts/make-manifest.py [base-url]"""
 import sys, os
+from xml.sax.saxutils import escape
 BASE = (sys.argv[1] if len(sys.argv) > 1 else 'https://dwfx-addin-production.up.railway.app').rstrip('/')
-VERSION = '0.5.1.0'
+VERSION = '0.6.0.0'
 G = [
- ('Project', 'Project', 'group', [('Projects', 'Projects', 'projects', 'openProjects', 'Open your projects: models, drawings, team, saved take-offs and settings.'),
-                                  ('Refresh', 'Refresh', 'refresh', 'refreshProject', 'Reload the open project to see new uploads and processing status.')]),
- ('Model', 'Model', 'group', [('Elements', 'Elements', 'elements', 'openElements', 'Browse the model elements by category, family and type.'),
-                              ('Zones', 'Zones', 'zones', 'openZones', 'Named zones (Villa, Annex, Block A) to split take-offs and colour the model.'),
-                              ('Window', '3D window', 'window', 'view3DWindow', 'Open the model in a large window that can go on a second screen, with drawings side by side.')]),
- ('View', '3D view', 'group', [('Fit', 'Fit view', 'fit', 'viewFit', 'Zoom the 3D view to the visible elements.'),
-                               ('Views', 'Views', 'views', 'viewViews', 'Top, front, side and isometric views; perspective or orthographic.'),
-                               ('Section', 'Section box', 'section', 'viewSection', 'Cut the model with a section box to see inside.'),
-                               ('Plan', 'Level plan', 'plan', 'viewPlan', 'Top view of one level, cut at a set height, like a plan drawing.'),
-                               ('Saved', 'Saved views', 'saved', 'viewSaved', 'Save or open views with camera, section, selection and colours, shared with the team.')]),
- ('Select', 'Select', 'group', [('Isolate', 'Isolate', 'isolate', 'viewIsolate', 'Show only the selected elements. Press again to show the rest.'),
-                                ('Hide', 'Hide', 'hide', 'viewHide', 'Hide the selected elements.'),
-                                ('ShowAll', 'Show all', 'showall', 'viewShowAll', 'Show every element and clear isolate, hide and the level filter.'),
-                                ('Box', 'Box select', 'box', 'viewBoxSelect', 'Drag a box: left to right selects elements fully inside, right to left anything touched.'),
-                                ('Clear', 'Clear selection', 'clear', 'viewClear', 'Clear the element selection.'),
-                                ('FromExcel', 'Select from Excel', 'fromexcel', 'selectFromExcel', 'Highlight in 3D the elements of the Take-off rows selected in Excel.')]),
- ('Measure', 'Measure', 'group', [('Measure', 'Measure', 'measure', 'openMeasure', 'Measure the selected elements and add live formulas to the Take-off sheet.'),
-                                  ('Templates', 'Templates', 'templates', 'openTemplates', 'Saved methods and discipline packs for Structure, Architecture, Interiors and MEP.'),
-                                  ('Tool', 'Distance and area', 'measure', 'viewMeasure', 'Measure a distance between two points or the area of a face in 3D.'),
-                                  ('Colour', 'Colour by', 'colour', 'viewColour', 'Colour the model by category, level, material, zone, property or revision changes.'),
-                                  ('Status', 'Measured status', 'status', 'measuredStatus', 'Green measured, purple measured twice, red not measured yet.')]),
- ('AI', 'AI', 'group', [('AskAI', 'Ask AI', 'ai', 'openAI', 'Ask the AI to work out a measurement method; it tests it on the model before you add it.'),
-                        ('Check', 'Check take-off', 'aicheck', 'aiCheck', 'AI review of the take-off for missing items, odd values, unit mistakes and double counting.')]),
- ('Revisions', 'Revisions', 'group', [('Compare', 'Compare revisions', 'compare', 'compareRevisions', 'Added, removed and changed elements between two model versions, with quantity differences.'),
-                                      ('Update', 'Update take-off', 'update', 'updateTakeoff', 'Re-measure take-off groups on the new revision, keeping formulas and assumptions.')]),
- ('Output', 'Output', 'group', [('BOQ', 'Build BOQ', 'boq', 'buildBOQ', 'Build a BOQ sheet linked to the take-off totals, with AI descriptions if you want.'),
-                                ('PDF', 'Audit PDF', 'pdf', 'auditPdf', 'A PDF with the method, assumptions, counts, totals and a 3D picture of every group.'),
-                                ('Review', 'Model checks', 'review', 'modelChecks', 'Missing data, overlapping concrete and measured status.'),
-                                ('Admin', 'Admin', 'admin', 'openAdmin', 'Users, AI settings, QS rules, errors, backups and system status (administrators only).')]),
- ('Help', 'Help', 'help', [('Help', 'Help and videos', 'help', 'openHelp', 'The user guide with short training videos for every workflow.')]),
+ ('Workflow', 'QS workflow', 'group', [
+   ('Projects', 'Project & Models', 'projects', 'openProjects', 'Open projects, models, drawings, templates and project settings.'),
+   ('Window', 'Launch Viewer', 'window', 'view3DWindow', 'Open the linked model viewer with its camera, visibility and selection toolbar.'),
+   ('Smart', 'Smart Takeoff', 'measure', 'openSmartTakeoff', 'Select, classify and review quantities using checked heading catalogues.'),
+   ('Schedules', 'BOQ & Schedules', 'boq', 'openSmartOutput', 'Export schedules, draft BOQs and linked take-offs with their measurement basis.'),
+   ('Audit', 'AI Audit', 'aicheck', 'aiCheck', 'Review missing data, rule conflicts and take-off checks.')]),
 ]
 icons = sorted({g[2] for g in G} | {c[2] for g in G for c in g[3]})
 ic = lambda n: '\n'.join(f'                    <bt:Image size="{s}" resid="I.{n}.{s}"/>' for s in (16, 32, 80))
@@ -54,9 +31,9 @@ for gid, glabel, gicon, ctrls in G:
 {chr(10).join(cs)}
               </Group>''')
 images = '\n'.join(f'        <bt:Image id="I.{n}.{s}" DefaultValue="{BASE}/assets/ribbon/{n}-{s}.png?v={VERSION}"/>' for n in icons for s in (16, 32, 80))
-short = '\n'.join([f'        <bt:String id="G.{g[0]}" DefaultValue="{g[1]}"/>' for g in G] + [f'        <bt:String id="L.{c[0]}" DefaultValue="{c[1]}"/>' for g in G for c in g[3]]
+short = '\n'.join([f'        <bt:String id="G.{g[0]}" DefaultValue="{escape(g[1])}"/>' for g in G] + [f'        <bt:String id="L.{c[0]}" DefaultValue="{escape(c[1])}"/>' for g in G for c in g[3]]
                   + ['        <bt:String id="TabLabel" DefaultValue="DWFx Measure"/>', '        <bt:String id="GetStarted.Title" DefaultValue="DWFx Measure is ready"/>'])
-long = '\n'.join([f'        <bt:String id="T.{c[0]}" DefaultValue="{c[4]}"/>' for g in G for c in g[3]]
+long = '\n'.join([f'        <bt:String id="T.{c[0]}" DefaultValue="{escape(c[4])}"/>' for g in G for c in g[3]]
                  + ['        <bt:String id="GetStarted.Description" DefaultValue="Open the DWFx Measure tab on the ribbon and choose Projects to sign in."/>'])
 xml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <!-- DWFx Measure add-in (generated by scripts/make-manifest.py). Live address: {BASE}

@@ -152,9 +152,9 @@ export function buildNrm1(entries, { keep = new Map(), gifa = null } = {}) {
     for (const [code, name] of elements) {
       if (grp.kids?.length) { rows.push(['', code, name]); kinds.push('section'); units.push(null); }
       const first = rows.length + 1;
-      itemsOf(entries, e => e.nrm1 === code).forEach(it => {
+      itemsOf(entries, e => e.nrm1 === code || e.nrm1.startsWith(code + '.')).forEach(it => {
         const r = rows.length + 1, k = `${it.code}@${code}`;
-        rows.push([k, '', `${it.desc}${it.ref ? ` (${it.ref})` : ''}`, it.unit, `=SUMIFS(${QQ},${QA},${qt(it.code)},${sheetRef(QSHEET)}!$F:$F,${crit(code)})`, keep.get(k) ?? '',
+        rows.push([k, '', `${it.desc}${it.ref ? ` (${it.ref})` : ''}`, it.unit, `=SUMIFS(${QQ},${QA},${qt(it.code)},${sheetRef(QSHEET)}!$F:$F,${crit(code)})${entries.some(e => e.code === it.code && e.nrm1.startsWith(code + '.')) ? `+SUMIFS(${QQ},${QA},${qt(it.code)},${sheetRef(QSHEET)}!$F:$F,${qt(code + '.*')})` : ''}`, keep.get(k) ?? '',
           `=IF(F${r}="",0,E${r}*F${r})`, per(r)]);
         kinds.push('item'); units.push(it.unit); inputs.push([r, 5]); pct.push(r);
       });
@@ -172,7 +172,7 @@ export function buildNrm1(entries, { keep = new Map(), gifa = null } = {}) {
     } else grand.push(...elTotals);
   }
   const gr = rows.length + 1;
-  rows.push(['', '', 'BUILDING WORKS ESTIMATE', '', '', '', `=${grand.join('+')}`, per(gr), 1]); kinds.push('total'); units.push(null);
+  rows.push(['', '', 'TOTAL COST ESTIMATE', '', '', '', `=${grand.join('+')}`, per(gr), 1]); kinds.push('total'); units.push(null);
   pct.forEach(r => { rows[r - 1][8] = `=IF($G$${gr}=0,"",G${r}/$G$${gr})`; });
   return { name: NRM1SHEET, rows, kinds, headRow: 6, hidden: [0], inputs, widths: [70, 45, 330, 40, 85, 70, 100, 90, 60],
     numFmt: (r, c) => (kinds[r] === 'item' && c === 4 ? unitFmt(units[r]) : c >= 5 && c <= 7 && kinds[r] !== 'head' ? '#,##0.00' : c === 8 && kinds[r] !== 'head' ? '0.0%' : null) };

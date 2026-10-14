@@ -47,6 +47,32 @@ code { font: 12px var(--mono); background: var(--bg3); padding: 1px 4px; border-
 .mono { font-family: var(--mono); font-size: 12px; }
 :focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; border-radius: var(--r); }
 
+/* Guided workflow uses existing Office theme tokens; advanced tools remain accessible. */
+.smart-header { margin-bottom: 16px; }
+.smart-header h2 { font-size: 20px; line-height: 28px; }
+.smart-header p { margin-top: 4px; }
+.smart-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-bottom: 12px; }
+.smart-steps button { white-space: normal; text-align: left; min-height: 48px; font-size: 12px; }
+.smart-steps [aria-current] { background: var(--brand-bg); color: var(--brand-text); border-color: var(--brand); font-weight: 600; }
+.smart-selection { padding: 10px; background: var(--bg3); border-radius: var(--r); margin-bottom: 16px; }
+.smart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.smart-grid select, #smartStep select, #smartStep textarea, #smartStep .field input { width: 100%; min-width: 0; }
+.smart-checks { display: grid; gap: 10px; margin: 14px 0; }
+.smart-checks input[type=number] { width: 90px; }
+.smart-table-wrap { max-height: 360px; overflow: auto; margin: 12px 0; border: 1px solid var(--stroke2); }
+.smart-table-wrap table { min-width: 560px; width: 100%; }
+.smart-table-wrap td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
+.smart-columns { display: grid; gap: 8px; max-height: 300px; overflow: auto; padding: 12px; background: var(--bg2); border: 1px solid var(--stroke2); margin: 12px 0; }
+.smart-columns label { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.smart-footer { display: flex; justify-content: space-between; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--stroke2); }
+#smartStep h3 { margin-top: 12px; }
+#smartStep .row { flex-wrap: wrap; }
+#tab-smart { padding: 16px; }
+/* View controls stay on the canvas, including in a narrow Excel pane. */
+#viewer > .vbar { position: absolute; top: 6px; left: 6px; right: 6px; z-index: 3; border: 1px solid var(--stroke2); border-radius: var(--r-l); box-shadow: var(--shadow); max-height: 88px; overflow: auto; }
+#viewer.smart-view { height: 26vh !important; min-height: 180px; max-height: 240px; }
+@media (max-width: 420px) { .smart-grid { grid-template-columns: 1fr; } #tab-smart { padding: 10px; } }
+
 /* controls */
 button, select, input, textarea { font: inherit; color: inherit; }
 .btn, .vtools button, .bar button, .row button, #props button, .card button:not(.link) {

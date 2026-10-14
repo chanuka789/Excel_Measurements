@@ -91,7 +91,7 @@ export function reportError(message, stack = '') {
   if (n > 2 || reported.size > 20) return;
   const s = session.get(); if (!s?.token) return;
   fetch('api/client-errors', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token },
-    body: JSON.stringify({ message: msg, stack: String(stack || '').slice(0, 6000), url: location.pathname, host: typeof Office !== 'undefined' && Office.context?.host || 'browser', version: '0.5' }) }).catch(() => {});
+    body: JSON.stringify({ message: msg, stack: String(stack || '').slice(0, 6000), url: location.pathname, host: typeof Office !== 'undefined' && Office.context?.host || 'browser', version: '0.6' }) }).catch(() => {});
 }
 window.addEventListener('error', (e) => reportError(e.message, e.error?.stack));
 window.addEventListener('unhandledrejection', (e) => reportError('Unhandled: ' + (e.reason?.message || e.reason), e.reason?.stack));

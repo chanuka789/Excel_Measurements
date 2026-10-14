@@ -5,6 +5,7 @@
 // Sources: RICS NRM2 2nd edition (effective 1 Dec 2021), Work section 11 notes (GCU), Principles of Measurement
 // (International) 1979, NRM1 (RICS, 2021). The app stores what each rule does, never the RICS wording itself.
 import { dimsOf } from './engine.js';
+import { CATALOGUES, lookup } from './standards.js';
 
 export const RULE_SETS = {
   NRM2: { id: 'NRM2', name: 'NRM2', full: 'RICS NRM2: Detailed measurement for building works, 2nd edition (effective 1 Dec 2021)', use: 'Bills of quantities' },
@@ -33,19 +34,19 @@ export const RULES = {
     'conc.vt.thick': { ref: 'NRM2 11.5', group: 'Concrete', unit: 'm3', title: 'Vertical work, exceeding 300 mm thick' },
     'conc.sl': { ref: 'NRM2 11.3/11.4', group: 'Concrete', unit: 'm3', title: 'Sloping work (stairs and ramps)' },
     'conc.mass': { ref: 'NRM2 11.1', group: 'Concrete', unit: 'm3', title: 'Mass concrete' },
-    'fw.soffit': { ref: 'NRM2 11.15', group: 'Formwork', unit: 'm2', title: 'Soffits of horizontal work', banded: true },
-    'fw.soffit.slope': { ref: 'NRM2 11.25', group: 'Formwork', unit: 'm2', title: 'Soffits of sloping work' },
-    'fw.edge.narrow': { ref: 'NRM2 11.14', group: 'Formwork', unit: 'm', title: 'Edges of horizontal work, not exceeding 500 mm high' },
-    'fw.edge.wide': { ref: 'NRM2 11.14', group: 'Formwork', unit: 'm2', title: 'Edges of horizontal work, exceeding 500 mm high' },
-    'fw.fdn.narrow': { ref: 'NRM2 11.13', group: 'Formwork', unit: 'm', title: 'Sides of foundations and bases, not exceeding 500 mm high' },
-    'fw.fdn.wide': { ref: 'NRM2 11.13', group: 'Formwork', unit: 'm2', title: 'Sides of foundations and bases, exceeding 500 mm high' },
-    'fw.beam.soffit': { ref: 'NRM2 11.17-11.19', group: 'Formwork', unit: 'm2', title: 'Soffits of beams', confirm: true },
-    'fw.beam.sides': { ref: 'NRM2 11.17-11.19', group: 'Formwork', unit: 'm2', title: 'Sides of beams' },
-    'fw.col': { ref: 'NRM2 11.20-11.21', group: 'Formwork', unit: 'm2', title: 'Sides of columns' },
-    'fw.wall': { ref: 'NRM2 11.22', group: 'Formwork', unit: 'm2', title: 'Walls, vertical' },
-    'fw.wall.end': { ref: 'NRM2 11.24', group: 'Formwork', unit: 'm', title: 'Wall ends, not exceeding 500 mm wide' },
-    'fw.top': { ref: 'NRM2 11.28', group: 'Formwork', unit: 'm2', title: 'Top formwork to surfaces sloping more than 15 degrees' },
-    'rb.bars': { ref: 'NRM2 11.33-11.34', group: 'Reinforcement', unit: 't', title: 'Bar reinforcement (allowance from kg/m3 rate until the bar schedule is available)' },
+    'fw.soffit': { ref: 'NRM2 WS11 / item 16', group: 'Formwork', unit: 'm2', title: 'Soffits of horizontal work', banded: true },
+    'fw.soffit.slope': { ref: 'NRM2 WS11 / item 18', group: 'Formwork', unit: 'm2', title: 'Soffits of sloping work' },
+    'fw.edge.narrow': { ref: 'NRM2 WS11 / item 15', group: 'Formwork', unit: 'm', title: 'Edges of horizontal work, not exceeding 500 mm high' },
+    'fw.edge.wide': { ref: 'NRM2 WS11 / item 15', group: 'Formwork', unit: 'm2', title: 'Edges of horizontal work, exceeding 500 mm high' },
+    'fw.fdn.narrow': { ref: 'NRM2 WS11 / item 14', group: 'Formwork', unit: 'm', title: 'Sides of foundations and bases, not exceeding 500 mm high' },
+    'fw.fdn.wide': { ref: 'NRM2 WS11 / item 14', group: 'Formwork', unit: 'm2', title: 'Sides of foundations and bases, exceeding 500 mm high' },
+    'fw.beam.soffit': { ref: 'NRM2 WS11 / item 19/20', group: 'Formwork', unit: 'm2', title: 'Soffits of beams', confirm: true },
+    'fw.beam.sides': { ref: 'NRM2 WS11 / item 19/20', group: 'Formwork', unit: 'm2', title: 'Sides of beams' },
+    'fw.col': { ref: 'NRM2 WS11 / item 22/23', group: 'Formwork', unit: 'm2', title: 'Sides of columns' },
+    'fw.wall': { ref: 'NRM2 WS11 / item 23 (wall-face row, printed p.186)', group: 'Formwork', unit: 'm2', title: 'Walls, vertical' },
+    'fw.wall.end': { ref: 'NRM2 WS11 / item 25', group: 'Formwork', unit: 'm', title: 'Wall ends, not exceeding 500 mm wide' },
+    'fw.top': { ref: 'NRM2 WS11 / item 28', group: 'Formwork', unit: 'm2', title: 'Top formwork to surfaces sloping more than 15 degrees' },
+    'rb.bars': { ref: 'NRM2 WS11 / item 33/34', group: 'Reinforcement', unit: 't', title: 'Bar reinforcement (allowance from kg/m3 rate until the bar schedule is available)' },
     'wp.flat': { ref: 'NRM2 19', group: 'Waterproofing', unit: 'm2', title: 'Waterproofing, horizontal (flat)', confirm: true },
     'wp.vertical': { ref: 'NRM2 19', group: 'Waterproofing', unit: 'm2', title: 'Waterproofing, vertical', confirm: true },
     'wp.upstand': { ref: 'NRM2 19', group: 'Waterproofing', unit: 'm', title: 'Upstands and skirtings, girth not exceeding 500 mm', confirm: true },
@@ -83,19 +84,10 @@ export const RULES = {
 };
 
 /** NRM1 elements (cost plan). unitQ: how the element unit quantity is measured from the model. confirm: check codes and units. */
-export const NRM1 = [
-  { code: '0', name: 'Facilitating works' },
-  { code: '1', name: 'Substructure', kids: [['1.1.1', 'Standard foundations'], ['1.1.2', 'Specialist foundations (piling)'], ['1.1.3', 'Lowest floor construction'], ['1.1.4', 'Basement excavation'], ['1.1.5', 'Basement retaining walls']] },
-  { code: '2', name: 'Superstructure', kids: [['2.1', 'Frame'], ['2.2', 'Upper floors'], ['2.3', 'Roof'], ['2.4', 'Stairs and ramps'], ['2.5', 'External walls'], ['2.6', 'Windows and external doors'], ['2.7', 'Internal walls and partitions'], ['2.8', 'Internal doors']] },
-  { code: '3', name: 'Internal finishes', kids: [['3.1', 'Wall finishes'], ['3.2', 'Floor finishes'], ['3.3', 'Ceiling finishes']] },
-  { code: '4', name: 'Fittings, furnishings and equipment' },
-  { code: '5', name: 'Services' },
-  { code: '6', name: 'Prefabricated buildings and building units' },
-  { code: '7', name: 'Work to existing buildings' },
-  { code: '8', name: 'External works' },
-];
-export const NRM1_CONFIRM = true;
-export const nrm1Name = (code) => { for (const g of NRM1) { if (g.code === code) return g.name; for (const [c, n] of g.kids || []) if (c === code) return n; } return ''; };
+export const NRM1 = CATALOGUES.NRM1.sections.filter(n => n.level === 1).map(n => ({ code: n.code, name: n.name,
+  kids: CATALOGUES.NRM1.sections.filter(c => c.parent === n.code).map(c => [c.code, c.name]) }));
+export const NRM1_CONFIRM = false;
+export const nrm1Name = (code) => lookup('NRM1', code)?.name || '';
 
 // ================================================================== classification (thinking as a QS)
 const STEEL_TYPE = /^(UKB|UKC|UB|UC|PFC|HEA|HEB|IPE|UPN|CHS|SHS|RHS|W\d|HSS|L\d)/i;
@@ -210,6 +202,7 @@ export function enrichElementQs(e) {
   const kind = kindOf(e);
   const mat = materialOf(e);
   if (!['insitu', 'precast'].includes(mat) && mat !== 'steel') return;
+  const existing = new Set(Object.keys(e.q));
 
   const t = elementThickness(e);
   if (t != null && !e.q['Thickness (geometry)']) {
@@ -217,18 +210,17 @@ export function enrichElementQs(e) {
   }
 
   const vol = e.q['Net volume']?.[0] ?? e.q['Geo volume']?.[0] ?? e.q.Volume?.[0] ?? 0;
-  const thk = t || e.q['Thickness (geometry)']?.[0] || 0.2;
+  const thk = t || e.q['Thickness (geometry)']?.[0] || null;
 
   if (['slab', 'roofslab'].includes(kind)) {
     const bottom = e.q['Geo bottom area']?.[0] || e.q.Area?.[0] || e.q['Geo plan area']?.[0] || (vol && thk ? vol / thk : 0);
     const hasSoffit = Object.keys(e.q).some(k => k.startsWith('FW soffit'));
     if (!hasSoffit && bottom > 0) {
       e.q['FW soffit'] = [bottom, 'm2'];
-      e.q['FW soffit 0-3 m'] = [bottom, 'm2'];
     }
     const hasSide = Object.keys(e.q).some(k => k.startsWith('FW narrow') || k.startsWith('FW wide') || k === 'FW sides');
     const perim = e.q['Exposed perimeter']?.[0] || e.q.Perimeter?.[0] || (e.bb ? 2 * (Math.abs(e.bb[3] - e.bb[0]) + Math.abs(e.bb[4] - e.bb[1])) : 0);
-    if (!hasSide && perim > 0) {
+    if (!hasSide && perim > 0 && thk != null) {
       if (thk <= 0.5) e.q['FW narrow length'] = [perim, 'm'];
       else e.q['FW wide sides'] = [perim * thk, 'm2'];
     }
@@ -242,15 +234,15 @@ export function enrichElementQs(e) {
     if (!e.q['Area on ground'] && bottom > 0) e.q['Area on ground'] = [bottom, 'm2'];
     const hasSide = Object.keys(e.q).some(k => k.startsWith('FW narrow') || k.startsWith('FW wide') || k === 'FW sides');
     const perim = e.q.Perimeter?.[0] || (e.bb ? 2 * (Math.abs(e.bb[3] - e.bb[0]) + Math.abs(e.bb[4] - e.bb[1])) : 0);
-    if (!hasSide && perim > 0) {
+    if (!hasSide && perim > 0 && thk != null) {
       if (thk <= 0.5) e.q['FW narrow length'] = [perim, 'm'];
       else e.q['FW wide sides'] = [perim * thk, 'm2'];
     }
   } else if (['beam', 'groundbeam'].includes(kind)) {
     const dims = dimsOf(e.type);
     const len = e.q['Cut Length']?.[0] || e.q.Length?.[0] || e.q['Geo box length']?.[0] || (vol && dims.length >= 2 ? vol / (dims[0] * dims[1]) : 0);
-    const b = dims[0] || e.q.Width?.[0] || e.q['Geo box width']?.[0] || 0.3;
-    const d = dims[1] || e.q.Height?.[0] || e.q['Geo box height']?.[0] || 0.6;
+    const b = dims[0] || e.q.Width?.[0] || e.q['Geo box width']?.[0] || 0;
+    const d = dims[1] || e.q.Height?.[0] || e.q['Geo box height']?.[0] || 0;
     const hasSoffit = Object.keys(e.q).some(k => k.startsWith('FW soffit'));
     if (!hasSoffit) {
       const soffit = e.q['Geo bottom area']?.[0] || (len > 0 ? b * len : 0);
@@ -264,13 +256,13 @@ export function enrichElementQs(e) {
   } else if (kind === 'column') {
     const hasSides = Object.keys(e.q).some(k => k === 'FW sides' || k.startsWith('FW wide'));
     if (!hasSides) {
-      const h = e.q['Geo box height']?.[0] || e.q.Height?.[0] || (e.bb ? Math.abs(e.bb[5] - e.bb[2]) : 3);
+      const h = e.q['Geo box height']?.[0] || e.q.Height?.[0] || (e.bb ? Math.abs(e.bb[5] - e.bb[2]) : 0);
       const dims = dimsOf(e.type);
-      const perim = e.q.Perimeter?.[0] || (dims.length >= 2 ? 2 * (dims[0] + dims[1]) : (e.bb ? 2 * (Math.abs(e.bb[3] - e.bb[0]) + Math.abs(e.bb[4] - e.bb[1])) : 1.6));
+      const perim = e.q.Perimeter?.[0] || (dims.length >= 2 ? 2 * (dims[0] + dims[1]) : (e.bb ? 2 * (Math.abs(e.bb[3] - e.bb[0]) + Math.abs(e.bb[4] - e.bb[1])) : 0));
       if (perim > 0 && h > 0) e.q['FW sides'] = [perim * h, 'm2'];
     }
   } else if (kind === 'wall') {
-    const h = e.q.Height?.[0] || e.q['Geo box height']?.[0] || (e.bb ? Math.abs(e.bb[5] - e.bb[2]) : 3);
+    const h = e.q.Height?.[0] || e.q['Geo box height']?.[0] || (e.bb ? Math.abs(e.bb[5] - e.bb[2]) : 0);
     const hasSides = Object.keys(e.q).some(k => k === 'FW wide sides' || k === 'FW sides');
     if (!hasSides) {
       const area = e.q.Area?.[0] || (e.bb ? Math.max(Math.abs(e.bb[3] - e.bb[0]), Math.abs(e.bb[4] - e.bb[1])) * h : 0);
@@ -282,10 +274,10 @@ export function enrichElementQs(e) {
     const hasEnds = Object.keys(e.q).some(k => k === 'FW narrow length' || k === 'FW narrow sides');
     if (!hasEnds && h > 0) {
       e.q['FW narrow length'] = [2 * h, 'm'];
-      e.q['FW narrow sides'] = [2 * h * thk, 'm2'];
+      if (thk != null) e.q['FW narrow sides'] = [2 * h * thk, 'm2'];
     }
   } else if (['footing', 'pilecap', 'raft'].includes(kind)) {
-    const h = e.q['Geo box height']?.[0] || e.q.Height?.[0] || (e.bb ? Math.abs(e.bb[5] - e.bb[2]) : 0.5);
+    const h = e.q['Geo box height']?.[0] || e.q.Height?.[0] || (e.bb ? Math.abs(e.bb[5] - e.bb[2]) : 0);
     const perim = e.q.Perimeter?.[0] || (e.bb ? 2 * (Math.abs(e.bb[3] - e.bb[0]) + Math.abs(e.bb[4] - e.bb[1])) : 0);
     const hasSides = Object.keys(e.q).some(k => k === 'FW sides' || k.startsWith('FW wide') || k.startsWith('FW narrow'));
     if (!hasSides && perim > 0 && h > 0) {
@@ -296,6 +288,7 @@ export function enrichElementQs(e) {
     const aog = e.q['Area on ground']?.[0] || e.q['Geo bottom area']?.[0] || e.q.Area?.[0] || (e.bb ? Math.abs(e.bb[3] - e.bb[0]) * Math.abs(e.bb[4] - e.bb[1]) : 0);
     if (!e.q['Area on ground'] && aog > 0) e.q['Area on ground'] = [aog, 'm2'];
   }
+  e.qsEstimatedQuantities = [...new Set([...(e.qsEstimatedQuantities || []), ...Object.keys(e.q).filter(k => !existing.has(k))])];
 }
 export const KIND_LABEL = { pile: 'Piles', pilecap: 'Pile caps', footing: 'Footings', raft: 'Raft', groundbeam: 'Ground beams', beam: 'Beams', column: 'Columns',
   slab: 'Suspended slabs', groundslab: 'Ground slabs', roofslab: 'Roof slabs', wall: 'Walls', stair: 'Stairs and landings', other: 'Other' };

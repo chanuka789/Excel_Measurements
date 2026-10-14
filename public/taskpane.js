@@ -10,9 +10,10 @@ import { initExcel, onExcelSelect, addToExcel } from './js/excel.js';
 import { initAI, refreshAIStatus } from './js/aiclient.js';
 import { initReview, renderReview } from './js/review.js';
 import { initPaneHost } from './js/panehost.js';
+import { initSmartTakeoff, renderSmart } from './js/smartTakeoff.js';
 
 // ================================================================== tabs
-const MODEL_TABS = ['elements', 'measure', 'ai', 'review'];
+const MODEL_TABS = ['smart', 'elements', 'measure', 'ai', 'review'];
 let currentTab = 'project';
 function selectTab(name) {
   if (name === 'admin' && session.get()?.user?.role !== 'admin') name = 'project';
@@ -26,6 +27,8 @@ function selectTab(name) {
   document.querySelectorAll('.nomodel').forEach(el => { el.hidden = Boolean(S.data); });
   document.querySelectorAll('.withmodel').forEach(el => { el.hidden = !S.data; });
   if (name === 'measure' && S.data) App.renderMeasure();
+  if (name === 'smart') renderSmart();
+  $('viewer').classList.toggle('smart-view', name === 'smart');
   if (name === 'ai') refreshAIStatus();
   if (name === 'review') renderReview();
   if (name === 'admin') showAdmin();
@@ -139,6 +142,8 @@ const needModel = () => { if (!S.data) { selectTab('project'); status('Open a mo
 const tool = (t) => () => { if (!needModel()) return; selectTab(MODEL_TABS.includes(currentTab) ? currentTab : 'elements'); const b = $('vbar').querySelector(`[data-t=${t}]`); b?.click(); };
 const reviewSection = (key) => () => { if (!needModel()) return; selectTab('review'); setTimeout(() => { const b = document.querySelector(`[data-rsec=${key}]`); if (b && b.getAttribute('aria-expanded') !== 'true') b.click(); document.querySelector(`#rs-${key}`)?.scrollIntoView({ block: 'start' }); }, 50); };
 const RIBBON = {
+  openSmartTakeoff: () => { if (needModel()) App.openSmartTakeoff(); },
+  openSmartOutput: () => { if (needModel()) App.openSmartOutput(); },
   openProjects: () => selectTab('project'), refreshProject: () => refreshProject(),
   openElements: () => { if (needModel()) selectTab('elements'); },
   openMeasure: () => { if (needModel()) selectTab('measure'); },
@@ -171,7 +176,7 @@ function registerRibbon() {
 window.__ribbon = RIBBON;
 
 // ================================================================== start
-initModel(); initMeasure(); initExcel(); initAI(); initReview(); initPaneHost();
+initModel(); initMeasure(); initExcel(); initAI(); initReview(); initPaneHost(); initSmartTakeoff();
 const officeReady = (typeof Office !== 'undefined') ? Office.onReady().catch(() => ({ host: null })) : Promise.resolve({ host: null });
 officeReady.then(async (info) => {
   S.inExcel = typeof Office !== 'undefined' && info?.host === Office.HostType.Excel;

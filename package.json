@@ -1,6 +1,6 @@
 {
   "name": "dwfx-structural-addin",
-  "version": "0.3.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "Excel add-in: DWFx 3D viewer linked to structural measurement sheet and BOQ",
@@ -10,7 +10,8 @@
     "hash-password": "node scripts/hash-password.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js && python3 -m unittest discover -s tests -p 'test_*.py'",
     "icons": "python3 scripts/make-icons.py",
-    "manifest": "python3 scripts/make-manifest.py"
+    "manifest": "python3 scripts/make-manifest.py",
+    "standards": "node scripts/build-standards.mjs"
   },
   "engines": {
     "node": ">=20"

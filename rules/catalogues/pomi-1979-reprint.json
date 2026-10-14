@@ -1,0 +1,677 @@
+{
+  "edition": "1979 (linked reprint)",
+  "sections": [
+    {
+      "code": "GP",
+      "name": "General Principles",
+      "parent": null
+    },
+    {
+      "code": "A",
+      "name": "General Requirements",
+      "parent": null
+    },
+    {
+      "code": "B",
+      "name": "Site Work",
+      "parent": null
+    },
+    {
+      "code": "C",
+      "name": "Concrete Work",
+      "parent": null
+    },
+    {
+      "code": "D",
+      "name": "Masonry",
+      "parent": null
+    },
+    {
+      "code": "E",
+      "name": "Metalwork",
+      "parent": null
+    },
+    {
+      "code": "F",
+      "name": "Woodwork",
+      "parent": null
+    },
+    {
+      "code": "G",
+      "name": "Thermal And Moisture Protection",
+      "parent": null
+    },
+    {
+      "code": "H",
+      "name": "Doors And Windows",
+      "parent": null
+    },
+    {
+      "code": "J",
+      "name": "Finishes",
+      "parent": null
+    },
+    {
+      "code": "K",
+      "name": "Accessories",
+      "parent": null
+    },
+    {
+      "code": "L",
+      "name": "Equipment",
+      "parent": null
+    },
+    {
+      "code": "M",
+      "name": "Furnishings",
+      "parent": null
+    },
+    {
+      "code": "N",
+      "name": "Special Construction",
+      "parent": null
+    },
+    {
+      "code": "P",
+      "name": "Conveying Systems",
+      "parent": null
+    },
+    {
+      "code": "Q",
+      "name": "Mechanical Engineering Installations",
+      "parent": null
+    },
+    {
+      "code": "R",
+      "name": "Electrical Engineering Installations",
+      "parent": null
+    }
+  ],
+  "topics": [
+    {
+      "code": "GP1",
+      "name": "Principles of measurement",
+      "parent": "GP"
+    },
+    {
+      "code": "GP2",
+      "name": "Bills of quantities",
+      "parent": "GP"
+    },
+    {
+      "code": "GP3",
+      "name": "Measurement",
+      "parent": "GP"
+    },
+    {
+      "code": "GP4",
+      "name": "Items to be fully inclusive",
+      "parent": "GP"
+    },
+    {
+      "code": "GP5",
+      "name": "Description of items",
+      "parent": "GP"
+    },
+    {
+      "code": "GP6",
+      "name": "Work to be executed by a specialist nominated by the employer",
+      "parent": "GP"
+    },
+    {
+      "code": "GP7",
+      "name": "Goods, materials or services to be provided by a merchant or tradesman nominated by the employer",
+      "parent": "GP"
+    },
+    {
+      "code": "GP8",
+      "name": "Work to be executed by a government or public authority",
+      "parent": "GP"
+    },
+    {
+      "code": "GP9",
+      "name": "Dayworks",
+      "parent": "GP"
+    },
+    {
+      "code": "GP10",
+      "name": "Contingencies",
+      "parent": "GP"
+    },
+    {
+      "code": "A1",
+      "name": "Conditions of contract",
+      "parent": "A"
+    },
+    {
+      "code": "A2",
+      "name": "Specification",
+      "parent": "A"
+    },
+    {
+      "code": "A3",
+      "name": "Restrictions",
+      "parent": "A"
+    },
+    {
+      "code": "A4",
+      "name": "Contractor's administrative arrangements",
+      "parent": "A"
+    },
+    {
+      "code": "A5",
+      "name": "Constructional plant",
+      "parent": "A"
+    },
+    {
+      "code": "A6",
+      "name": "Employer's facilities",
+      "parent": "A"
+    },
+    {
+      "code": "A7",
+      "name": "Contractor's facilities",
+      "parent": "A"
+    },
+    {
+      "code": "A8",
+      "name": "Temporary works",
+      "parent": "A"
+    },
+    {
+      "code": "A9",
+      "name": "Sundry items",
+      "parent": "A"
+    },
+    {
+      "code": "B1",
+      "name": "Site exploration generally",
+      "parent": "B"
+    },
+    {
+      "code": "B2",
+      "name": "Trial holes",
+      "parent": "B"
+    },
+    {
+      "code": "B3",
+      "name": "Boreholes (including pumping test wells)",
+      "parent": "B"
+    },
+    {
+      "code": "B4",
+      "name": "Site preparation",
+      "parent": "B"
+    },
+    {
+      "code": "B5",
+      "name": "Demolitions and alterations",
+      "parent": "B"
+    },
+    {
+      "code": "B6",
+      "name": "Shoring",
+      "parent": "B"
+    },
+    {
+      "code": "B7",
+      "name": "Underpinning",
+      "parent": "B"
+    },
+    {
+      "code": "B8",
+      "name": "Earthworks generally",
+      "parent": "B"
+    },
+    {
+      "code": "B9",
+      "name": "Excavation",
+      "parent": "B"
+    },
+    {
+      "code": "B10",
+      "name": "Dredging",
+      "parent": "B"
+    },
+    {
+      "code": "B11",
+      "name": "Disposal",
+      "parent": "B"
+    },
+    {
+      "code": "B12",
+      "name": "Filling",
+      "parent": "B"
+    },
+    {
+      "code": "B13",
+      "name": "Piling generally",
+      "parent": "B"
+    },
+    {
+      "code": "B14",
+      "name": "Driven piling",
+      "parent": "B"
+    },
+    {
+      "code": "B15",
+      "name": "Bored piling",
+      "parent": "B"
+    },
+    {
+      "code": "B16",
+      "name": "Sheet piling",
+      "parent": "B"
+    },
+    {
+      "code": "B17",
+      "name": "Performance designed piling",
+      "parent": "B"
+    },
+    {
+      "code": "B18",
+      "name": "Testing piling",
+      "parent": "B"
+    },
+    {
+      "code": "B19",
+      "name": "Underground drainage",
+      "parent": "B"
+    },
+    {
+      "code": "B20",
+      "name": "Paving and surfacing",
+      "parent": "B"
+    },
+    {
+      "code": "B21",
+      "name": "Fencing",
+      "parent": "B"
+    },
+    {
+      "code": "B22",
+      "name": "Landscaping",
+      "parent": "B"
+    },
+    {
+      "code": "B23",
+      "name": "Railway work",
+      "parent": "B"
+    },
+    {
+      "code": "B24",
+      "name": "Tunnel excavation",
+      "parent": "B"
+    },
+    {
+      "code": "B25",
+      "name": "Tunnel linings",
+      "parent": "B"
+    },
+    {
+      "code": "B26",
+      "name": "Tunnel support and stabilisation",
+      "parent": "B"
+    },
+    {
+      "code": "C1",
+      "name": "Generally",
+      "parent": "C"
+    },
+    {
+      "code": "C2",
+      "name": "Poured concrete",
+      "parent": "C"
+    },
+    {
+      "code": "C3",
+      "name": "Reinforcement",
+      "parent": "C"
+    },
+    {
+      "code": "C4",
+      "name": "Shuttering",
+      "parent": "C"
+    },
+    {
+      "code": "C5",
+      "name": "Precast concrete",
+      "parent": "C"
+    },
+    {
+      "code": "C6",
+      "name": "Prestressed concrete",
+      "parent": "C"
+    },
+    {
+      "code": "C7",
+      "name": "Sundries",
+      "parent": "C"
+    },
+    {
+      "code": "D1",
+      "name": "Generally",
+      "parent": "D"
+    },
+    {
+      "code": "D2",
+      "name": "Walls and piers",
+      "parent": "D"
+    },
+    {
+      "code": "D3",
+      "name": "Sills, etc",
+      "parent": "D"
+    },
+    {
+      "code": "D4",
+      "name": "Reinforcement",
+      "parent": "D"
+    },
+    {
+      "code": "D5",
+      "name": "Sundries",
+      "parent": "D"
+    },
+    {
+      "code": "E1",
+      "name": "Generally",
+      "parent": "E"
+    },
+    {
+      "code": "E2",
+      "name": "Structural metalwork",
+      "parent": "E"
+    },
+    {
+      "code": "E3",
+      "name": "Non structural metalwork",
+      "parent": "E"
+    },
+    {
+      "code": "F1",
+      "name": "Generally",
+      "parent": "F"
+    },
+    {
+      "code": "F2",
+      "name": "Structural timbers",
+      "parent": "F"
+    },
+    {
+      "code": "F3",
+      "name": "Boarding and flooring",
+      "parent": "F"
+    },
+    {
+      "code": "F4",
+      "name": "Grounds and battens",
+      "parent": "F"
+    },
+    {
+      "code": "F5",
+      "name": "Framework",
+      "parent": "F"
+    },
+    {
+      "code": "F6",
+      "name": "Finishings and fittings",
+      "parent": "F"
+    },
+    {
+      "code": "F7",
+      "name": "Composite items",
+      "parent": "F"
+    },
+    {
+      "code": "F8",
+      "name": "Sundry items",
+      "parent": "F"
+    },
+    {
+      "code": "F9",
+      "name": "Metalwork",
+      "parent": "F"
+    },
+    {
+      "code": "F10",
+      "name": "Ironmongery",
+      "parent": "F"
+    },
+    {
+      "code": "G1",
+      "name": "Generally",
+      "parent": "G"
+    },
+    {
+      "code": "G2",
+      "name": "Coverings and linings",
+      "parent": "G"
+    },
+    {
+      "code": "G3",
+      "name": "Damp-proof courses",
+      "parent": "G"
+    },
+    {
+      "code": "G4",
+      "name": "Insulation",
+      "parent": "G"
+    },
+    {
+      "code": "H1",
+      "name": "Doors",
+      "parent": "H"
+    },
+    {
+      "code": "H2",
+      "name": "Windows",
+      "parent": "H"
+    },
+    {
+      "code": "H3",
+      "name": "Screens",
+      "parent": "H"
+    },
+    {
+      "code": "H4",
+      "name": "Ironmongery",
+      "parent": "H"
+    },
+    {
+      "code": "H5",
+      "name": "Glass",
+      "parent": "H"
+    },
+    {
+      "code": "H6",
+      "name": "Patent glazing",
+      "parent": "H"
+    },
+    {
+      "code": "J1",
+      "name": "Generally",
+      "parent": "J"
+    },
+    {
+      "code": "J2",
+      "name": "Backgrounds",
+      "parent": "J"
+    },
+    {
+      "code": "J3",
+      "name": "Finishings",
+      "parent": "J"
+    },
+    {
+      "code": "J4",
+      "name": "Sundries",
+      "parent": "J"
+    },
+    {
+      "code": "J5",
+      "name": "Suspended ceilings",
+      "parent": "J"
+    },
+    {
+      "code": "J6",
+      "name": "Decorations",
+      "parent": "J"
+    },
+    {
+      "code": "J7",
+      "name": "Signwriting",
+      "parent": "J"
+    },
+    {
+      "code": "K1",
+      "name": "Generally",
+      "parent": "K"
+    },
+    {
+      "code": "K2",
+      "name": "Partitions",
+      "parent": "K"
+    },
+    {
+      "code": "L1",
+      "name": "Generally",
+      "parent": "L"
+    },
+    {
+      "code": "M1",
+      "name": "Generally",
+      "parent": "M"
+    },
+    {
+      "code": "M2",
+      "name": "Curtain track",
+      "parent": "M"
+    },
+    {
+      "code": "N1",
+      "name": "Generally",
+      "parent": "N"
+    },
+    {
+      "code": "N2",
+      "name": "Enclosures",
+      "parent": "N"
+    },
+    {
+      "code": "N3",
+      "name": "Installations",
+      "parent": "N"
+    },
+    {
+      "code": "P1",
+      "name": "Generally",
+      "parent": "P"
+    },
+    {
+      "code": "P2",
+      "name": "Sundries",
+      "parent": "P"
+    },
+    {
+      "code": "P3",
+      "name": "Work incidental to conveying systems",
+      "parent": "P"
+    },
+    {
+      "code": "Q1",
+      "name": "Generally",
+      "parent": "Q"
+    },
+    {
+      "code": "Q2",
+      "name": "Pipework and gutterwork",
+      "parent": "Q"
+    },
+    {
+      "code": "Q3",
+      "name": "Ductwork",
+      "parent": "Q"
+    },
+    {
+      "code": "Q4",
+      "name": "Equipment",
+      "parent": "Q"
+    },
+    {
+      "code": "Q5",
+      "name": "Automatic controls",
+      "parent": "Q"
+    },
+    {
+      "code": "Q6",
+      "name": "Connections to supply mains",
+      "parent": "Q"
+    },
+    {
+      "code": "Q7",
+      "name": "Insulation, including linings and protective coverings",
+      "parent": "Q"
+    },
+    {
+      "code": "Q8",
+      "name": "Sundries",
+      "parent": "Q"
+    },
+    {
+      "code": "Q9",
+      "name": "Work incidental to mechanical engineering installations",
+      "parent": "Q"
+    },
+    {
+      "code": "R1",
+      "name": "Generally",
+      "parent": "R"
+    },
+    {
+      "code": "R2",
+      "name": "Main circuits",
+      "parent": "R"
+    },
+    {
+      "code": "R3",
+      "name": "Sub-main circuits",
+      "parent": "R"
+    },
+    {
+      "code": "R4",
+      "name": "Final sub-circuits and auxiliary installations",
+      "parent": "R"
+    },
+    {
+      "code": "R5",
+      "name": "Accessories",
+      "parent": "R"
+    },
+    {
+      "code": "R6",
+      "name": "Control gear",
+      "parent": "R"
+    },
+    {
+      "code": "R7",
+      "name": "Equipment",
+      "parent": "R"
+    },
+    {
+      "code": "R8",
+      "name": "Connections to supply mains",
+      "parent": "R"
+    },
+    {
+      "code": "R9",
+      "name": "Sundries",
+      "parent": "R"
+    },
+    {
+      "code": "R10",
+      "name": "Work incidental to electrical engineering installations",
+      "parent": "R"
+    }
+  ]
+}

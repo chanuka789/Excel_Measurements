@@ -1,0 +1,210 @@
+{
+  "edition": "2021 second edition",
+  "sections": [
+    {
+      "code": "1",
+      "name": "Preliminaries",
+      "parent": null
+    },
+    {
+      "code": "2",
+      "name": "Off-site manufactured materials, components or buildings",
+      "parent": null
+    },
+    {
+      "code": "3",
+      "name": "Demolitions",
+      "parent": null
+    },
+    {
+      "code": "4",
+      "name": "Alterations, repairs and conservation",
+      "parent": null
+    },
+    {
+      "code": "5",
+      "name": "Excavating and filling",
+      "parent": null
+    },
+    {
+      "code": "6",
+      "name": "Ground remediation and soil stabilisation",
+      "parent": null
+    },
+    {
+      "code": "7",
+      "name": "Piling",
+      "parent": null
+    },
+    {
+      "code": "8",
+      "name": "Underpinning",
+      "parent": null
+    },
+    {
+      "code": "9",
+      "name": "Diaphragm walls and embedded retaining walls",
+      "parent": null
+    },
+    {
+      "code": "10",
+      "name": "Crib walls, gabions and reinforced earth",
+      "parent": null
+    },
+    {
+      "code": "11",
+      "name": "In-situ concrete works",
+      "parent": null
+    },
+    {
+      "code": "12",
+      "name": "Precast/composite concrete",
+      "parent": null
+    },
+    {
+      "code": "13",
+      "name": "Precast concrete",
+      "parent": null
+    },
+    {
+      "code": "14",
+      "name": "Masonry",
+      "parent": null
+    },
+    {
+      "code": "15",
+      "name": "Structural metalwork",
+      "parent": null
+    },
+    {
+      "code": "16",
+      "name": "Carpentry",
+      "parent": null
+    },
+    {
+      "code": "17",
+      "name": "Sheet roof coverings",
+      "parent": null
+    },
+    {
+      "code": "18",
+      "name": "Tile and slate roof and wall coverings",
+      "parent": null
+    },
+    {
+      "code": "19",
+      "name": "Waterproofing",
+      "parent": null
+    },
+    {
+      "code": "20",
+      "name": "Proprietary walls, linings and partitions",
+      "parent": null
+    },
+    {
+      "code": "21",
+      "name": "Cladding and covering",
+      "parent": null
+    },
+    {
+      "code": "22",
+      "name": "General joinery",
+      "parent": null
+    },
+    {
+      "code": "23",
+      "name": "Windows, screens and lights",
+      "parent": null
+    },
+    {
+      "code": "24",
+      "name": "Doors, shutters and hatches",
+      "parent": null
+    },
+    {
+      "code": "25",
+      "name": "Stairs, walkways and balustrades",
+      "parent": null
+    },
+    {
+      "code": "26",
+      "name": "Metalwork",
+      "parent": null
+    },
+    {
+      "code": "27",
+      "name": "Glazing",
+      "parent": null
+    },
+    {
+      "code": "28",
+      "name": "Floor, wall, ceiling and roof finishings",
+      "parent": null
+    },
+    {
+      "code": "29",
+      "name": "Decoration",
+      "parent": null
+    },
+    {
+      "code": "30",
+      "name": "Suspended ceilings",
+      "parent": null
+    },
+    {
+      "code": "31",
+      "name": "Insulation, fire stopping and fire protection",
+      "parent": null
+    },
+    {
+      "code": "32",
+      "name": "Furniture, fittings and equipment",
+      "parent": null
+    },
+    {
+      "code": "33",
+      "name": "Drainage above ground",
+      "parent": null
+    },
+    {
+      "code": "34",
+      "name": "Drainage below ground",
+      "parent": null
+    },
+    {
+      "code": "35",
+      "name": "Site works",
+      "parent": null
+    },
+    {
+      "code": "36",
+      "name": "Fencing",
+      "parent": null
+    },
+    {
+      "code": "37",
+      "name": "Soft landscaping",
+      "parent": null
+    },
+    {
+      "code": "38",
+      "name": "Mechanical services",
+      "parent": null
+    },
+    {
+      "code": "39",
+      "name": "Electrical services",
+      "parent": null
+    },
+    {
+      "code": "40",
+      "name": "Transportation systems",
+      "parent": null
+    },
+    {
+      "code": "41",
+      "name": "Builder’s work in connection with mechanical, electrical and transportation installations",
+      "parent": null
+    }
+  ]
+}

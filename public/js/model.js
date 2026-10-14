@@ -211,6 +211,7 @@ export function paint() {
 export function update() {
   paint(); renderTree();
   if ($('tab-measure').classList.contains('on')) App.renderMeasure?.();
+  if ($('tab-smart')?.classList.contains('on')) App.renderSmart?.();
 }
 function colorOf(id) {
   if (S.colorMap) return S.colorMap.get(id) || '#c8ccd0';
@@ -409,11 +410,16 @@ export function showProps(id) {
     ${qs.some(([k]) => /^Geo |^Openings/.test(k)) ? `<h4>Measured from the 3D geometry</h4><table class="q"><tbody>${qRows(qs.filter(([k]) => /^Geo |^Openings/.test(k)))}</tbody></table>
       <p class="hint">Geo values are exact from the model faces. Volume shows only when the element is a closed solid.</p>` : ''}
     <h4>All properties</h4><input type="search" id="pFind" placeholder="Filter properties" style="width:100%;margin-bottom:4px" aria-label="Filter properties">
-    <table class="q" id="pAll"><tbody>${all.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="v" style="white-space:normal">${esc(v)}</td></tr>`).join('')}</tbody></table>`;
+    <table class="q" id="pAll"><tbody>${all.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="v" style="white-space:normal">${esc(v)}</td></tr>`).join('')}</tbody></table>
+    <div class="row"><button id="pSmart">Smart Takeoff</button><button id="pOnly">Show only this element</button><button id="pAllVisible">Show all</button><button id="pFitAll">Fit view</button></div>`;
   $('pClose').onclick = () => { p.hidden = true; };
   $('pTick').onclick = () => { snapshot(); S.ticked.has(id) ? S.ticked.delete(id) : S.ticked.add(id); update(); showProps(id); };
   $('pZoom').onclick = () => V.fit([id]);
   $('pHide').onclick = () => { snapshot(); S.hidden.add(id); S.ticked.delete(id); update(); p.hidden = true; };
+  $('pSmart').onclick = () => { selectIds([id]); p.hidden = true; App.openSmartTakeoff?.(); };
+  $('pOnly').onclick = () => { selectIds([id]); S.isolated = true; update(); p.hidden = true; };
+  $('pAllVisible').onclick = () => { HOST.showAll(); p.hidden = true; };
+  $('pFitAll').onclick = () => V.fit();
   $('pRows') && ($('pRows').onclick = () => App.goToRows?.([id]));
   $('pFind').oninput = (ev) => { const q = ev.target.value.toLowerCase(); $('pAll').querySelectorAll('tr').forEach(tr => { tr.hidden = !tr.textContent.toLowerCase().includes(q); }); };
   $('pClose').focus();

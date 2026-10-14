@@ -160,7 +160,7 @@ test('dimension groups from raw BIM models: slabs and walls split by thickness, 
   const slab200 = plan.find(g => g.name === '200 mm suspended slab');
   const t200 = tot(slab200);
   assert.equal(groupTotal(asGroup(slab200), rawById).total, 10);
-  assert.ok(t200['Soffits of horizontal work, propping height 0 to 3 m'] > 0);
+  assert.ok(t200['Soffits of horizontal work, propping height unknown (review)'] > 0);
   assert.ok(t200['Edges of horizontal work, not exceeding 500 mm high'] > 0);
 
   const wall300 = plan.find(g => g.name === '300 mm wall');
@@ -171,7 +171,7 @@ test('dimension groups from raw BIM models: slabs and walls split by thickness, 
   const roof250 = plan.find(g => g.name === '250 mm roof slab');
   const troof = tot(roof250);
   assert.equal(groupTotal(asGroup(roof250), rawById).total, 12.5);
-  assert.ok(troof['Soffits of horizontal work, propping height 0 to 3 m'] > 0);
+  assert.ok(troof['Soffits of horizontal work, propping height unknown (review)'] > 0);
   assert.ok(troof['Waterproofing, horizontal (flat), roof'] > 0);
 });
 
