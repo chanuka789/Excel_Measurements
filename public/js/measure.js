@@ -142,7 +142,8 @@ function downloadCsv() {
     rows.forEach(({ e, v }) => lines.push([e.id, e.cat, e.fam, e.type, e.level, e.mark, ...cols.map(c => v[c.key] ?? '')]));
     lines.push([]);
   });
-  const csv = lines.map(r => r.map(v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v).join(',')).join('\r\n');
+  const cell = (v) => { let t = String(v ?? ''); if (/^[=+\-@\t\r]/.test(t) && typeof v === 'string') t = "'" + t; return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const csv = lines.map(r => r.map(cell).join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
   a.download = (S.data?.fileName || 'model').replace(/\.dwfx$/i, '') + '_takeoff.csv'; a.click();

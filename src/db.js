@@ -95,14 +95,24 @@ const MIGRATIONS = [
    ALTER TABLE projects ADD COLUMN IF NOT EXISTS ai_off BOOLEAN NOT NULL DEFAULT false;
    ALTER TABLE projects ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}';
    ALTER TABLE takeoffs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;`,
+  // 3: error monitoring (phase 6)
+  `CREATE TABLE IF NOT EXISTS errors (
+     id BIGSERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now(), source TEXT NOT NULL, ref TEXT,
+     user_id INT REFERENCES users(id) ON DELETE SET NULL, message TEXT NOT NULL, stack TEXT, url TEXT, detail JSONB);
+   CREATE INDEX IF NOT EXISTS errors_at ON errors (at DESC);`,
 ];
 
+/** Apply new migrations once, even when the API and the worker start at the same time (advisory lock). */
 export async function migrate() {
-  await q(`CREATE TABLE IF NOT EXISTS schema_version (v INT NOT NULL)`);
-  const cur = (await one(`SELECT max(v) AS v FROM schema_version`))?.v || 0;
-  for (let i = cur; i < MIGRATIONS.length; i++) {
-    await tx(async (x) => { await x(MIGRATIONS[i]); await x(`INSERT INTO schema_version (v) VALUES ($1)`, [i + 1]); });
-  }
+  await tx(async (x) => {
+    await x(`SELECT pg_advisory_xact_lock(731001)`);
+    await x(`CREATE TABLE IF NOT EXISTS schema_version (v INT NOT NULL)`);
+    const cur = (await x(`SELECT max(v) AS v FROM schema_version`))[0]?.v || 0;
+    for (let i = cur; i < MIGRATIONS.length; i++) {
+      await x(MIGRATIONS[i]);
+      await x(`INSERT INTO schema_version (v) VALUES ($1)`, [i + 1]);
+    }
+  });
 }
 
 export async function audit(userId, projectId, action, detail = null) {

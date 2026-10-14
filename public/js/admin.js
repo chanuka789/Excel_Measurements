@@ -47,6 +47,7 @@ export async function showAdmin() {
         <div id="hashOut"></div>
       </section>
 
+      <section class="card" id="errAdmin"><h3>Errors</h3><div class="loading">Loading…</div></section>
       <section class="card" id="aiAdmin"><h3>AI assistant</h3><div class="loading">Loading…</div></section>
       <section class="card" id="kbAdmin"><h3>Company QS rules</h3><div class="loading">Loading…</div></section>
 
@@ -72,7 +73,7 @@ export async function showAdmin() {
         };
       } catch (err) { status(err.message, 'bad'); }
     };
-    renderAIAdmin(); renderKBAdmin();
+    renderErrors(); renderAIAdmin(); renderKBAdmin();
   } catch (err) { box.innerHTML = `<div class="msg bad">${esc(err.message)}</div>`; }
 }
 
@@ -141,4 +142,17 @@ async function renderKBAdmin() {
     try { if (e.target.dataset.edit) await api('PATCH', `/kb/${e.target.dataset.edit}`, body); else await api('POST', '/kb', body); status('Rule saved.', 'ok'); renderKBAdmin(); }
     catch (err) { status(err.message, 'bad'); }
   };
+}
+
+async function renderErrors() {
+  const box = $('errAdmin'); if (!box) return;
+  let d; try { d = await api('GET', '/admin/errors'); } catch (err) { box.innerHTML = `<h3>Errors</h3><div class="msg bad">${esc(err.message)}</div>`; return; }
+  box.innerHTML = `<h3>Errors</h3>
+    <div class="kpis"><div class="kpi ${d.counts.day ? 'rem' : 'add'}"><b>${d.counts.day}</b><span>last 24 hours</span></div><div class="kpi"><b>${d.counts.week}</b><span>last 7 days</span></div><div class="kpi ${d.failedJobs.length ? 'chg' : ''}"><b>${d.failedJobs.length}</b><span>failed jobs</span></div></div>
+    <p class="muted small">Server and add-in errors with their reference number (users see it in the error message). Kept for 90 days.</p>
+    ${d.errors.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>When</th><th>Ref</th><th>Where</th><th>Error</th></tr></thead><tbody>${d.errors.slice(0, 60).map(e => `<tr><td class="small">${fmtDate(e.at)}</td><td class="small mono">${esc(e.ref || '')}</td><td class="small">${esc(e.source)}${e.email ? '<br>' + esc(e.email) : ''}</td>
+      <td class="small wrap"><details><summary>${esc(e.message.slice(0, 160))}</summary><pre class="mono" style="white-space:pre-wrap">${esc((e.stack || '') + (e.url ? '\n' + e.url : ''))}</pre></details></td></tr>`).join('')}</tbody></table></div>
+      <div class="actions left"><button class="btn subtle danger-text" id="errClear">Clear the error log</button></div>` : '<div class="msg ok">No errors recorded.</div>'}
+    ${d.failedJobs.length ? `<h4>Failed processing jobs</h4><ul class="check-list">${d.failedJobs.map(j => `<li><span class="grow"><strong>${esc(j.kind)}</strong> · ${fmtDate(j.finished_at)} · ${j.attempts} attempt(s)<br><span class="muted small">${esc(j.error || '')}</span></span></li>`).join('')}</ul>` : ''}`;
+  $('errClear') && ($('errClear').onclick = async () => { try { await api('DELETE', '/admin/errors'); renderErrors(); status('Error log cleared.', 'ok'); } catch (err) { status(err.message, 'bad'); } });
 }

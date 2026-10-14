@@ -112,7 +112,12 @@ def templates(d):
     d.rounded_rectangle(u(5, 3, 27, 29), radius=W(2), outline=INK, width=W(2)); d.rectangle(u(9, 8, 23, 13), fill=BLUE)
     for y in (18, 23): d.line(u(9, y, 23, y), fill=INK, width=W(1.6))
 
-ICONS = dict(zones=zones, window=window3d, views=views, section=section, plan=plan, saved=saved, hide=hide, box=box, colour=colour,
+def helpi(d):
+    d.ellipse(u(3, 3, 29, 29), outline=BLUE, width=W(2.4))
+    d.arc(u(11, 8, 21, 18), 200, 400, fill=BLUE, width=W(2.6)); d.line(u(19.5, 16, 16, 19, 16, 21), fill=BLUE, width=W(2.6))
+    d.ellipse(u(14.6, 23, 17.4, 25.8), fill=BLUE)
+
+ICONS = dict(help=helpi, zones=zones, window=window3d, views=views, section=section, plan=plan, saved=saved, hide=hide, box=box, colour=colour,
              status=status_, aicheck=aicheck, compare=compare, update=updatei, boq=boq, pdf=pdf, review=review, templates=templates,
              projects=projects, elements=elements, measure=measure, ai=ai, fit=fitv, showall=showall, isolate=isolate,
              clear=clear, fromexcel=fromexcel, refresh=refresh, admin=admin, group=group)

@@ -397,6 +397,8 @@ export class Viewer {
   bindEvents() {
     const el = this.renderer.domElement;
     let down = null;
+    let rdown = null;
+    el.addEventListener('pointerdown', (e) => { if (e.button === 2) rdown = { x: e.clientX, y: e.clientY }; }, true);
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       down = { x: e.clientX, y: e.clientY, t: Date.now() };
@@ -433,6 +435,8 @@ export class Viewer {
     el.addEventListener('dblclick', (e) => { const h = this.hit(e); if (h) this.fit([h.id]); });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      if (rdown && Math.hypot(e.clientX - rdown.x, e.clientY - rdown.y) > 5) { rdown = null; return; }   // right-drag pans
+      rdown = null;
       const h = this.hit(e); if (h) this.cb.onContext?.(h.id, e.clientX, e.clientY);
     });
     el.tabIndex = 0;

@@ -12,16 +12,20 @@ import { backupDatabase, dataKey } from './processing.js';
 import { login, logout, requireUser, requireAdmin, hashPassword, syncUsers, publicUser } from './auth.js';
 import { json, wrap, clean, safeName, uuidOk, HttpError, fail, need, versionProject, RANK } from './http.js';
 import { registerFeatures } from './features.js';
+import { loginGuard, loginFailed, loginSucceeded, apiLimit } from './security.js';
+import { recordError } from './monitor.js';
 
 export const api = express.Router();
 const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 500 * 1024 * 1024, files: 20 } });
 // ---------------------------------------------------------------- auth
-api.post('/auth/login', json, wrap(async (req, res) => {
+api.post('/auth/login', json, loginGuard, wrap(async (req, res) => {
   const r = await login(req.body?.email, req.body?.password, req.get('user-agent'));
-  if (!r) return res.status(401).json({ error: 'Email or password is not correct, or the account is disabled.' });
+  if (!r) { loginFailed(req.body?.email); return res.status(401).json({ error: 'Email or password is not correct, or the account is disabled.' }); }
+  loginSucceeded(req.body?.email);
   res.json(r);
 }));
 api.use(wrap(requireUser));
+api.use(apiLimit());
 api.post('/auth/logout', wrap(async (req, res) => { await logout(req.token); res.json({ ok: true }); }));
 api.get('/auth/me', (req, res) => res.json({ user: req.user }));
 api.get('/users/directory', wrap(async (req, res) => {
@@ -291,11 +295,32 @@ api.post('/admin/backup', requireAdmin, wrap(async (req, res) => { res.json({ ke
 
 registerFeatures(api);
 
+// ---------------------------------------------------------------- error monitoring
+const clientErrors = new Map();     // per user, per hour: stop a looping page from flooding the log
+api.post('/client-errors', json, wrap(async (req, res) => {
+  const k = req.user.id + ':' + new Date().toISOString().slice(0, 13);
+  const n = (clientErrors.get(k) || 0) + 1; clientErrors.set(k, n);
+  if (clientErrors.size > 5000) clientErrors.clear();
+  if (n <= 30) await recordError({ source: 'client', ref: req.ref, userId: req.user.id, message: clean(req.body?.message, 2000), stack: clean(req.body?.stack, 8000), url: clean(req.body?.url, 500),
+    detail: { ua: clean(req.get('user-agent'), 200), host: clean(req.body?.host, 40), version: clean(req.body?.version, 40) } });
+  res.json({ ok: true, ref: req.ref });
+}));
+api.get('/admin/errors', requireAdmin, wrap(async (req, res) => {
+  res.json({
+    errors: await q(`SELECT e.id, e.at, e.source, e.ref, e.message, e.stack, e.url, e.detail, u.email FROM errors e LEFT JOIN users u ON u.id=e.user_id ORDER BY e.at DESC LIMIT 200`),
+    counts: await one(`SELECT count(*) FILTER (WHERE at > now() - interval '1 day')::int AS day, count(*) FILTER (WHERE at > now() - interval '7 days')::int AS week FROM errors`),
+    failedJobs: await q(`SELECT j.id, j.kind, j.error, j.finished_at, j.attempts, j.payload FROM jobs j WHERE status='failed' ORDER BY j.id DESC LIMIT 50`),
+  });
+}));
+api.delete('/admin/errors', requireAdmin, wrap(async (req, res) => { await q(`DELETE FROM errors`); await audit(req.user.id, null, 'admin.clear_errors'); res.json({ ok: true }); }));
+
 // errors
 api.use((err, req, res, _next) => {
   if (err instanceof HttpError) return res.status(err.status).json({ error: err.message });
   if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'The file is larger than 500 MB.' });
-  console.error(err);
-  res.status(500).json({ error: 'Something went wrong on the server. Try again; if it keeps happening, tell your admin.' });
+  if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'The request is too large.' });
+  if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'The request was not valid JSON.' });
+  recordError({ source: 'server', ref: req.ref, userId: req.user?.id, message: `${req.method} ${req.path}: ${err?.message || err}`, stack: err?.stack });
+  res.status(500).json({ error: `Something went wrong on the server (reference ${req.ref}). Try again; if it keeps happening, send the reference to your admin.` });
 });
 export { publicUser };

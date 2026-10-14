@@ -15,17 +15,16 @@ import { AI } from './src/ai.js';
 import { seedFeatures } from './src/features.js';
 import { storageKind } from './src/storage.js';
 import { startWorker } from './worker.js';
+import { securityHeaders } from './src/security.js';
+import { requestId, installCrashHandlers, pruneErrors } from './src/monitor.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const app = express();
 app.disable('x-powered-by');
 app.use(compression());
-app.use((req, res, next) => {
-  res.setHeader('Cache-Control', req.path.startsWith('/vendor/') ? 'public, max-age=86400' : 'no-store');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  next();
-});
+app.set('trust proxy', 1);                      // Railway's proxy sets X-Forwarded-For / -Proto
+app.use(requestId);
+app.use(securityHeaders(path.join(here, 'public')));
 app.use('/vendor/three', express.static(path.join(here, 'node_modules/three')));
 app.use('/vendor/bvh', express.static(path.join(here, 'node_modules/three-mesh-bvh/src')));
 app.use('/vendor/pdfjs', express.static(path.join(here, 'node_modules/pdfjs-dist/build')));
@@ -56,6 +55,7 @@ export async function start(port = process.env.PORT || 3000) {
   if (!pool) throw new Error('DATABASE_URL is not set. Add a Postgres database and set DATABASE_URL.');
   await migrate();
   await seedFeatures();
+  await pruneErrors();
   const s = await syncUsers();
   console.log(`Users: ${s.active} active, ${s.disabled} disabled${s.problems.length ? `, ${s.problems.length} APP_USERS problem(s)` : ''}`);
   if ((process.env.WORKER_IN_API || '1') === '1') startWorker();     // set WORKER_IN_API=0 when a separate worker service runs
@@ -63,5 +63,6 @@ export async function start(port = process.env.PORT || 3000) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  installCrashHandlers('server');
   start().catch((e) => { console.error(e.message); process.exit(1); });
 }

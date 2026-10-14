@@ -7,7 +7,7 @@
            xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
            xsi:type="TaskPaneApp">
   <Id>6f1c2a4e-8d3b-4f7a-9c51-2b7e0d4a9f13</Id>
-  <Version>0.4.0.0</Version>
+  <Version>0.5.0.0</Version>
   <ProviderName>QSGS</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="DWFx Measure"/>
@@ -404,6 +404,24 @@
                   <Action xsi:type="ExecuteFunction"><FunctionName>openAdmin</FunctionName></Action>
                 </Control>
               </Group>
+              <Group id="DWFx.G.Help">
+                <Label resid="G.Help"/>
+                <Icon>
+                    <bt:Image size="16" resid="I.help.16"/>
+                    <bt:Image size="32" resid="I.help.32"/>
+                    <bt:Image size="80" resid="I.help.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="DWFx.Help">
+                  <Label resid="L.Help"/>
+                  <Supertip><Title resid="L.Help"/><Description resid="T.Help"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.help.16"/>
+                    <bt:Image size="32" resid="I.help.32"/>
+                    <bt:Image size="80" resid="I.help.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>openHelp</FunctionName></Action>
+                </Control>
+              </Group>
               <Label resid="TabLabel"/>
             </CustomTab>
           </ExtensionPoint>
@@ -448,6 +466,9 @@
         <bt:Image id="I.group.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-16.png"/>
         <bt:Image id="I.group.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-32.png"/>
         <bt:Image id="I.group.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-80.png"/>
+        <bt:Image id="I.help.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/help-16.png"/>
+        <bt:Image id="I.help.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/help-32.png"/>
+        <bt:Image id="I.help.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/help-80.png"/>
         <bt:Image id="I.hide.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/hide-16.png"/>
         <bt:Image id="I.hide.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/hide-32.png"/>
         <bt:Image id="I.hide.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/hide-80.png"/>
@@ -512,6 +533,7 @@
         <bt:String id="G.AI" DefaultValue="AI"/>
         <bt:String id="G.Revisions" DefaultValue="Revisions"/>
         <bt:String id="G.Output" DefaultValue="Output"/>
+        <bt:String id="G.Help" DefaultValue="Help"/>
         <bt:String id="L.Projects" DefaultValue="Projects"/>
         <bt:String id="L.Refresh" DefaultValue="Refresh"/>
         <bt:String id="L.Elements" DefaultValue="Elements"/>
@@ -541,6 +563,7 @@
         <bt:String id="L.PDF" DefaultValue="Audit PDF"/>
         <bt:String id="L.Review" DefaultValue="Model checks"/>
         <bt:String id="L.Admin" DefaultValue="Admin"/>
+        <bt:String id="L.Help" DefaultValue="Help and videos"/>
         <bt:String id="TabLabel" DefaultValue="DWFx Measure"/>
         <bt:String id="GetStarted.Title" DefaultValue="DWFx Measure is ready"/>
       </bt:ShortStrings>
@@ -573,7 +596,8 @@
         <bt:String id="T.BOQ" DefaultValue="Build a BOQ sheet linked to the take-off totals, with AI descriptions if you want."/>
         <bt:String id="T.PDF" DefaultValue="A PDF with the method, assumptions, counts, totals and a 3D picture of every group."/>
         <bt:String id="T.Review" DefaultValue="Missing data, overlapping concrete and measured status."/>
-        <bt:String id="T.Admin" DefaultValue="Users, AI settings, QS rules, backups and system status (administrators only)."/>
+        <bt:String id="T.Admin" DefaultValue="Users, AI settings, QS rules, errors, backups and system status (administrators only)."/>
+        <bt:String id="T.Help" DefaultValue="The user guide with short training videos for every workflow."/>
         <bt:String id="GetStarted.Description" DefaultValue="Open the DWFx Measure tab on the ribbon and choose Projects to sign in."/>
       </bt:LongStrings>
     </Resources>

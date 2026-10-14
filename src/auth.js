@@ -19,6 +19,14 @@ export function verifyPassword(password, stored) {
   const got = crypto.scryptSync(String(password), Buffer.from(s, 'base64'), want.length, { N: 16384, r: 8, p: 1 });
   return crypto.timingSafeEqual(got, want);
 }
+/** Same check without blocking other requests (runs on the libuv thread pool). */
+export function verifyPasswordAsync(password, stored) {
+  const [kind, s, h] = String(stored || '').split('$');
+  if (kind !== 'scrypt' || !s || !h) return Promise.resolve(false);
+  const want = Buffer.from(h, 'base64');
+  return new Promise((resolve) => crypto.scrypt(String(password), Buffer.from(s, 'base64'), want.length, { N: 16384, r: 8, p: 1 },
+    (err, got) => resolve(!err && got.length === want.length && crypto.timingSafeEqual(got, want))));
+}
 
 export function parseUsers(text) {
   const users = [], problems = [];
@@ -37,8 +45,11 @@ export async function syncUsers(text = process.env.APP_USERS) {
   const { users, problems } = parseUsers(text);
   problems.forEach(p => console.warn('APP_USERS', p));
   for (const u of users) {
+    const before = await one(`SELECT id, pw_hash, role FROM users WHERE email=$1`, [u.email]);
     await q(`INSERT INTO users (email, name, role, pw_hash, active) VALUES ($1,$2,$3,$4,TRUE)
              ON CONFLICT (email) DO UPDATE SET name=$2, role=$3, pw_hash=$4, active=TRUE`, [u.email, u.name, u.role, u.hash]);
+    // a new password or a lower role signs the user out everywhere
+    if (before && (before.pw_hash !== u.hash || (before.role === 'admin' && u.role !== 'admin'))) await q(`DELETE FROM sessions WHERE user_id=$1`, [before.id]);
   }
   const listed = users.map(u => u.email);
   const off = await q(`UPDATE users SET active=FALSE WHERE active AND NOT (email = ANY($1::text[])) RETURNING id`, [listed]);
@@ -49,7 +60,7 @@ export async function syncUsers(text = process.env.APP_USERS) {
 export async function login(email, password, userAgent) {
   const u = await one(`SELECT * FROM users WHERE email=$1`, [String(email || '').trim().toLowerCase()]);
   // same work whether or not the user exists, to avoid revealing which emails are valid
-  const ok = u ? verifyPassword(password, u.pw_hash) : (verifyPassword(password, 'scrypt$AAAAAAAAAAAAAAAAAAAAAA==$AAAA'), false);
+  const ok = u ? await verifyPasswordAsync(password, u.pw_hash) : (await verifyPasswordAsync(password, 'scrypt$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='), false);
   if (!u || !ok || !u.active) return null;
   const token = crypto.randomBytes(32).toString('base64url');
   await q(`INSERT INTO sessions (token_hash, user_id, expires_at, user_agent) VALUES ($1,$2, now() + make_interval(days => $3), $4)`,

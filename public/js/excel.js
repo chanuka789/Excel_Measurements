@@ -9,6 +9,8 @@ import { update } from './model.js';
 
 export const SHEET = 'Take-off', META = '_dwfx', BOQ = 'BOQ', LOG = 'Change log';
 const colL = (n) => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - 1 - m) / 26; } return s; };
+/** Text written to Excel must never turn into a formula (names, types and AI text can start with = + - @). */
+export const safeText = (v) => (typeof v === 'string' && /^[=+\-@\t\r]/.test(v) ? "'" + v : v);
 const nameKey = (ref, key) => `TO_${ref}_${key}`.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 250);
 
 // ================================================================== build one group block
@@ -20,11 +22,11 @@ function buildBlock(spec, ref, top, evRows) {
   const out = [], kinds = [];
   const push = (row, kind) => { const r = blank(); row.forEach((v, i) => { r[i] = v; }); out.push(r); kinds.push(kind); };
   const rowNo = () => top + out.length;
-  push([ref, spec.name], 'title');
+  push([ref, safeText(spec.name)], 'title');
   if (spec.note) push(['', 'Method: ' + spec.note], 'note');
   const constCell = {};
-  spec.constants.forEach(c => { constCell[c.key] = `$C$${rowNo()}`; push(['', c.label, Number(c.value) || 0, c.unit || ''], 'const'); });
-  push(['Ref', 'Revit ID', 'Category', 'Family', 'Type', 'Level', 'Mark', ...cols.map(c => `${c.label} (${c.unit})`)], 'head');
+  spec.constants.forEach(c => { constCell[c.key] = `$C$${rowNo()}`; push(['', safeText(c.label), Number(c.value) || 0, safeText(c.unit || '')], 'const'); });
+  push(['Ref', 'Revit ID', 'Category', 'Family', 'Type', 'Level', 'Mark', ...cols.map(c => safeText(`${c.label} (${c.unit})`))], 'head');
   const toXl = (expr, r) => '=' + String(expr).replace(/\{(\w+)\}/g, (m, k) => colOf[k] ? colOf[k] + r : (constCell[k] || '0'));
   const sumCols = cols.filter(c => c.sum !== false && (c.sum || spec.formulas.includes(c)));
   const key = (e) => spec.by === 'type' ? e.type : spec.by === 'level' ? (e.level || '(no level)') : spec.by === 'zone' ? (S.zoneOf.get(e.id) || '(no zone)')
@@ -36,11 +38,11 @@ function buildBlock(spec, ref, top, evRows) {
     const start = rowNo();
     list.sort((a, b) => (a.e.level || '').localeCompare(b.e.level || '') || a.e.id - b.e.id).forEach(({ e, v }) => {
       n++; const r = rowNo();
-      push([`${ref}.${n}`, e.id, e.cat, e.fam, e.type, e.level, e.mark, ...spec.inputs.map(i => v[i.key] ?? ''), ...spec.formulas.map(f => toXl(f.expr, r))], 'data');
+      push([`${ref}.${n}`, e.id, ...[e.cat, e.fam, e.type, e.level, e.mark].map(safeText), ...spec.inputs.map(i => v[i.key] ?? ''), ...spec.formulas.map(f => toXl(f.expr, r))], 'data');
     });
     if (spec.by && parts.size > 1) {
       const end = rowNo() - 1, r = blank();
-      r[1] = `Sub-total ${k}`; sumCols.forEach(c => { r[7 + cols.indexOf(c)] = `=SUBTOTAL(9,${colOf[c.key]}${start}:${colOf[c.key]}${end})`; });
+      r[1] = `Sub-total ${k}`.replace(/^([=+\-@])/, "'$1"); sumCols.forEach(c => { r[7 + cols.indexOf(c)] = `=SUBTOTAL(9,${colOf[c.key]}${start}:${colOf[c.key]}${end})`; });
       out.push(r); kinds.push('sub');
     }
   }
@@ -77,7 +79,7 @@ async function writeMeta(ctx, ref, spec, takeoffId) {
   const m = await metaSheet(ctx);
   const used = m.getUsedRange(true); used.load('values'); await ctx.sync();
   const method = JSON.stringify({ name: spec.name, by: spec.by, note: spec.note, inputs: spec.inputs, constants: spec.constants, formulas: spec.formulas, filter: spec.filter }).slice(0, 32000);
-  const row = [ref, takeoffId || '', S.versionId || '', spec.name, method, new Date().toISOString(), App.currentProjectId?.() || '', S.label || ''];
+  const row = [ref, takeoffId || '', S.versionId || '', safeText(spec.name), method, new Date().toISOString(), App.currentProjectId?.() || '', S.label || ''];
   let r = used.values.findIndex(v => v[0] === ref);
   r = r > 0 ? r + 1 : used.values.length + 1;
   m.getRange(`A${r}:H${r}`).values = [row];
@@ -233,7 +235,7 @@ export async function writeChangeLog(rows) {
     const used = sh.getUsedRange(true); used.load('rowCount'); await ctx.sync();
     const r0 = used.rowCount + 1;
     const rng = sh.getRange(`A${r0}:J${r0 + rows.length - 1}`);
-    rng.values = rows; rng.format.font.set({ name: 'Arial', size: 9 });
+    rng.values = rows.map(r => r.map(safeText)); rng.format.font.set({ name: 'Arial', size: 9 });
     sh.getRange(`H${r0}:J${r0 + rows.length - 1}`).numberFormat = rows.map(() => ['#,##0.000', '#,##0.000', '+#,##0.000;-#,##0.000;0']);
     await ctx.sync();
   });
@@ -255,14 +257,14 @@ export async function buildBOQ(items, { title = 'BILL OF QUANTITIES' } = {}) {
       sh.delete(); await ctx.sync();
     }
     sh = ctx.workbook.worksheets.add(BOQ);
-    const rows = [[title, '', '', '', '', ''], [`${App.currentProject?.()?.project?.name || ''} · ${S.label || ''}`, '', '', '', '', ''], ['', '', '', '', '', ''],
+    const rows = [[title, '', '', '', '', ''], [safeText(`${App.currentProject?.()?.project?.name || ''} · ${S.label || ''}`), '', '', '', '', ''], ['', '', '', '', '', ''],
       ['Item', 'Description', 'Unit', 'Quantity', 'Rate', 'Amount']];
     const kinds = ['title', 'sub', 'blank', 'head'];
     let lastHeading = null;
     items.forEach((it) => {
-      if (it.heading && it.heading !== lastHeading) { rows.push(['', it.heading, '', '', '', '']); kinds.push('heading'); lastHeading = it.heading; }
+      if (it.heading && it.heading !== lastHeading) { rows.push(['', safeText(it.heading), '', '', '', '']); kinds.push('heading'); lastHeading = it.heading; }
       const r = rows.length + 1;
-      rows.push([it.item, it.description, it.unit, `=${it.nameKey}`, rates.get(String(it.item)) ?? '', `=IF(E${r}="","",D${r}*E${r})`]);
+      rows.push([safeText(it.item), safeText(it.description), safeText(it.unit), `=${it.nameKey}`, rates.get(String(it.item)) ?? '', `=IF(E${r}="","",D${r}*E${r})`]);
       kinds.push('item');
     });
     const first = 5, lastItem = rows.length;

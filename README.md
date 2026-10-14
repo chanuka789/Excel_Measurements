@@ -20,6 +20,7 @@ After adding the add-in, Excel shows a **DWFx Measure** tab on the ribbon:
 | AI | Ask AI, Check take-off |
 | Revisions | Compare revisions, Update take-off |
 | Output | Build BOQ, Audit PDF, Model checks, Admin |
+| Help | Help and training videos |
 
 1. **Sign in** with the email and password your administrator gave you.
 2. **Project** tab: create a project, upload DWFx models (the same model name makes a new version), drawings
@@ -86,6 +87,9 @@ Variables on `dwfx-addin` (and the worker):
 | `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` | optional AI, see below |
 | `WORKER_IN_API` | `1` (default) runs processing inside the web service; `0` when a separate worker runs |
 | `SESSION_DAYS` | optional, default 30 |
+| `CSP_MODE` | optional: `enforce` (default), `report` or `off` (Content Security Policy) |
+| `RATE_LIMIT_PER_MIN` | optional API limit per user, default 600 |
+| `LOGIN_LIMIT_PER_IP` | optional sign-in attempts per IP per 15 minutes, default 20 |
 
 Storage layout: `projects/{project}/models/{model}/v{n}/source.dwfx` + `model.json.gz`,
 `projects/{project}/drawings/...`, `backups/YYYY-MM-DD.json.gz` (database backup every day, last 30 kept).
@@ -113,6 +117,13 @@ changing provider or model.
 - After a manifest change (new ribbon), remove the add-in and add it again, or clear the Office cache
   (`%LOCALAPPDATA%\Microsoft\Office\16.0\Wef\`) and restart Excel.
 - The ribbon needs Microsoft 365 Excel (shared runtime). Older Excel versions still open the task pane.
+
+## Help, security and IT
+- User guide with 5 short training videos: `/help/` (Help button on the ribbon, the user menu and the sign-in screen).
+- `docs/IT-deployment-pack.md`: install, network domains, data flow, privacy note. `docs/SECURITY.md`: security review and load test.
+- Errors: users see a reference code; admins see the error log in **Admin > Errors** (kept 90 days).
+- Worker health (separate service): `GET /health` on the worker's `PORT`.
+- Load test: `BASE=https://... EMAIL=... PASSWORD=... USERS=50 SECONDS=60 node scripts/loadtest.mjs`.
 
 ## Development
 ```

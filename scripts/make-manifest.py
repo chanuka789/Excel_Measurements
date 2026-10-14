@@ -1,7 +1,7 @@
 """Writes manifest.xml: the DWFx Measure ribbon tab (shared runtime). Run: python3 scripts/make-manifest.py [base-url]"""
 import sys, os
 BASE = (sys.argv[1] if len(sys.argv) > 1 else 'https://dwfx-addin-production.up.railway.app').rstrip('/')
-VERSION = '0.4.0.0'
+VERSION = '0.5.0.0'
 G = [
  ('Project', 'Project', 'group', [('Projects', 'Projects', 'projects', 'openProjects', 'Open your projects: models, drawings, team, saved take-offs and settings.'),
                                   ('Refresh', 'Refresh', 'refresh', 'refreshProject', 'Reload the open project to see new uploads and processing status.')]),
@@ -31,7 +31,8 @@ G = [
  ('Output', 'Output', 'group', [('BOQ', 'Build BOQ', 'boq', 'buildBOQ', 'Build a BOQ sheet linked to the take-off totals, with AI descriptions if you want.'),
                                 ('PDF', 'Audit PDF', 'pdf', 'auditPdf', 'A PDF with the method, assumptions, counts, totals and a 3D picture of every group.'),
                                 ('Review', 'Model checks', 'review', 'modelChecks', 'Missing data, overlapping concrete and measured status.'),
-                                ('Admin', 'Admin', 'admin', 'openAdmin', 'Users, AI settings, QS rules, backups and system status (administrators only).')]),
+                                ('Admin', 'Admin', 'admin', 'openAdmin', 'Users, AI settings, QS rules, errors, backups and system status (administrators only).')]),
+ ('Help', 'Help', 'help', [('Help', 'Help and videos', 'help', 'openHelp', 'The user guide with short training videos for every workflow.')]),
 ]
 icons = sorted({g[2] for g in G} | {c[2] for g in G for c in g[3]})
 ic = lambda n: '\n'.join(f'                    <bt:Image size="{s}" resid="I.{n}.{s}"/>' for s in (16, 32, 80))

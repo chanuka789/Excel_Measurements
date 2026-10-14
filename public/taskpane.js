@@ -75,6 +75,16 @@ $('umOut').onclick = async () => {
   try { await api('POST', '/auth/logout'); } catch { /* already signed out */ }
   session.set(null); resetProjects(); closeModel(); showSignIn();
 };
+/** Help opens in an Office dialog inside Excel, or a new browser tab elsewhere. */
+function openHelp(anchor = '') {
+  const url = new URL('help/index.html' + (anchor ? '#' + anchor : ''), location.href).href;
+  if (S.inExcel && typeof Office !== 'undefined' && Office.context?.ui?.displayDialogAsync) {
+    Office.context.ui.displayDialogAsync(url, { height: 85, width: 60, displayInIframe: false }, (r) => { if (r.status !== Office.AsyncResultStatus.Succeeded) window.open(url, '_blank'); });
+  } else window.open(url, '_blank');
+}
+App.openHelp = openHelp;
+$('umHelp').onclick = () => { $('userMenu').hidden = true; openHelp(); };
+$('siHelp').onclick = () => openHelp();
 $('umKeys').onclick = () => confirmBox({ title: 'Keyboard shortcuts', confirmLabel: 'Close', body: `<table class="tbl"><tbody>
   <tr><td>1 – 7</td><td>Top, front, right, back, left, bottom, isometric (3D view focused)</td></tr>
   <tr><td>F</td><td>Fit the view</td></tr><tr><td>Arrows, + and −</td><td>Orbit and zoom</td></tr>
@@ -141,6 +151,7 @@ const RIBBON = {
   viewSection: tool('section'), viewPlan: tool('plan'), viewBoxSelect: tool('box'), viewMeasure: tool('measure'),
   viewColour: tool('color'), viewSaved: tool('saved'), view3DWindow: tool('window'), viewViews: tool('views'),
   selectFromExcel: () => App.selectFromExcel(),
+  openHelp: () => openHelp(),
   measuredStatus: async () => { if (!needModel()) return; await setColorMode('measured'); selectTab('review'); },
   compareRevisions: reviewSection('revisions'), updateTakeoff: reviewSection('revisions'),
   aiCheck: reviewSection('aicheck'), buildBOQ: reviewSection('output'), auditPdf: reviewSection('output'), modelChecks: reviewSection('checks'),
@@ -150,7 +161,7 @@ function registerRibbon() {
   for (const [name, fn] of Object.entries(RIBBON)) {
     Office.actions.associate(name, async (event) => {
       try { await Office.addin?.showAsTaskpane?.(); } catch { /* older Office */ }
-      try { if (!session.get()?.token) showSignIn('Sign in first.'); else await fn(); }
+      try { if (!session.get()?.token && name !== 'openHelp') showSignIn('Sign in first.'); else await fn(); }
       catch (err) { status(err.message, 'bad'); }
       event.completed();
     });
