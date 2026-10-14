@@ -3,6 +3,7 @@ import { $, esc, App, api, status } from './core.js';
 import { dimsOf, keyOf, evaluate as evaluateSpec, fmt } from './engine.js';
 import { S } from './state.js';
 import { selectIds, update } from './model.js';
+import { mountQs } from './qsui.js';
 
 export const evaluate = (spec) => evaluateSpec(spec, S.byId);
 
@@ -281,5 +282,9 @@ export function initMeasure() {
   App.computeDerived = computeDerived;
   App.specFromPlanGroup = specFromPlanGroup;
   $('tplBox').addEventListener('toggle', () => { if ($('tplBox').open) renderTemplates(); });
+  const qs = mountQs({ host: $('qsBody'), E: () => S.E, byId: () => S.byId, ticked: () => [...S.ticked], project: () => App.currentProject?.(),
+    selectIds, status, get inExcel() { return S.inExcel; }, add: (spec) => (S.inExcel ? App.addToExcel(spec) : App.addToList(spec)) });
+  App.renderQs = () => { if ($('qsBox').open) qs.render(); };
+  $('qsBox').addEventListener('toggle', App.renderQs);
 }
 export { update };

@@ -143,6 +143,7 @@ export async function loadModelData(data, { versionId = null, label = '', geomet
   update();
   const shown = S.E.filter(e => V.hasGeometry(e.id)).length;
   status(`${S.E.length} elements in ${S.tree.size} categories, ${shown} shown in 3D.` + (data.geoNote ? ' ' + data.geoNote : ''), 'ok');
+  App.renderQs?.();
   sendToWindow({ type: 'model', versionId: S.versionId, label: S.label });
 }
 export function closeModel() {

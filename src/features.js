@@ -136,6 +136,30 @@ export function registerFeatures(api) {
     res.json({ project: p });
   }));
 
+  // ---------------------------------------------------------------- QS setup: rule set and measuring assumptions (editors)
+  api.patch('/projects/:pid/qs', json, wrap(async (req, res) => {
+    await need(req, req.params.pid, 'editor');
+    const b = req.body || {};
+    const cur = await one(`SELECT settings FROM projects WHERE id=$1`, [req.params.pid]);
+    const qs = { ...(cur.settings?.qs || {}) };
+    const num = (k, lo, hi) => { if (b[k] === undefined) return; if (b[k] === null && k === 'groundLevel') { qs[k] = null; return; } const v = Number(b[k]); if (!Number.isFinite(v) || v < lo || v > hi) fail(400, `${k} must be between ${lo} and ${hi}.`); qs[k] = v; };
+    if (b.ruleSet !== undefined) { if (!['NRM2', 'POMI', 'NRM1'].includes(b.ruleSet)) fail(400, 'Rule set must be NRM2, POMI or NRM1.'); qs.ruleSet = b.ruleSet; }
+    num('groundLevel', -1000, 10000); num('wpUpturn', 0, 5); num('roofUpturn', 0, 5);
+    for (const k of ['wpUnderGround', 'wpFoundationSides', 'wpRoof', 'earthFaced']) if (b[k] !== undefined) qs[k] = Boolean(b[k]);
+    if (b.rates && typeof b.rates === 'object') {
+      qs.rates = { ...(qs.rates || {}) };
+      for (const [k, v] of Object.entries(b.rates)) {
+        if (!/^[a-z]{2,20}$/.test(k)) continue;
+        const n = Number(v); if (!Number.isFinite(n) || n < 0 || n > 1000) fail(400, `Reinforcement rate for ${k} must be between 0 and 1000 kg/m3.`);
+        qs.rates[k] = n;
+      }
+    }
+    const settings = { ...(cur.settings || {}), qs };
+    await q(`UPDATE projects SET settings=$2, updated_at=now() WHERE id=$1`, [req.params.pid, settings]);
+    await audit(req.user.id, req.params.pid, 'project.qs', qs);
+    res.json({ qs });
+  }));
+
   // ---------------------------------------------------------------- take-off update (new revision)
   api.patch('/takeoffs/:id', json, wrap(async (req, res) => {
     if (!uuidOk(req.params.id)) fail(404, 'Take-off not found.');

@@ -308,3 +308,14 @@ table.q td.v { text-align: right; font-variant-numeric: tabular-nums; white-spac
 details.box { border: 1px solid var(--stroke2); border-radius: var(--r-l); padding: 8px 10px; margin: 8px 0; background: var(--bg); }
 details.box > summary { cursor: pointer; font-weight: 600; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* measure items (QS rules) */
+.qs-head { display: flex; gap: 8px; align-items: flex-end; }
+.qs-head .field { flex: 1; margin: 0; }
+.qs-use { gap: 12px; flex-wrap: wrap; font-size: 13px; margin: 6px 0; }
+.tpl[data-empty] { opacity: .55; }
+.qs-card table.q { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+.qs-card table.q td, .qs-card table.q th { padding: 3px 4px; border-bottom: 1px solid var(--stroke2); vertical-align: top; text-align: left; }
+.qs-card td.v { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.qs-consts { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; margin: 6px 0; }
+.rates { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; font-size: 12px; }
+.rates label { display: flex; flex-direction: column; gap: 2px; }

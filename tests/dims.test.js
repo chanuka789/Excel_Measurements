@@ -133,3 +133,15 @@ test('standard dimension groups: add from a project, reuse in another project', 
   assert.equal((await call('DELETE', `/api/dimgroups/${list[0].id}`, { token: T.other })).status, 403);
   assert.equal((await call('DELETE', `/api/dimgroups/${list[0].id}`, { token: T.admin })).status, 200);
 });
+
+test('QS setup: editors set the rule set and assumptions; values are checked', async () => {
+  let r = await call('PATCH', `/api/projects/${P.id}/qs`, { token: T.user, body: { ruleSet: 'POMI', groundLevel: 1.25, wpUpturn: 0.3, earthFaced: true, rates: { beam: 175, bad_key: 5 } } });
+  assert.equal(r.status, 200); assert.equal(r.data.qs.ruleSet, 'POMI'); assert.equal(r.data.qs.rates.beam, 175); assert.equal(r.data.qs.rates.bad_key, undefined);
+  assert.equal((await call('PATCH', `/api/projects/${P.id}/qs`, { token: T.user, body: { ruleSet: 'SMM7' } })).status, 400);
+  assert.equal((await call('PATCH', `/api/projects/${P.id}/qs`, { token: T.user, body: { rates: { beam: 5000 } } })).status, 400);
+  assert.equal((await call('PATCH', `/api/projects/${P.id}/qs`, { token: T.other, body: { ruleSet: 'NRM2' } })).status, 403);
+  r = await call('PATCH', `/api/projects/${P.id}/qs`, { token: T.user, body: { groundLevel: null } });
+  assert.equal(r.data.qs.groundLevel, null); assert.equal(r.data.qs.ruleSet, 'POMI');
+  const p = (await call('GET', `/api/projects/${P.id}`, { token: T.other })).data.project;
+  assert.equal(p.settings.qs.wpUpturn, 0.3);
+});

@@ -5,12 +5,13 @@ import { fileURLToPath } from 'url';
 import { pool, migrate, one } from './src/db.js';
 import { claim, finish, fail, enqueue } from './src/jobs.js';
 import http from 'http';
-import { processVersion, backupDatabase } from './src/processing.js';
+import { processVersion, backupDatabase, updateQs, QS_VERSION } from './src/processing.js';
 import { recordError, installCrashHandlers } from './src/monitor.js';
 
 const HANDLERS = {
   process_version: (p) => processVersion(p.versionId),
   backup: () => backupDatabase(),
+  qs_update: (p) => updateQs(p.versionId),
   // the AI test set takes a while: run it in the background so model processing is never blocked
   ai_eval: async (p) => { const m = await import('./src/aieval.js'); m.runEvaluation(p).catch(e => console.error('AI evaluation failed:', e.message)); },
 };
@@ -30,6 +31,15 @@ async function scheduleBackup() {
   if (!done) await enqueue('backup', { day: today });
 }
 
+/** Models processed before the QS face analysis get it added once, in the background. */
+async function scheduleQsUpgrade() {
+  const { q } = await import('./src/db.js');
+  const todo = await q(`SELECT v.id FROM model_versions v WHERE v.status='ready' AND coalesce((v.stats->>'qs')::int, 0) < $1
+                        AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.kind='qs_update' AND j.payload->>'versionId' = v.id::text AND j.status IN ('queued','running'))`, [QS_VERSION]);
+  for (const r of todo) await enqueue('qs_update', { versionId: r.id });
+  if (todo.length) console.log(`QS analysis queued for ${todo.length} model version(s)`);
+}
+
 export function startWorker() {
   if (running) return; running = true;
   const loop = async () => {
@@ -40,6 +50,7 @@ export function startWorker() {
   };
   loop();
   scheduleBackup().catch(() => {});
+  scheduleQsUpgrade().catch(() => {});
   timer = setInterval(() => scheduleBackup().catch(() => {}), 60 * 60 * 1000);
   console.log('Worker started');
 }
