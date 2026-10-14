@@ -18,7 +18,8 @@ let office = false, V, TB, started = false;
 
 // ------------------------------------------------------------------ messaging with the task pane
 // dialog: Office dialog (messageParent); pop-up: window.opener; app: server link (a normal window with minimise/maximise)
-const HASH = new URLSearchParams(location.hash.slice(1));
+// window settings come in the query string (Excel on the web can drop the #fragment) or, from older panes, the fragment
+const HASH = new URLSearchParams(location.search); new URLSearchParams(location.hash.slice(1)).forEach((v, k) => { if (!HASH.has(k)) HASH.set(k, v); });
 const MODE = HASH.get('link') ? 'app' : HASH.get('dlg') ? 'dialog' : 'popup';
 let link = null;
 function send(msg) {
@@ -66,7 +67,7 @@ function ended(text) {
 async function startLink() {
   const id = HASH.get('link'), claim = HASH.get('claim');
   session.useMemory(null);
-  history.replaceState(null, '', location.pathname + location.search);
+  history.replaceState(null, '', location.pathname);      // the one-time code leaves the address bar
   const r = await fetch('api/link/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, claim }) });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) { ended(data.error || 'This window link has expired. Open the app window again from the Excel task pane.'); return false; }
@@ -334,7 +335,10 @@ const ready = MODE !== 'app' && typeof Office !== 'undefined' ? Office.onReady()
 ready.then(async () => {
   if (MODE === 'app') { if (!(await startLink())) return; }
   else {
-    office = typeof Office !== 'undefined' && Boolean(Office.context?.ui?.messageParent) && !window.opener;
+    // In Excel on the web the dialog is a pop-up whose opener is Excel itself, not this pane, so a dialog always
+    // talks through Office (messageParent / messageChild). A plain pop-up (add-in opened in a browser) uses the opener.
+    const canOffice = typeof Office !== 'undefined' && Boolean(Office.context?.ui?.messageParent);
+    office = canOffice && (MODE === 'dialog' || !window.opener);
     if (office) {
       try { Office.context.ui.addHandlerAsync(Office.EventType.DialogParentMessageReceived, (arg) => { try { receive(JSON.parse(arg.message)); } catch { /* ignore */ } }); } catch { /* DialogApi 1.2 missing */ }
     }

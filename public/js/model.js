@@ -468,7 +468,7 @@ export async function openWindow(mode = 'normal', carry = null) {
   if (mode === 'app') return openAppWindow(base);
   if (typeof Office !== 'undefined' && Office.context?.ui?.displayDialogAsync && S.inExcel) {
     const size = mode === 'max' ? 'max' : 'normal';
-    Office.context.ui.displayDialogAsync(`${base}#dlg=${size}`, { ...WIN_SIZES[size], displayInIframe: false }, (r) => {
+    Office.context.ui.displayDialogAsync(`${base}?dlg=${size}`, { ...WIN_SIZES[size], displayInIframe: false }, (r) => {
       if (r.status !== Office.AsyncResultStatus.Succeeded) { status('Could not open the 3D window: ' + (r.error?.message || ''), 'bad'); return; }
       const dlg = r.value;
       win = { office: dlg, size };
@@ -494,7 +494,7 @@ async function openAppWindow(base) {
   });
   ch.start();
   win = { link: ch };
-  const url = `${base}#link=${encodeURIComponent(link.id)}&claim=${encodeURIComponent(link.claim)}`;
+  const url = `${base}?link=${encodeURIComponent(link.id)}&claim=${encodeURIComponent(link.claim)}`;
   try {
     if (typeof Office !== 'undefined' && Office.context?.ui?.openBrowserWindow && S.inExcel) Office.context.ui.openBrowserWindow(url);
     else if (!window.open(url, '_blank')) throw new Error('blocked');
