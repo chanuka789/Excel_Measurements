@@ -4,6 +4,7 @@
 //
 // Sources: RICS NRM2 2nd edition (effective 1 Dec 2021), Work section 11 notes (GCU), Principles of Measurement
 // (International) 1979, NRM1 (RICS, 2021). The app stores what each rule does, never the RICS wording itself.
+import { dimsOf } from './engine.js';
 
 export const RULE_SETS = {
   NRM2: { id: 'NRM2', name: 'NRM2', full: 'RICS NRM2: Detailed measurement for building works, 2nd edition (effective 1 Dec 2021)', use: 'Bills of quantities' },
@@ -106,12 +107,13 @@ export function materialOf(e) {
   if (/concrete|cip|in-situ|insitu|\brc\b/.test(m) || /\b(rc|cip)\b|concrete/i.test(t)) return 'insitu';
   if (/timber|wood|glulam/.test(m)) return 'timber';
   if (/masonry|block|brick/.test(m)) return 'masonry';
-  return /structural|^floors$|^walls$|stairs?|runs|landings/i.test(e.cat || '') ? 'insitu' : 'other';
+  return /structural|floor|wall|stair|run|landing|roof|slab|foundation|framing|column/i.test(e.cat || '') ? 'insitu' : 'other';
 }
 const q = (e, n) => e.q?.[n]?.[0] ?? 0;
 /** The kind of element a QS sees: pile, pilecap, footing, raft, groundbeam, beam, column, slab, groundslab, roofslab, wall, stair, other. */
 export function kindOf(e) {
   const cat = String(e.cat || ''), t = `${e.fam} ${e.type}`.toLowerCase();
+  const lv = String(e.level || '').toLowerCase();
   const bb = e.bb ? [e.bb[3] - e.bb[0], e.bb[4] - e.bb[1], e.bb[5] - e.bb[2]] : null;
   const plan = q(e, 'Geo plan area') || q(e, 'Area');
   if (/foundation/i.test(cat)) {
@@ -124,16 +126,175 @@ export function kindOf(e) {
   }
   if (/framing/i.test(cat)) return /ground beam|tie beam|grade beam|\bgb\b/.test(t) || q(e, 'Area on ground') > 0.5 * Math.max(q(e, 'Geo bottom area'), 1e-9) ? 'groundbeam' : 'beam';
   if (/column/i.test(cat)) return 'column';
+  if (/roof/i.test(cat)) return 'roofslab';
   if (/^floors?$|slab/i.test(cat)) {
     const bottom = q(e, 'Geo bottom area') || plan;
     if (q(e, 'Area on ground') > 0.5 * bottom) return 'groundslab';
-    if (q(e, 'Top exposed') > 0.5 * (q(e, 'Geo top area') || plan)) return 'roofslab';
+    if (q(e, 'Top exposed') > 0.5 * (q(e, 'Geo top area') || plan) || /roof/i.test(t) || /roof/i.test(lv)) return 'roofslab';
     return 'slab';
   }
-  if (/roof/i.test(cat)) return 'roofslab';
-  if (/^walls?$/i.test(cat)) return 'wall';
+  if (/roof/i.test(t) && !/beam|column|wall|truss/i.test(t)) return 'roofslab';
+  if (/^walls?$/i.test(cat) || /\bwall\b/i.test(t)) return 'wall';
   if (/stair|runs|landing|ramp/i.test(cat)) return 'stair';
   return 'other';
+}
+
+/** Element thickness in metres (null if unknown). */
+export function elementThickness(e) {
+  if (!e) return null;
+  const tg = e.q?.['Thickness (geometry)']?.[0];
+  if (tg != null && tg > 0) return tg;
+
+  const rawThick = e.q?.['Thickness']?.[0] ?? e.props?.['Thickness'] ?? e.props?.['Default Thickness'] ?? e.props?.['Wall Thickness'] ?? e.props?.['Core Thickness'];
+  if (typeof rawThick === 'number' && rawThick > 0) {
+    return rawThick > 10 ? rawThick / 1000 : rawThick;
+  }
+  if (typeof rawThick === 'string') {
+    const num = parseFloat(rawThick.replace(/,/g, ''));
+    if (!isNaN(num) && num > 0) return /mm/i.test(rawThick) || num > 10 ? num / 1000 : num;
+  }
+
+  const kind = kindOf(e);
+  if (kind === 'wall') {
+    const w = e.q?.['Width']?.[0] ?? e.props?.['Width'];
+    if (typeof w === 'number' && w > 0) return w > 10 ? w / 1000 : w;
+    if (typeof w === 'string') {
+      const num = parseFloat(w.replace(/,/g, ''));
+      if (!isNaN(num) && num > 0) return /mm/i.test(w) || num > 10 ? num / 1000 : num;
+    }
+  }
+
+  const str = `${e.type || ''} ${e.fam || ''}`;
+  const m1 = /(?:^|[^\d])(\d{2,4})\s*(?:mm\b|\bthk\b|\bthick\b)/i.exec(str);
+  if (m1) return parseInt(m1[1], 10) / 1000;
+
+  const m2 = /\b(?:slab|wall|floor|roof|bed|plate|rcw|retaining)\D*(\d{2,4})\b/i.exec(str);
+  if (m2) {
+    const val = parseInt(m2[1], 10);
+    if (val >= 50 && val <= 2000) return val / 1000;
+  }
+
+  const m3 = /\b(\d{2,4})\D*(?:slab|wall|floor|roof)\b/i.exec(str);
+  if (m3) {
+    const val = parseInt(m3[1], 10);
+    if (val >= 50 && val <= 2000) return val / 1000;
+  }
+
+  if (e.bb && e.bb.length >= 6) {
+    const dx = Math.abs(e.bb[3] - e.bb[0]);
+    const dy = Math.abs(e.bb[4] - e.bb[1]);
+    const dz = Math.abs(e.bb[5] - e.bb[2]);
+    if (['slab', 'groundslab', 'roofslab', 'raft'].includes(kind)) {
+      if (dz >= 0.05 && dz <= 1.5) return Math.round(dz * 1000) / 1000;
+    } else if (kind === 'wall') {
+      const minH = Math.min(dx, dy);
+      if (minH >= 0.05 && minH <= 1.5) return Math.round(minH * 1000) / 1000;
+    }
+  }
+
+  const vol = e.q?.['Net volume']?.[0] ?? e.q?.['Geo volume']?.[0] ?? e.q?.Volume?.[0];
+  const area = e.q?.['Geo plan area']?.[0] ?? e.q?.['Geo bottom area']?.[0] ?? e.q?.['Geo top area']?.[0] ?? e.q?.Area?.[0];
+  if (vol && area && area > 0) {
+    const t = vol / area;
+    if (t >= 0.05 && t <= 1.5) return Math.round(t * 1000) / 1000;
+  }
+
+  return null;
+}
+
+/** Populate missing QS quantities (thickness, formwork faces, area on ground) from element geometry. */
+export function enrichElementQs(e) {
+  if (!e) return;
+  if (!e.q) e.q = {};
+  const kind = kindOf(e);
+  const mat = materialOf(e);
+  if (!['insitu', 'precast'].includes(mat) && mat !== 'steel') return;
+
+  const t = elementThickness(e);
+  if (t != null && !e.q['Thickness (geometry)']) {
+    e.q['Thickness (geometry)'] = [t, 'm'];
+  }
+
+  const vol = e.q['Net volume']?.[0] ?? e.q['Geo volume']?.[0] ?? e.q.Volume?.[0] ?? 0;
+  const thk = t || e.q['Thickness (geometry)']?.[0] || 0.2;
+
+  if (['slab', 'roofslab'].includes(kind)) {
+    const bottom = e.q['Geo bottom area']?.[0] || e.q.Area?.[0] || e.q['Geo plan area']?.[0] || (vol && thk ? vol / thk : 0);
+    const hasSoffit = Object.keys(e.q).some(k => k.startsWith('FW soffit'));
+    if (!hasSoffit && bottom > 0) {
+      e.q['FW soffit'] = [bottom, 'm2'];
+      e.q['FW soffit 0-3 m'] = [bottom, 'm2'];
+    }
+    const hasSide = Object.keys(e.q).some(k => k.startsWith('FW narrow') || k.startsWith('FW wide') || k === 'FW sides');
+    const perim = e.q['Exposed perimeter']?.[0] || e.q.Perimeter?.[0] || (e.bb ? 2 * (Math.abs(e.bb[3] - e.bb[0]) + Math.abs(e.bb[4] - e.bb[1])) : 0);
+    if (!hasSide && perim > 0) {
+      if (thk <= 0.5) e.q['FW narrow length'] = [perim, 'm'];
+      else e.q['FW wide sides'] = [perim * thk, 'm2'];
+    }
+    if (kind === 'roofslab') {
+      const top = e.q['Geo top area']?.[0] || e.q.Area?.[0] || e.q['Geo plan area']?.[0] || bottom;
+      if (!e.q['Top exposed'] && top > 0) e.q['Top exposed'] = [top, 'm2'];
+      if (!e.q['Exposed perimeter'] && perim > 0) e.q['Exposed perimeter'] = [perim, 'm'];
+    }
+  } else if (kind === 'groundslab') {
+    const bottom = e.q['Geo bottom area']?.[0] || e.q.Area?.[0] || e.q['Geo plan area']?.[0] || (vol && thk ? vol / thk : 0);
+    if (!e.q['Area on ground'] && bottom > 0) e.q['Area on ground'] = [bottom, 'm2'];
+    const hasSide = Object.keys(e.q).some(k => k.startsWith('FW narrow') || k.startsWith('FW wide') || k === 'FW sides');
+    const perim = e.q.Perimeter?.[0] || (e.bb ? 2 * (Math.abs(e.bb[3] - e.bb[0]) + Math.abs(e.bb[4] - e.bb[1])) : 0);
+    if (!hasSide && perim > 0) {
+      if (thk <= 0.5) e.q['FW narrow length'] = [perim, 'm'];
+      else e.q['FW wide sides'] = [perim * thk, 'm2'];
+    }
+  } else if (['beam', 'groundbeam'].includes(kind)) {
+    const dims = dimsOf(e.type);
+    const len = e.q['Cut Length']?.[0] || e.q.Length?.[0] || e.q['Geo box length']?.[0] || (vol && dims.length >= 2 ? vol / (dims[0] * dims[1]) : 0);
+    const b = dims[0] || e.q.Width?.[0] || e.q['Geo box width']?.[0] || 0.3;
+    const d = dims[1] || e.q.Height?.[0] || e.q['Geo box height']?.[0] || 0.6;
+    const hasSoffit = Object.keys(e.q).some(k => k.startsWith('FW soffit'));
+    if (!hasSoffit) {
+      const soffit = e.q['Geo bottom area']?.[0] || (len > 0 ? b * len : 0);
+      if (soffit > 0) e.q['FW soffit'] = [soffit, 'm2'];
+    }
+    const hasSides = Object.keys(e.q).some(k => k === 'FW sides' || k.startsWith('FW wide'));
+    if (!hasSides) {
+      const sides = e.q['Geo side area']?.[0] || (len > 0 ? 2 * d * len : 0);
+      if (sides > 0) e.q['FW sides'] = [sides, 'm2'];
+    }
+  } else if (kind === 'column') {
+    const hasSides = Object.keys(e.q).some(k => k === 'FW sides' || k.startsWith('FW wide'));
+    if (!hasSides) {
+      const h = e.q['Geo box height']?.[0] || e.q.Height?.[0] || (e.bb ? Math.abs(e.bb[5] - e.bb[2]) : 3);
+      const dims = dimsOf(e.type);
+      const perim = e.q.Perimeter?.[0] || (dims.length >= 2 ? 2 * (dims[0] + dims[1]) : (e.bb ? 2 * (Math.abs(e.bb[3] - e.bb[0]) + Math.abs(e.bb[4] - e.bb[1])) : 1.6));
+      if (perim > 0 && h > 0) e.q['FW sides'] = [perim * h, 'm2'];
+    }
+  } else if (kind === 'wall') {
+    const h = e.q.Height?.[0] || e.q['Geo box height']?.[0] || (e.bb ? Math.abs(e.bb[5] - e.bb[2]) : 3);
+    const hasSides = Object.keys(e.q).some(k => k === 'FW wide sides' || k === 'FW sides');
+    if (!hasSides) {
+      const area = e.q.Area?.[0] || (e.bb ? Math.max(Math.abs(e.bb[3] - e.bb[0]), Math.abs(e.bb[4] - e.bb[1])) * h : 0);
+      if (area > 0) {
+        e.q['FW wide sides'] = [2 * area, 'm2'];
+        e.q['FW sides'] = [2 * area, 'm2'];
+      }
+    }
+    const hasEnds = Object.keys(e.q).some(k => k === 'FW narrow length' || k === 'FW narrow sides');
+    if (!hasEnds && h > 0) {
+      e.q['FW narrow length'] = [2 * h, 'm'];
+      e.q['FW narrow sides'] = [2 * h * thk, 'm2'];
+    }
+  } else if (['footing', 'pilecap', 'raft'].includes(kind)) {
+    const h = e.q['Geo box height']?.[0] || e.q.Height?.[0] || (e.bb ? Math.abs(e.bb[5] - e.bb[2]) : 0.5);
+    const perim = e.q.Perimeter?.[0] || (e.bb ? 2 * (Math.abs(e.bb[3] - e.bb[0]) + Math.abs(e.bb[4] - e.bb[1])) : 0);
+    const hasSides = Object.keys(e.q).some(k => k === 'FW sides' || k.startsWith('FW wide') || k.startsWith('FW narrow'));
+    if (!hasSides && perim > 0 && h > 0) {
+      e.q['FW sides'] = [perim * h, 'm2'];
+      if (h <= 0.5) e.q['FW narrow length'] = [perim, 'm'];
+      else e.q['FW wide sides'] = [perim * h, 'm2'];
+    }
+    const aog = e.q['Area on ground']?.[0] || e.q['Geo bottom area']?.[0] || e.q.Area?.[0] || (e.bb ? Math.abs(e.bb[3] - e.bb[0]) * Math.abs(e.bb[4] - e.bb[1]) : 0);
+    if (!e.q['Area on ground'] && aog > 0) e.q['Area on ground'] = [aog, 'm2'];
+  }
 }
 export const KIND_LABEL = { pile: 'Piles', pilecap: 'Pile caps', footing: 'Footings', raft: 'Raft', groundbeam: 'Ground beams', beam: 'Beams', column: 'Columns',
   slab: 'Suspended slabs', groundslab: 'Ground slabs', roofslab: 'Roof slabs', wall: 'Walls', stair: 'Stairs and landings', other: 'Other' };

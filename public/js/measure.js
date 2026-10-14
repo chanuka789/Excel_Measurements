@@ -6,6 +6,7 @@ import { selectIds, update } from './model.js';
 import { mountQs } from './qsui.js';
 import { filterIds } from './filter.js';
 import { createStructureGroups } from './actions.js';
+import { enrichElementQs } from './rules.js';
 
 export const evaluate = (spec) => evaluateSpec(spec, S.byId);
 
@@ -18,6 +19,7 @@ const WALL_CATS = /walls?$/i;
  * default 0.5 m2, the usual rule for finishes).
  */
 export function computeDerived() {
+  S.E?.forEach(enrichElementQs);
   const thr = Number(S.settings.openingThreshold ?? 0.5);
   const openings = S.E.filter(e => OPENING_CATS.test(e.cat) && e.bb);
   const walls = S.E.filter(e => WALL_CATS.test(e.cat) && e.bb);

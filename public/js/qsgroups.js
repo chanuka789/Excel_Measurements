@@ -4,7 +4,7 @@
 //   Section C - Concrete works \ Substructure | Frame | Superstructure | Roof
 // Pure module: the AI action, the Measure tab and the tests all use it, so they give the same groups.
 import { keyOf, evaluate } from './engine.js';
-import { KIND_LABEL, kindOf, materialOf, qsSetup, guessGroundLevel, steelMass } from './rules.js';
+import { KIND_LABEL, kindOf, materialOf, qsSetup, guessGroundLevel, steelMass, elementThickness, enrichElementQs } from './rules.js';
 import { structuralSpecs } from './qsitems.js';
 
 export const POMI_SECTIONS = [
@@ -24,7 +24,7 @@ const SINGULAR = { slab: 'suspended slab', groundslab: 'ground slab', roofslab: 
 export function elementGroup(e, kind, gl) {
   if (SUB.has(kind)) return 'Substructure';
   if (kind === 'column' || kind === 'beam') return 'Frame';
-  if (kind === 'roofslab') return 'Roof';
+  if (kind === 'roofslab' || /roof/i.test(e.cat || '') || /roof/i.test(e.level || '')) return 'Roof';
   if (kind === 'wall') { const top = e.q?.['Top level']?.[0]; if (top != null && gl != null && top <= gl + 0.01) return 'Substructure'; }
   return 'Superstructure';
 }
@@ -32,7 +32,7 @@ export function elementGroup(e, kind, gl) {
 export function sectionOf(mat) {
   return sectionName(mat === 'steel' ? 'E' : mat === 'timber' ? 'F' : mat === 'masonry' ? 'D' : 'C');
 }
-const mm = (e) => { const t = e.q?.['Thickness (geometry)']?.[0]; return t ? Math.round(t * 1000) : null; };
+export const mm = (e) => { const t = elementThickness(e); return t ? Math.round(t * 1000) : null; };
 
 /** Turn a take-off spec into dimension-group custom quantities (formula references expanded, constants as variables). */
 export function specToGroupProps(spec, byId, { keepConcrete = 'auto' } = {}) {
@@ -73,6 +73,7 @@ export function structureGroupPlan(E, byId, { ids = null, set, setup = {}, root 
   const ruleSet = set || S.ruleSet;
   const gl = S.groundLevel ?? guessGroundLevel(E) ?? 0;
   const els = (ids ? ids.map(id => byId.get(id)).filter(Boolean) : E);
+  for (const e of els) enrichElementQs(e);
   const buckets = new Map();
   for (const e of els) {
     const mat = materialOf(e), kind = kindOf(e);

@@ -5,6 +5,7 @@
 // props: { display, quantity, multiplier, width, height, offset, custom:[{label,unit,expr}], variables:[{name,value,unit}],
 //          measured:[{id,label,value,unit,sign,multiplier}], posColor, negColor, zone, ... }
 import { keyOf } from './engine.js';
+import { enrichElementQs } from './rules.js';
 
 export const MTYPES = ['Count', 'Length', 'Area', 'Volume'];
 export const UNIT = { Count: 'nr', Length: 'm', Area: 'm2', Volume: 'm3' };
@@ -116,7 +117,12 @@ export function groupToSpec(g, byId, opts = {}) {
   // custom quantities: {Qty}, {Base}, {Width}, {Height}, {Multiplier}, variables and any BIM quantity of the elements
   const known = new Set([...inputs, ...constants, ...formulas].map(c => c.key));
   const bimKeys = new Map();
-  ids.forEach(id => Object.entries(byId.get(id).q || {}).forEach(([n, [, u]]) => { if (!bimKeys.has(keyOf(n))) bimKeys.set(keyOf(n), { n, u }); }));
+  ids.forEach(id => {
+    const e = byId.get(id);
+    if (!e) return;
+    enrichElementQs(e);
+    Object.entries(e.q || {}).forEach(([n, [, u]]) => { if (!bimKeys.has(keyOf(n))) bimKeys.set(keyOf(n), { n, u }); });
+  });
   for (const [i, c] of (p.custom || []).entries()) {
     let expr = String(c.expr).replace(/\{(Quantity|Qty)\}/g, qtyRef).replace(/\{(Length|Area|Volume|Count)\}/g, (m, k) => (k === g.mtype || (k === 'Count' && g.mtype === 'Count') ? qtyRef : m));
     for (const [, k] of expr.matchAll(/\{([A-Za-z_]\w*)\}/g)) {

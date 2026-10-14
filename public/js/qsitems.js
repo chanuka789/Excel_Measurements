@@ -2,7 +2,7 @@
 // related item in one table: concrete, formwork, reinforcement, waterproofing, worded and split by the chosen rule
 // set (POMI, NRM2, NRM1). Pure module: used by the task pane, the 3D window and the AI, so all give the same numbers.
 import { keyOf } from './engine.js';
-import { RULES, LIMITS, KIND_LABEL, NRM1_OF_KIND, kindOf, materialOf, qsSetup, guessGroundLevel, steelMass } from './rules.js';
+import { RULES, LIMITS, KIND_LABEL, NRM1_OF_KIND, kindOf, materialOf, qsSetup, guessGroundLevel, steelMass, enrichElementQs } from './rules.js';
 
 const BAND_ORDER = ['0-3', '3-4.5', '4.5-6', '6-7.5', '7.5-9', '9-10.5', '10.5-12', '12-13.5', '13.5-15', '>15'];
 const bandText = (b) => (b.startsWith('>') ? `propping height over ${b.slice(1)} m` : `propping height ${b.replace('-', ' to ')} m`);
@@ -20,6 +20,7 @@ export function structuralSpecs(ids, byId, opts = {}) {
   const groups = new Map();
   for (const id of ids) {
     const e = byId.get(id); if (!e) continue;
+    enrichElementQs(e);
     const mat = materialOf(e), kind = mat === 'steel' ? 'steel' : mat === 'precast' ? 'precast' : kindOf(e);
     if (!groups.has(kind)) groups.set(kind, []);
     groups.get(kind).push(e);

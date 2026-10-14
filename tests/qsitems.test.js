@@ -124,3 +124,52 @@ test('structural dimension groups: one group per element type and thickness, all
   assert.ok(Math.abs(steel['Structural steel members'] - 0.052) < 1e-9);
   assert.equal(new Set(plan.map(g => g.name)).size, plan.length);                        // no duplicate groups
 });
+
+test('dimension groups from raw BIM models: slabs and walls split by thickness, roof folder created, formwork generated without precomputed FW data', async () => {
+  const { structureGroupPlan } = await import('../public/js/qsgroups.js');
+  const { groupToSpec, groupTotal } = await import('../public/js/dims.js');
+
+  // Raw BIM elements without 'Thickness (geometry)' or 'FW ' properties
+  const rawElements = [
+    el(101, 'Floors', 'Generic Floor 200mm', { 'Volume': 10, 'Area': 50, 'Perimeter': 30 }),
+    el(102, 'Floors', 'Slab 350', { 'Volume': 17.5, 'Area': 50, 'Perimeter': 30 }),
+    el(103, 'Walls', 'Basic Wall: Retaining 300mm Concrete', { 'Volume': 9, 'Area': 30, 'Length': 10, 'Height': 3 }, { props: { conc, Width: 0.3 } }),
+    el(104, 'Roofs', 'Flat Roof 250mm', { 'Volume': 12.5, 'Area': 50, 'Perimeter': 30 }, { level: 'Roof' }),
+    el(105, 'Floors', 'Roof Slab 200', { 'Volume': 8, 'Area': 40, 'Perimeter': 26 }, { level: 'Roof' }),
+  ];
+  const rawById = new Map(rawElements.map(e => [e.id, e]));
+
+  const plan = structureGroupPlan(rawElements, rawById, { set: 'NRM2' });
+  const where = Object.fromEntries(plan.map(g => [g.name, g.path.join(' > ')]));
+
+  // 1. Slabs and walls split by thickness
+  assert.equal(where['200 mm suspended slab'], 'Section C - Concrete works > Superstructure');
+  assert.equal(where['350 mm suspended slab'], 'Section C - Concrete works > Superstructure');
+  assert.equal(where['300 mm wall'], 'Section C - Concrete works > Superstructure');
+
+  // 2. Roof dimension groups created in Roof folder
+  assert.equal(where['250 mm roof slab'], 'Section C - Concrete works > Roof');
+  assert.equal(where['200 mm roof slab'], 'Section C - Concrete works > Roof');
+
+  // 3. Formwork generated and present in the dimension groups
+  const asGroup = (g) => ({ id: 'g' + g.name, name: g.name, mtype: g.mtype, props: g.props, items: g.ids.map(id => ({ element_id: id, sign: 1, multiplier: 1 })) });
+  const tot = (g) => { const sp = groupToSpec(asGroup(g), rawById); const ev = evaluate(sp, rawById); return Object.fromEntries(sp.formulas.map(f => [f.label, ev.tot[f.key]])); };
+
+  const slab200 = plan.find(g => g.name === '200 mm suspended slab');
+  const t200 = tot(slab200);
+  assert.equal(groupTotal(asGroup(slab200), rawById).total, 10);
+  assert.ok(t200['Soffits of horizontal work, propping height 0 to 3 m'] > 0);
+  assert.ok(t200['Edges of horizontal work, not exceeding 500 mm high'] > 0);
+
+  const wall300 = plan.find(g => g.name === '300 mm wall');
+  const twall = tot(wall300);
+  assert.equal(groupTotal(asGroup(wall300), rawById).total, 9);
+  assert.ok(twall['Walls, vertical'] > 0);
+
+  const roof250 = plan.find(g => g.name === '250 mm roof slab');
+  const troof = tot(roof250);
+  assert.equal(groupTotal(asGroup(roof250), rawById).total, 12.5);
+  assert.ok(troof['Soffits of horizontal work, propping height 0 to 3 m'] > 0);
+  assert.ok(troof['Waterproofing, horizontal (flat), roof'] > 0);
+});
+
