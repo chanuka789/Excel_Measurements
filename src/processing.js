@@ -105,7 +105,7 @@ export async function processVersion(versionId) {
 
 /** Daily backup: every table as gzipped JSON in the bucket (backups/YYYY-MM-DD.json.gz). */
 export async function backupDatabase() {
-  const tables = ['users', 'projects', 'project_members', 'models', 'model_versions', 'drawings', 'takeoffs', 'audit', 'settings', 'views', 'templates', 'zones', 'kb_rules', 'ai_usage', 'exports'];
+  const tables = ['users', 'projects', 'project_members', 'models', 'model_versions', 'drawings', 'takeoffs', 'audit', 'settings', 'views', 'templates', 'zones', 'kb_rules', 'ai_usage', 'exports', 'folders', 'dim_groups', 'dim_items'];
   const out = { at: new Date().toISOString() };
   for (const t of tables) out[t] = await q(`SELECT * FROM ${t}`);
   const key = `backups/${out.at.slice(0, 10)}.json.gz`;

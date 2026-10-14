@@ -100,6 +100,25 @@ const MIGRATIONS = [
      id BIGSERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now(), source TEXT NOT NULL, ref TEXT,
      user_id INT REFERENCES users(id) ON DELETE SET NULL, message TEXT NOT NULL, stack TEXT, url TEXT, detail JSONB);
    CREATE INDEX IF NOT EXISTS errors_at ON errors (at DESC);`,
+  // 4: CostX-style project tree: folders for drawings/models and for dimension groups, dimension groups and their dimensions
+  `CREATE TABLE IF NOT EXISTS folders (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+     kind TEXT NOT NULL CHECK (kind IN ('drawing','dim')), parent_id UUID REFERENCES folders(id) ON DELETE CASCADE,
+     name TEXT NOT NULL, sort INT NOT NULL DEFAULT 0, created_by INT REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+   CREATE INDEX IF NOT EXISTS folders_project ON folders (project_id, kind);
+   ALTER TABLE models ADD COLUMN IF NOT EXISTS folder_id UUID REFERENCES folders(id) ON DELETE SET NULL;
+   ALTER TABLE drawings ADD COLUMN IF NOT EXISTS folder_id UUID REFERENCES folders(id) ON DELETE SET NULL;
+   CREATE TABLE IF NOT EXISTS dim_groups (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+     folder_id UUID REFERENCES folders(id) ON DELETE SET NULL, name TEXT NOT NULL, mtype TEXT NOT NULL DEFAULT 'Count',
+     props JSONB NOT NULL DEFAULT '{}', standard BOOLEAN NOT NULL DEFAULT false, created_by INT REFERENCES users(id),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+   CREATE INDEX IF NOT EXISTS dim_groups_project ON dim_groups (project_id);
+   CREATE TABLE IF NOT EXISTS dim_items (
+     id BIGSERIAL PRIMARY KEY, group_id UUID NOT NULL REFERENCES dim_groups(id) ON DELETE CASCADE, element_id BIGINT NOT NULL,
+     version_id UUID REFERENCES model_versions(id) ON DELETE SET NULL, sign SMALLINT NOT NULL DEFAULT 1,
+     multiplier DOUBLE PRECISION NOT NULL DEFAULT 1, added_by INT REFERENCES users(id), added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     UNIQUE (group_id, element_id));`,
 ];
 
 /** Apply new migrations once, even when the API and the worker start at the same time (advisory lock). */

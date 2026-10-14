@@ -46,6 +46,16 @@ After adding the add-in, Excel shows a **DWFx Measure** tab on the ribbon:
    revision (in place, keeps formulas and your assumption values, writes a Change log sheet), **BOQ sheet** (linked
    to named take-off totals; rates you type are kept when you rebuild; optional AI descriptions), **audit PDF**.
 
+8. **3D window** (CostX style): project tree on the left with **folders** for drawings and models and for
+   **dimension groups** (measured items: Count, Length, Area or Volume, with multiplier, width, height, offset, custom
+   quantities, variables, BIM dimensions and measured dimensions, standard groups library). Right-click an object for
+   Object Properties, Create Dimension Group, Show Only / Hide / Import Objects In (category, family, type, object,
+   selection, custom, area), Hide Geometry (H), Show All, Zoom Area / Extents, Reset View, Default Views, Hide Images.
+   Groups and folders go to Excel as schedules with the details you choose for each row.
+
+**One table for the same elements**: concrete, formwork, reinforcement, waterproofing… measured on exactly the same
+elements (Measure tab, templates, AI or dimension groups) are added as new columns to the existing table.
+
 ## Exact geometry quantities
 Every element with 3D geometry gets quantities measured from its faces: **Geo volume** (closed solids only),
 **Geo bottom area** (soffits, undersides), **Geo top area**, **Geo side area** (all vertical faces: formwork to

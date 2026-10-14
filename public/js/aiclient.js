@@ -3,6 +3,7 @@ import { $, esc, App, api, status } from './core.js';
 import { dimsOf, fmt } from './engine.js';
 import { S } from './state.js';
 import { evaluate, specFromPlanGroup } from './measure.js';
+import { mergeList } from './dims.js';
 import { selectIds } from './model.js';
 
 /** Small client-side summary, only used for quick-open models that are not on the server. */
@@ -46,8 +47,10 @@ export function renderPlan({ plan = {}, model, provider, steps = [] }) {
   if (steps.length) out.insertAdjacentHTML('beforeend', `<details class="box"><summary>How the AI worked it out (${steps.length} step${steps.length > 1 ? 's' : ''})</summary>
     <ol class="steps">${steps.map(s => `<li><strong>${esc(stepLabel(s.tool))}</strong> ${esc(s.result || '')}</li>`).join('')}</ol></details>`);
   const groups = plan.groups || [];
-  groups.forEach((g) => {
-    const spec = specFromPlanGroup(g);
+  // concrete, formwork, reinforcement, waterproofing... of the same elements become one table
+  const specs = mergeList(groups.map(g => specFromPlanGroup(g)));
+  specs.forEach((spec) => {
+    const g = { filter: spec.filter };
     const card = document.createElement('div'); card.className = 'card ai-card'; out.append(card);
     const draw = () => {
       let ev, err = '';
@@ -56,6 +59,7 @@ export function renderPlan({ plan = {}, model, provider, steps = [] }) {
       const first = ev?.rows[0];
       card.innerHTML = `<h3>${esc(spec.name)}</h3>
         <div>${spec.ids.length} element${spec.ids.length === 1 ? '' : 's'} found${spec.by ? ` · sub-totals by ${esc(spec.by)}` : ''}</div>
+        ${(spec.parts || []).length > 1 ? `<div class="hint">One table for the same elements: ${spec.parts.map(esc).join(', ')}.</div>` : ''}
         ${spec.note ? `<div class="note">Method: ${esc(spec.note)}</div>` : ''}
         ${spec.formulas.map(f => `<div><code>${esc(f.label)} (${esc(f.unit)}) = ${esc(f.expr)}</code></div>`).join('')}
         ${spec.constants.length ? '<div class="note">Assumptions (you can also change them later in the yellow Excel cells):</div>' + spec.constants.map((c, i) =>
@@ -72,7 +76,7 @@ export function renderPlan({ plan = {}, model, provider, steps = [] }) {
       const add = card.querySelector('[data-a=add]');
       if (add) add.onclick = async () => {
         try {
-          if (S.inExcel) await App.addToExcel(spec); else { S.takeoff.push(spec); App.saveTakeoff?.(spec); status(`Added "${spec.name}" to the take-off list.`, 'ok'); }
+          if (S.inExcel) await App.addToExcel(spec); else await App.addToList(spec);
           add.disabled = true; add.textContent = 'Added';
         } catch { /* status already shows the error */ }
       };

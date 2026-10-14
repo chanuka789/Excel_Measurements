@@ -43,6 +43,7 @@
     <li><a href="#view">The 3D view</a></li>
     <li><a href="#select">Selecting elements and zones</a></li>
     <li><a href="#measure">Measuring</a></li>
+    <li><a href="#dimgroups">3D window: project tree and dimension groups</a></li>
     <li><a href="#ai">AI assistant</a></li>
     <li><a href="#review">Checks</a></li>
     <li><a href="#revisions">Revisions</a></li>
@@ -90,7 +91,7 @@
   <figure><video controls preload="none" poster="media/02-3d-tools.jpg?v=2" src="media/02-3d-tools.webm?v=2"></video><figcaption>Video, 1.5 minutes: views, section box, level plan, box select, measuring, colours and isolate.</figcaption></figure>
   <table class="ref">
     <tr><th>Tool</th><th>What it does</th></tr>
-    <tr><td>Mouse</td><td>Left drag: orbit. Right drag: pan. Wheel: zoom. Click: select. <kbd>Ctrl</kbd>+click: add to the selection. Double-click: zoom to an element. Right-click: properties.</td></tr>
+    <tr><td>Mouse</td><td>Left drag: orbit. Right drag: pan. Wheel: zoom. Click: select. <kbd>Ctrl</kbd>+click: add to the selection. Double-click: zoom to an element. Right-click: properties (in the task pane) or the object menu (in the 3D window, see <a href="#dimgroups">section 7</a>).</td></tr>
     <tr><td>View cube and Views</td><td>Click a face of the cube, or use Views for top, front, sides and isometric. Tick <em>Orthographic</em> for a drawing-like view.</td></tr>
     <tr><td>Section</td><td>Cut the model with a box; drag the sliders. <em>Fit to selection</em> cuts around the selected elements.</td></tr>
     <tr><td>Plan</td><td>Top view of one level, cut at a height you choose (default 1.2 m). <em>Back to 3D</em> returns.</td></tr>
@@ -130,8 +131,44 @@
     <tr><td>Openings to deduct</td><td>Door and window area in a wall above the project threshold</td></tr>
   </table>
   <div class="tip">In Excel, yellow cells are assumptions (for example slab thickness). Change them and every row recalculates. Green column headers are formula columns.</div>
+  <div class="tip"><strong>One table for the same elements.</strong> When you add concrete, formwork, reinforcement, waterproofing… for exactly the same elements (from the Measure tab, a template, the AI or a dimension group), the add-in adds the new columns to the table that already holds those elements instead of starting a new table. Different element sets still get their own tables.</div>
 
-  <h2 id="ai">7. AI assistant</h2>
+  <h2 id="dimgroups">7. 3D window: project tree and dimension groups</h2>
+  <figure><video controls preload="none" poster="media/06-dimension-groups.jpg?v=1" src="media/06-dimension-groups.webm?v=1"></video><figcaption>Video, 1.7 minutes: folders, the object menu, dimension groups with custom quantities, import, deductions and one Excel table for concrete and formwork.</figcaption></figure>
+  <p>Press <strong>3D window</strong> (ribbon or 3D toolbar). The window works like CostX: the <strong>project tree</strong> on the left, the model in the middle, drawings and properties on the right (<strong>Drawings and properties</strong> button). Drag the grey bars to resize.</p>
+  <h3>Drawings, Model and Views tabs (top left)</h3>
+  <ul>
+    <li><strong>Drawings</strong>: your folders, 3D models (with their versions and DWFx sheets) and drawings. Right-click for <em>New Folder</em>, <em>Rename Folder</em>, <em>Delete Folder</em> (the contents move up, nothing is lost) and <em>Upload Drawings Here</em>. Move a model or drawing with <em>Change Folder…</em> or drag it onto a folder. Double-click a version to open it (the task pane follows); double-click a drawing to see it on the right.</li>
+    <li><strong>Model</strong>: Category › Family › Type with the number of objects. Click to select; right-click for Show Only, Hide, Import and Create Dimension Group.</li>
+    <li><strong>Views</strong>: the team's saved views.</li>
+  </ul>
+  <h3>Right-click an object in 3D</h3>
+  <table class="ref">
+    <tr><th>Command</th><th>What it does</th></tr>
+    <tr><td>Object Properties</td><td>All quantities and properties of the object (right panel).</td></tr>
+    <tr><td>Create Dimension Group</td><td>New group for the object (or the selection, if the object is selected); the objects are imported straight away.</td></tr>
+    <tr><td>Show Only / Hide / Import Objects In ›</td><td>Choose the set: the object's <em>category</em>, <em>family</em>, <em>type</em> or the <em>object</em> itself (with counts), the <em>Current Selection</em>, <em>Custom…</em> (by category, family, type, level or any property) or <em>Area</em> (drag a rectangle). <strong>Import</strong> adds the objects to the <em>current</em> dimension group; objects already in it are skipped.</td></tr>
+    <tr><td>Hide Geometry <kbd>H</kbd></td><td>Hides the object (or the selection). <em>Show All Objects</em> brings everything back.</td></tr>
+    <tr><td>Zoom Area, Zoom Extents, Reset View, Default Views ›</td><td>Zoom to a rectangle, to everything visible, back to the starting view, or to top, bottom, front, back, left, right, isometric.</td></tr>
+    <tr><td>Hide Images</td><td>Hides the faded background objects and the edge lines (press again to show them).</td></tr>
+  </table>
+  <h3>Dimension groups (bottom left)</h3>
+  <p>A dimension group is one measured item, for example <em>Concrete to beams</em> (volume) or <em>IR Ducts</em> (length). Make folders for stages and trades (for example <em>2026-09-25 SD 100% › Irrigation › Ducts</em>). The <strong>Current</strong> group is the one that <em>Import Objects In</em> fills; its objects show in its colour in 3D, and its total shows at the bottom of the window.</p>
+  <table class="ref">
+    <tr><th>Right-click a group</th><th>What it does</th></tr>
+    <tr><td>Expand All / Collapse All</td><td>Opens or closes every folder.</td></tr>
+    <tr><td>Add / Copy Dimension Group…</td><td>New group in the same folder, or a copy (optionally with its dimensions).</td></tr>
+    <tr><td>Edit Dimension Group Properties…</td><td>Name, folder, measurement type (Count, Length, Area, Volume), the BIM quantity it is measured from, default display, multiplier, width, height, offset, Add to GFA, colours, weight unit. Tabs: <em>Custom Quantities</em> (formulas such as <code>{Geo_side_area} + {Geo_bottom_area}</code>), <em>Variables</em> (assumptions such as Waste = 1.05), <em>BIM Dimensions</em> (the objects; untick to remove), <em>Measured Dimensions</em> (values measured in 3D or typed).</td></tr>
+    <tr><td>Edit Variable Properties…</td><td>Opens the Variables tab.</td></tr>
+    <tr><td>Change Folder / Multiplier / Width / Height / Zone / Offset…</td><td>Changes one setting. A length shown as an area uses the height; as a volume, width × height. Offset is added to every length. Zone needs zones in the task pane.</td></tr>
+    <tr><td>Isolate Dimension Group</td><td>Shows only its objects.</td></tr>
+    <tr><td>Delete Dimension Group</td><td>Deletes the group (tables already in Excel stay).</td></tr>
+    <tr><td>Add to Standard Dimension Groups…</td><td>Saves the method (not the objects) to the company library, the <em>Standard</em> folder, to reuse on any project.</td></tr>
+    <tr><td>Add to Excel as Schedule…</td><td>Writes the group to the Take-off sheet with live formulas. Choose the <strong>details</strong> for each row (category, family, type, level, mark and any object property), extra quantities and sub-totals. Right-click a folder for <em>Add Folder to Excel as Schedules…</em>. Keep the task pane open: it writes to the workbook.</td></tr>
+  </table>
+  <p>The <strong>Dimensions</strong> tab lists the dimensions of the current group. Click to select in 3D; right-click to delete, change the multiplier, or make dimensions negative (deductions). <strong>Add measured…</strong> adds the last distance or face area you measured in 3D, or a value you type.</p>
+
+  <h2 id="ai">8. AI assistant</h2>
   <figure><video controls preload="none" poster="media/04-ai.jpg?v=2" src="media/04-ai.webm?v=2"></video><figcaption>Video, 38 seconds: ask the AI, see its working, add the result and check the take-off.</figcaption></figure>
   <ol>
     <li>Open the <strong>AI</strong> tab and describe what to measure, for example <em>"Formwork to beams on Level 1, soffit and sides less a 200 mm slab"</em>, or pick a common request.</li>
@@ -140,7 +177,7 @@
   </ol>
   <p>The AI chooses the method; the add-in calculates every number from the model. The AI receives element names, counts, levels and quantity names, never the file or the 3D geometry. It can be switched off per project.</p>
 
-  <h2 id="review">8. Checks (Review tab)</h2>
+  <h2 id="review">9. Checks (Review tab)</h2>
   <ul>
     <li><strong>Missing data</strong>: elements without 3D, without a level, concrete without a volume, beams without a size in the type name.</li>
     <li><strong>Measured status</strong>: green measured once, purple measured twice or more (possible double count), red not measured.</li>
@@ -148,7 +185,7 @@
     <li><strong>AI take-off check</strong>: a review for missing items, odd values, unit mistakes and double counting.</li>
   </ul>
 
-  <h2 id="revisions">9. Revisions</h2>
+  <h2 id="revisions">10. Revisions</h2>
   <figure><video controls preload="none" poster="media/05-revisions-output.jpg?v=2" src="media/05-revisions-output.webm?v=2"></video><figcaption>Video, 1 minute: restore saved groups, upload a revision, compare, update, BOQ and audit PDF.</figcaption></figure>
   <ol>
     <li>Upload the new DWFx with the <em>same model name</em>, so it becomes the next version, and open it.</li>
@@ -156,14 +193,14 @@
     <li><strong>Update selected groups</strong> re-measures your take-off on the new version by Revit ID. Formulas and your assumption values stay; groups made from a template or the AI also pick up new elements. A <em>Change log</em> sheet records the before and after totals.</li>
   </ol>
 
-  <h2 id="output">10. BOQ and audit PDF</h2>
+  <h2 id="output">11. BOQ and audit PDF</h2>
   <ul>
     <li><strong>Build BOQ sheet</strong>: choose the totals that become BOQ items (final results are ticked by default to avoid double counting). Quantities link to the take-off totals, so the BOQ updates with them. Rates you type are kept when you rebuild. Tick the AI option for item descriptions in your house style.</li>
     <li><strong>Create audit PDF</strong>: method, assumptions, element counts, totals and a 3D picture for every group, saved to the project.</li>
     <li><strong>Project › Saved take-off groups › Restore</strong> rebuilds the Take-off sheet in any workbook.</li>
   </ul>
 
-  <h2 id="first">11. Your first take-off, step by step</h2>
+  <h2 id="first">12. Your first take-off, step by step</h2>
   <ol>
     <li>Ribbon <strong>DWFx Measure › Projects</strong>, sign in.</li>
     <li><strong>New project</strong> › name › <strong>Create project</strong>.</li>
@@ -173,7 +210,7 @@
     <li><strong>Review › Output › Build BOQ sheet</strong>. Type a rate in a yellow cell to see the amount.</li>
   </ol>
 
-  <h2 id="admin">12. For administrators</h2>
+  <h2 id="admin">13. For administrators</h2>
   <ul>
     <li><strong>Users</strong> are lines in the Railway variable <code>APP_USERS</code>: <code>email | full name | role | password hash</code> (role is <em>admin</em> or <em>user</em>). Make the hash in <strong>Admin › Create a password hash</strong>. Changing a password or removing a line signs that user out everywhere.</li>
     <li><strong>AI assistant</strong>: choose the provider and model, the daily limit per user, and run the 50-request QS test set after any change (target 45 of 50).</li>
@@ -182,7 +219,7 @@
     <li><strong>Backups</strong>: the database is backed up every day (last 30 kept); <em>Back up database now</em> makes one immediately. <em>Export ZIP</em> on a project downloads all its files.</li>
   </ul>
 
-  <h2 id="trouble">13. Problems and answers</h2>
+  <h2 id="trouble">14. Problems and answers</h2>
   <table class="ref">
     <tr><th>Problem</th><th>What to do</th></tr>
     <tr><td>The ribbon tab is missing or shows old buttons</td><td>Clear the web add-ins cache (see <a href="#install">Install</a>), restart Excel, add the add-in again. The ribbon needs Microsoft 365 Excel.</td></tr>

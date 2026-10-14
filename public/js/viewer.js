@@ -145,7 +145,7 @@ export class Viewer {
     this.ghostMat = new THREE.MeshLambertMaterial({ color: '#b9bfc4', transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide, flatShading: true });
     this.edgeMat = new THREE.LineBasicMaterial({ color: '#2f363c', transparent: true, opacity: 0.38 });
     this.solid = new THREE.Mesh(this.geoSolid, this.solidMat);
-    this.ghost = new THREE.Mesh(this.geoGhost, this.ghostMat); this.ghost.renderOrder = 2;
+    this.ghost = new THREE.Mesh(this.geoGhost, this.ghostMat); this.ghost.renderOrder = 2; this.ghost.visible = !this.imagesHidden;
     this.edges = new THREE.LineSegments(this.geoEdge, this.edgeMat); this.edges.renderOrder = 1;
     for (const o of [this.solid, this.ghost, this.edges]) { o.frustumCulled = false; this.root.add(o); }
     // picking geometry: every triangle, with a BVH built on first use
@@ -196,7 +196,7 @@ export class Viewer {
       const id = this.E.id[k];
       if (id === -1 || !isVisible(id)) continue;
       const sel = selected.has(id);
-      if (sel || (!anySel && !xray)) solidK.push(k); else ghostK.push(k);
+      if (sel || (!anySel && !xray) || state.solid?.(id)) solidK.push(k); else ghostK.push(k);   // solid(): e.g. the current dimension group
       tmp.set(sel ? PICK : colorOf(id) || '#8a9aa6');
       if (k === this.hoverK && !sel) tmp.lerp(new THREE.Color('#ffffff'), 0.35);
       const packed = (Math.round(tmp.r * 255) << 16) | (Math.round(tmp.g * 255) << 8) | Math.round(tmp.b * 255);
@@ -226,7 +226,7 @@ export class Viewer {
   updateEdgeVisibility() {
     if (!this.edges) return;
     // edges on demand: big models only show outlines once zoomed in
-    let show = this.edgesWanted;
+    let show = this.edgesWanted && !this.imagesHidden;
     if (show && this.visibleTris > 400000 && this.bounds) {
       const r = this.bounds.getSize(new THREE.Vector3()).length() / 2;
       const d = this.camera.isOrthographicCamera ? r / this.camera.zoom : this.camera.position.distanceTo(this.controls.target);
@@ -430,6 +430,7 @@ export class Viewer {
       const moved = Math.hypot(e.clientX - d.x, e.clientY - d.y);
       if (d.cube) { if (moved < 5) { const face = this.cubeHit(e); if (face) this.setView(face); } return; }
       if (this.mode === 'box' && moved > 4) { this.rect.hidden = true; this.boxSelect(d, e); return; }
+      if (this.mode === 'box' && this.areaCb) { this.rect.hidden = true; return; }          // a click without a drag: keep waiting
       this.rect.hidden = true;
       if (moved > 4) return;
       const add = e.ctrlKey || e.metaKey || e.shiftKey;
@@ -451,7 +452,7 @@ export class Viewer {
       const views = { 1: 'top', 2: 'front', 3: 'right', 4: 'back', 5: 'left', 6: 'bottom', 7: 'iso' };
       if (views[e.key]) { this.setView(views[e.key]); e.preventDefault(); }
       else if (e.key === 'f' || e.key === 'F') { this.fit(); e.preventDefault(); }
-      else if (e.key === 'Escape') { this.setMode('orbit'); }
+      else if (e.key === 'Escape') { if (this.areaCb) this.cancelArea(); else this.setMode('orbit'); }
       else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '-', '='].includes(e.key)) {
         const off = this.camera.position.clone().sub(this.controls.target);
         const s = new THREE.Spherical().setFromVector3(this.up === 1 ? off : new THREE.Vector3(off.x, off.z, -off.y));
@@ -511,10 +512,19 @@ export class Viewer {
       if (behind) continue;
       const inside = mnx >= x0 && mxx <= x1 && mny >= y0 && mxy <= y1;
       const touch = mxx >= x0 && mnx <= x1 && mxy >= y0 && mny <= y1;
-      if (crossing ? touch : inside) ids.push(this.E.id[k]);
+      if (crossing || this.areaCrossing ? touch : inside) ids.push(this.E.id[k]);
     }
+    if (this.areaCb) { const cb = this.areaCb; this.areaCb = null; this.areaCrossing = false; this.setMode(this.areaPrev || 'orbit'); cb(ids); return; }
     this.cb.onBoxSelect?.(ids, b.ctrlKey || b.metaKey || b.shiftKey);
   }
+  /** One rectangle drawn by the user, then cb(ids). crossing: every element the rectangle touches. Esc cancels. */
+  pickArea(cb, { crossing = false } = {}) {
+    this.areaPrev = this.mode === 'box' ? 'orbit' : this.mode;
+    this.areaCb = cb; this.areaCrossing = crossing; this.setMode('box');
+  }
+  cancelArea() { if (this.areaCb) { this.areaCb = null; this.areaCrossing = false; this.setMode(this.areaPrev || 'orbit'); } }
+  /** "Hide Images": the faded (ghost) objects and the edge lines. */
+  setImagesHidden(on) { this.imagesHidden = Boolean(on); if (this.ghost) this.ghost.visible = !on; this.updateEdgeVisibility(); this.dirty = true; }
 
   // ------------------------------------------------------------------ measure tools
   snap(h, e) {
@@ -552,7 +562,7 @@ export class Viewer {
       this.mText = `Distance ${d.toFixed(3)} m · horizontal ${dh.toFixed(3)} m · vertical ${dv.toFixed(3)} m`;
       this.mAt = pts[0].clone().add(pts[1]).multiplyScalar(0.5);
     } else { this.mText = 'Click the second point'; this.mAt = pts[0].clone(); }
-    this.cb.onMeasure?.(this.mText);
+    this.cb.onMeasure?.(this.mText, pts.length === 2 ? { distance: pts[0].distanceTo(pts[1]) } : null);
     this.dirty = true;
   }
   areaClick(h) {

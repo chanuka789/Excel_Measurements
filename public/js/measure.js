@@ -124,7 +124,7 @@ export function renderMeasure() {
   const go = async (fnc) => { try { const s = build(); evaluate(s); await fnc(s); } catch (err) { $('mErr').textContent = err.message; } };
   if (S.inExcel) $('toExcel').onclick = () => go((s) => App.addToExcel(s));
   else {
-    $('toList').onclick = () => go(async (s) => { S.takeoff.push(s); App.saveTakeoff?.(s); status(`Added "${s.name}". ${S.takeoff.length} group(s) in the list.`, 'ok'); renderMeasure(); });
+    $('toList').onclick = () => go(async (s) => { await App.addToList(s); renderMeasure(); });
     $('csv') && ($('csv').onclick = downloadCsv);
   }
   $('saveTpl').onclick = () => go(async (s) => saveTemplateDialog(s));
@@ -184,7 +184,7 @@ export function applyTemplate(t, { useSelection = false } = {}) {
   box.querySelectorAll('input[data-c]').forEach(inp => inp.onchange = () => { spec.constants[+inp.dataset.c].value = Number(inp.value) || 0; });
   $('tpShow').onclick = () => selectIds(spec.ids);
   $('tpAdd').onclick = async () => {
-    try { if (S.inExcel) await App.addToExcel(spec); else { S.takeoff.push(spec); App.saveTakeoff?.(spec); status(`Added "${spec.name}".`, 'ok'); } $('tpAdd').disabled = true; $('tpAdd').textContent = 'Added'; }
+    try { if (S.inExcel) await App.addToExcel(spec); else await App.addToList(spec); $('tpAdd').disabled = true; $('tpAdd').textContent = 'Added'; }
     catch (err) { status(err.message, 'bad'); }
   };
   box.scrollIntoView({ block: 'nearest' });

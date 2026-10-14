@@ -210,10 +210,12 @@ async function renderOutput() {
     if (!picks.length) { status('Tick at least one quantity.', 'bad'); return; }
     const items = picks.map(([gi, li], k) => {
       const g = groups[gi], l = g.labels.filter(x => g.totals[x] != null)[li];
-      const col = [...(g.method?.inputs || []), ...(g.method?.formulas || [])].find(c => `${c.label} (${c.unit})` === l);
+      const mcols = [...(g.method?.inputs || []), ...(g.method?.formulas || [])];
+      const byPos = mcols[g.labels.indexOf(l)];       // headings follow the method's column order
+      const col = byPos && `${byPos.label} (${byPos.unit})` === l ? byPos : mcols.find(c => `${c.label} (${c.unit})` === l);
       const unit = (g.units[l] || '').replace('m2', 'm²').replace('m3', 'm³');
       return { item: `${g.ref}.${String.fromCharCode(97 + picks.filter(([x], j) => x === gi && j < k).length)}`, group: g, label: l, unit, heading: g.name,
-        nameKey: col ? `TO_${g.ref}_${col.key}`.replace(/[^A-Za-z0-9_]/g, '_') : `'Take-off'!$${colLetter(7 + g.labels.indexOf(l))}$${g.totalRow}`,
+        nameKey: col ? `TO_${g.ref}_${col.key}`.replace(/[^A-Za-z0-9_]/g, '_') : `'Take-off'!$${colLetter((g.dataStart ?? 7) + g.labels.indexOf(l))}$${g.totalRow}`,
         description: `${g.name}: ${l.replace(/ \([^)]*\)$/, '')}` };
     });
     try {

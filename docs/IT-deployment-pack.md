@@ -51,7 +51,7 @@ Excel (user PC) ──HTTPS──> DWFx Measure server (Railway, EU) ──> Pos
 | Data | Where it is kept | How long |
 |---|---|---|
 | User accounts (email, name, role, password hash) | Database | While the user is listed by the administrator |
-| Projects, team members, take-off methods, saved views, zones, QS rules | Database | Until deleted |
+| Projects, team members, take-off methods, saved views, zones, QS rules, folders, dimension groups | Database | Until deleted |
 | Uploaded DWFx files, processed model data, drawings, audit PDFs | Private storage bucket, per project | Until the version, drawing or project is deleted |
 | Activity log (who uploaded, measured, exported) | Database | Life of the project |
 | Error log | Database | 90 days |

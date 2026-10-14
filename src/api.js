@@ -12,6 +12,7 @@ import { backupDatabase, dataKey } from './processing.js';
 import { login, logout, requireUser, requireAdmin, hashPassword, syncUsers, publicUser } from './auth.js';
 import { json, wrap, clean, safeName, uuidOk, HttpError, fail, need, versionProject, RANK } from './http.js';
 import { registerFeatures } from './features.js';
+import { registerDims } from './dims.js';
 import { loginGuard, loginFailed, loginSucceeded, apiLimit } from './security.js';
 import { recordError } from './monitor.js';
 
@@ -65,7 +66,7 @@ api.get('/projects/:pid', wrap(async (req, res) => {
     q(`SELECT * FROM models WHERE project_id=$1 ORDER BY name`, [pid]),
     q(`SELECT v.id, v.model_id, v.version, v.file_name, v.size, v.status, v.progress, v.error, v.stats, v.note, v.created_at, u.name AS uploaded_by
        FROM model_versions v JOIN models m ON m.id=v.model_id LEFT JOIN users u ON u.id=v.uploaded_by WHERE m.project_id=$1 ORDER BY v.version DESC`, [pid]),
-    q(`SELECT d.id, d.name, d.size, d.content_type, d.created_at, u.name AS uploaded_by FROM drawings d LEFT JOIN users u ON u.id=d.uploaded_by WHERE d.project_id=$1 ORDER BY d.created_at DESC`, [pid]),
+    q(`SELECT d.id, d.name, d.size, d.content_type, d.folder_id, d.created_at, u.name AS uploaded_by FROM drawings d LEFT JOIN users u ON u.id=d.uploaded_by WHERE d.project_id=$1 ORDER BY d.created_at DESC`, [pid]),
     q(`SELECT t.id, t.name, t.version_id, t.created_at, u.name AS created_by, jsonb_array_length(t.spec->'ids') AS elements
        FROM takeoffs t LEFT JOIN users u ON u.id=t.created_by WHERE t.project_id=$1 ORDER BY t.created_at`, [pid]),
   ]);
@@ -185,12 +186,18 @@ api.post('/projects/:pid/drawings', upload.array('files', 20), wrap(async (req, 
   try {
     await need(req, req.params.pid, 'editor');
     if (!req.files?.length) fail(400, 'No files received.');
+    let folder = null;
+    if (req.body?.folderId) {
+      const f = uuidOk(req.body.folderId) ? await one(`SELECT * FROM folders WHERE id=$1`, [req.body.folderId]) : null;
+      if (!f || f.project_id !== req.params.pid || f.kind !== 'drawing') fail(400, 'Folder not found in this project.');
+      folder = f.id;
+    }
     const bad = req.files.find(f => !DRAWING_TYPES.test(f.originalname));
     if (bad) fail(400, `${bad.originalname}: this file type is not accepted. Use PDF, DWFx, DWF, DWG, DXF, images, XLSX or DOCX.`);
     const out = [];
     for (const f of req.files) {
-      const d = await one(`INSERT INTO drawings (project_id, name, size, content_type, storage_key, uploaded_by)
-                           VALUES ($1,$2,$3,$4,'pending',$5) RETURNING *`, [req.params.pid, safeName(f.originalname), f.size, f.mimetype, req.user.id]);
+      const d = await one(`INSERT INTO drawings (project_id, name, size, content_type, storage_key, uploaded_by, folder_id)
+                           VALUES ($1,$2,$3,$4,'pending',$5,$6) RETURNING *`, [req.params.pid, safeName(f.originalname), f.size, f.mimetype, req.user.id, folder]);
       const key = `projects/${req.params.pid}/drawings/${d.id}/${d.name}`;
       await store.putFile(key, f.path, f.mimetype);
       await q(`UPDATE drawings SET storage_key=$2 WHERE id=$1`, [d.id, key]);
@@ -294,6 +301,7 @@ api.get('/admin/system', requireAdmin, wrap(async (req, res) => {
 api.post('/admin/backup', requireAdmin, wrap(async (req, res) => { res.json({ key: await backupDatabase() }); }));
 
 registerFeatures(api);
+registerDims(api);
 
 // ---------------------------------------------------------------- error monitoring
 const clientErrors = new Map();     // per user, per hour: stop a looping page from flooding the log

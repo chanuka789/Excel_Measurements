@@ -6,6 +6,7 @@ import { unitFmt } from './engine.js';
 import { S } from './state.js';
 import { evaluate } from './measure.js';
 import { update } from './model.js';
+import { DEFAULT_DETAILS, detailLabel, detailValue, sameElements, mergeSpecs } from './dims.js';
 
 export const SHEET = 'Take-off', META = '_dwfx', BOQ = 'BOQ', LOG = 'Change log';
 const colL = (n) => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - 1 - m) / 26; } return s; };
@@ -16,42 +17,58 @@ const nameKey = (ref, key) => `TO_${ref}_${key}`.replace(/[^A-Za-z0-9_]/g, '_').
 // ================================================================== build one group block
 function buildBlock(spec, ref, top, evRows) {
   const cols = [...spec.inputs, ...spec.formulas];
-  const colOf = {}; cols.forEach((c, i) => { colOf[c.key] = colL(7 + i); });
-  const width = 7 + cols.length, last = colL(Math.max(width - 1, 6));
+  const manual = spec.manual || [];
+  let details = spec.details || DEFAULT_DETAILS;
+  if (manual.length && !details.length) details = ['type'];             // somewhere to write the measured label
+  const D = 2 + details.length;                                          // first quantity column (0-based)
+  const colOf = {}; cols.forEach((c, i) => { colOf[c.key] = colL(D + i); });
+  const width = D + cols.length, last = colL(Math.max(width - 1, D - 1));
   const blank = () => Array(width).fill('');
   const out = [], kinds = [];
   const push = (row, kind) => { const r = blank(); row.forEach((v, i) => { r[i] = v; }); out.push(r); kinds.push(kind); };
   const rowNo = () => top + out.length;
   push([ref, safeText(spec.name)], 'title');
-  if (spec.note) push(['', 'Method: ' + spec.note], 'note');
+  if (spec.note) push(['', safeText('Method: ' + spec.note)], 'note');
   const constCell = {};
   spec.constants.forEach(c => { constCell[c.key] = `$C$${rowNo()}`; push(['', safeText(c.label), Number(c.value) || 0, safeText(c.unit || '')], 'const'); });
-  push(['Ref', 'Revit ID', 'Category', 'Family', 'Type', 'Level', 'Mark', ...cols.map(c => safeText(`${c.label} (${c.unit})`))], 'head');
+  push(['Ref', 'Revit ID', ...details.map(d => safeText(detailLabel(d))), ...cols.map(c => safeText(`${c.label} (${c.unit})`))], 'head');
   const toXl = (expr, r) => '=' + String(expr).replace(/\{(\w+)\}/g, (m, k) => colOf[k] ? colOf[k] + r : (constCell[k] || '0'));
   const sumCols = cols.filter(c => c.sum !== false && (c.sum || spec.formulas.includes(c)));
   const key = (e) => spec.by === 'type' ? e.type : spec.by === 'level' ? (e.level || '(no level)') : spec.by === 'zone' ? (S.zoneOf.get(e.id) || '(no zone)')
     : spec.by === 'category' ? e.cat : '';
   const parts = new Map();
   evRows.forEach(x => { const k = key(x.e); if (!parts.has(k)) parts.set(k, []); parts.get(k).push(x); });
+  const nParts = parts.size + (manual.length ? 1 : 0);
+  const subtotal = (k, start) => {
+    if (!spec.by || nParts < 2) return;
+    const end = rowNo() - 1, r = blank();
+    r[1] = safeText(`Sub-total ${k}`); sumCols.forEach(c => { r[D + cols.indexOf(c)] = `=SUBTOTAL(9,${colOf[c.key]}${start}:${colOf[c.key]}${end})`; });
+    out.push(r); kinds.push('sub');
+  };
   const firstData = rowNo(); let n = 0;
   for (const [k, list] of [...parts].sort((a, b) => a[0].localeCompare(b[0]))) {
     const start = rowNo();
     list.sort((a, b) => (a.e.level || '').localeCompare(b.e.level || '') || a.e.id - b.e.id).forEach(({ e, v }) => {
       n++; const r = rowNo();
-      push([`${ref}.${n}`, e.id, ...[e.cat, e.fam, e.type, e.level, e.mark].map(safeText), ...spec.inputs.map(i => v[i.key] ?? ''), ...spec.formulas.map(f => toXl(f.expr, r))], 'data');
+      push([`${ref}.${n}`, e.id, ...details.map(d => safeText(String(detailValue(e, d)))), ...spec.inputs.map(i => v[i.key] ?? ''), ...spec.formulas.map(f => toXl(f.expr, r))], 'data');
     });
-    if (spec.by && parts.size > 1) {
-      const end = rowNo() - 1, r = blank();
-      r[1] = `Sub-total ${k}`.replace(/^([=+\-@])/, "'$1"); sumCols.forEach(c => { r[7 + cols.indexOf(c)] = `=SUBTOTAL(9,${colOf[c.key]}${start}:${colOf[c.key]}${end})`; });
-      out.push(r); kinds.push('sub');
-    }
+    subtotal(k, start);
+  }
+  if (manual.length) {
+    const start = rowNo(), at = Math.max(details.indexOf('type'), 0);
+    manual.forEach(m => {
+      n++; const r = rowNo();
+      const det = details.map((d, i) => (i === at ? safeText(String(m.label || 'Measured dimension')) : ''));
+      push([`${ref}.${n}`, '', ...det, ...spec.inputs.map(i => m.v?.[i.key] ?? ''), ...spec.formulas.map(f => toXl(f.expr, r))], 'data');
+    });
+    subtotal('measured dimensions', start);
   }
   const lastData = Math.max(rowNo() - 1, firstData), tr = blank();
-  tr[1] = `Total ${spec.name}`; sumCols.forEach(c => { tr[7 + cols.indexOf(c)] = `=SUBTOTAL(9,${colOf[c.key]}${firstData}:${colOf[c.key]}${lastData})`; });
+  tr[1] = safeText(`Total ${spec.name}`); sumCols.forEach(c => { tr[D + cols.indexOf(c)] = `=SUBTOTAL(9,${colOf[c.key]}${firstData}:${colOf[c.key]}${lastData})`; });
   out.push(tr); kinds.push('total');
   const totalRow = top + out.length - 1;
   const names = sumCols.map(c => ({ name: nameKey(ref, c.key), address: `$${colOf[c.key]}$${totalRow}`, label: c.label, unit: c.unit }));
-  return { out, kinds, cols, colOf, width, last, top, end: totalRow, names, headRow: top + kinds.indexOf('head') };
+  return { out, kinds, cols, colOf, width, last, top, end: totalRow, names, headRow: top + kinds.indexOf('head'), D };
 }
 
 async function ensureSheet(ctx) {
@@ -78,7 +95,9 @@ async function metaSheet(ctx) {
 async function writeMeta(ctx, ref, spec, takeoffId) {
   const m = await metaSheet(ctx);
   const used = m.getUsedRange(true); used.load('values'); await ctx.sync();
-  const method = JSON.stringify({ name: spec.name, by: spec.by, note: spec.note, inputs: spec.inputs, constants: spec.constants, formulas: spec.formulas, filter: spec.filter }).slice(0, 32000);
+  const method = JSON.stringify({ name: spec.name, by: spec.by, note: spec.note, inputs: spec.inputs, constants: spec.constants, formulas: spec.formulas, filter: spec.filter,
+    details: spec.details, manual: spec.manual, parts: spec.parts, base: spec.base, dimGroupId: spec.dimGroupId });
+  if (method.length > 32000) throw new Error(`The method of "${spec.name}" is too large to link to the sheet (more than 32,000 characters).`);
   const row = [ref, takeoffId || '', S.versionId || '', safeText(spec.name), method, new Date().toISOString(), App.currentProjectId?.() || '', S.label || ''];
   let r = used.values.findIndex(v => v[0] === ref);
   r = r > 0 ? r + 1 : used.values.length + 1;
@@ -123,9 +142,16 @@ async function setNames(ctx, sh, names) {
 }
 
 // ================================================================== add a group
-export async function addToExcel(spec, { save = true, takeoffId = null } = {}) {
+export async function addToExcel(spec, { save = true, takeoffId = null, merge = true } = {}) {
   if (!S.inExcel) throw new Error('Open this add-in inside Excel to write the take-off sheet.');
   const { rows: evRows } = evaluate(spec);                     // validates formulas before touching Excel
+  // Same elements as a table already on the sheet (concrete, formwork, rebar, waterproofing... of the same
+  // beams): add the new columns to that table instead of starting another one.
+  if (merge && spec.ids?.length) {
+    const groups = await readGroups();
+    const g = groups.find(x => x.meta?.method && sameElements({ ids: x.ids }, spec));
+    if (g) return mergeIntoGroup(g, spec, { save });
+  }
   let id = takeoffId;
   if (save && !id) id = await saveTakeoff(spec, { quiet: true });
   let ref = '';
@@ -153,6 +179,30 @@ export async function addToExcel(spec, { save = true, takeoffId = null } = {}) {
   if (S.colorBy === 'measured') App.setColorMode?.('measured');
   return ref;
 }
+async function mergeIntoGroup(g, spec, { save }) {
+  const merged = mergeSpecs({ ...g.meta.method, name: g.meta.method.name || g.name, ids: spec.ids }, spec);
+  evaluate(merged);
+  let id = g.meta.takeoffId || null;
+  const p = App.currentProject?.();
+  if (id && p && ['owner', 'editor'].includes(p.my_role)) {
+    try { await api('PATCH', `/takeoffs/${id}`, { spec: merged, versionId: S.versionId }); } catch (err) { status(`Saving to the project failed: ${err.message}`, 'bad'); }
+  } else if (!id && save) id = await saveTakeoff(merged, { quiet: true });
+  try { await updateGroupInPlace(g.ref, merged, { keepAssumptions: true, takeoffId: id }); }
+  catch (err) { status('Excel error: ' + err.message, 'bad'); throw err; }
+  const added = merged.formulas.length + merged.inputs.length - g.meta.method.formulas.length - g.meta.method.inputs.length;
+  status(`"${spec.name}" uses the same ${spec.ids.length} elements as ${g.ref}, so it was added to that table (${added} new column${added === 1 ? '' : 's'}).`, 'ok');
+  if (S.colorBy === 'measured') App.setColorMode?.('measured');
+  return g.ref;
+}
+/** Outside Excel: the take-off list follows the same rule (one group for the same elements). */
+export async function addToList(spec) {
+  const i = S.takeoff.findIndex(x => sameElements(x, spec));
+  if (i < 0) { S.takeoff.push(spec); spec.takeoffId = await saveTakeoff(spec, { quiet: true }); status(`Added "${spec.name}". ${S.takeoff.length} group(s) in the list.`, 'ok'); return; }
+  const merged = mergeSpecs(S.takeoff[i], spec); evaluate(merged);
+  merged.takeoffId = S.takeoff[i].takeoffId; S.takeoff[i] = merged;
+  if (merged.takeoffId) { try { await api('PATCH', `/takeoffs/${merged.takeoffId}`, { spec: merged, versionId: S.versionId }); } catch (err) { status(err.message, 'bad'); return; } }
+  status(`"${spec.name}" has the same elements as "${S.takeoff[i].parts?.[0] || S.takeoff[i].name}", so its columns were added to that group.`, 'ok');
+}
 /** Keep a server copy of the group (editors and owners of the open project). Returns the take-off id. */
 export async function saveTakeoff(spec, { quiet = false } = {}) {
   const p = App.currentProject?.();
@@ -171,9 +221,9 @@ export async function readGroups() {
   return Excel.run(async (ctx) => {
     const sh = ctx.workbook.worksheets.getItemOrNullObject(SHEET); await ctx.sync();
     if (sh.isNullObject) return [];
-    const used = sh.getUsedRangeOrNullObject(false); used.load('rowCount,columnCount,rowIndex'); await ctx.sync();
+    const used = sh.getUsedRangeOrNullObject(false); used.load('rowCount,columnCount,rowIndex,columnIndex'); await ctx.sync();
     if (used.isNullObject) return [];
-    const rng = sh.getRangeByIndexes(0, 0, used.rowIndex + used.rowCount, Math.max(used.columnCount, 8)); rng.load('values'); await ctx.sync();
+    const rng = sh.getRangeByIndexes(0, 0, used.rowIndex + used.rowCount, Math.max(used.columnIndex + used.columnCount, 8)); rng.load('values'); await ctx.sync();
     const meta = await readMeta(ctx);
     const V = rng.values, groups = [];
     for (let i = 0; i < V.length; i++) {
@@ -182,10 +232,17 @@ export async function readGroups() {
       let j = i + 1;
       for (; j < V.length && !/^G\d+$/.test(String(V[j][0])); j++) {
         const a = String(V[j][0]), b = String(V[j][1]);
-        if (a === 'Ref') { g.headRow = j + 1; g.labels = V[j].slice(7).map(String).filter(Boolean); }
+        if (a === 'Ref') {
+          g.headRow = j + 1;
+          const det = meta.get(g.ref)?.method?.details;
+          g.dataStart = Array.isArray(det) ? 2 + (det.length || (meta.get(g.ref).method.manual?.length ? 1 : 0))
+            : Math.max(2, V[j].findIndex((h, k) => k >= 2 && /\([^()]*\)$/.test(String(h))));
+          if (g.dataStart < 2) g.dataStart = 7;
+          g.labels = V[j].slice(g.dataStart).map(String).filter(Boolean);
+        }
         else if (!a && !g.headRow && b && !b.startsWith('Method:')) g.constants.push({ label: b, value: V[j][2], unit: String(V[j][3] || ''), address: `C${j + 1}` });
         else if (a.startsWith(g.ref + '.') && typeof V[j][1] === 'number') g.ids.push(V[j][1]);
-        else if (b.startsWith('Total ')) { g.totalRow = j + 1; g.labels.forEach((l, k) => { const v = V[j][7 + k]; if (v !== '' && v != null) g.totals[l] = v; }); }
+        else if (b.startsWith('Total ') && g.headRow) { g.totalRow = j + 1; g.labels.forEach((l, k) => { const v = V[j][g.dataStart + k]; if (v !== '' && v != null) g.totals[l] = v; }); }
         if (b.startsWith('Method:')) g.note = b.slice(8);
       }
       g.end = g.totalRow || j;
@@ -210,7 +267,7 @@ export async function updateGroupInPlace(ref, spec, { keepAssumptions = true, ta
     const oldRows = g.end - g.top + 1, newRows = b.end - b.top + 1;
     if (newRows > oldRows) sh.getRange(`${g.end + 1}:${g.end + newRows - oldRows}`).insert(Excel.InsertShiftDirection.down);
     if (newRows < oldRows) sh.getRange(`${g.top + newRows}:${g.end}`).delete(Excel.DeleteShiftDirection.up);
-    const clearTo = colL(Math.max(b.width, 7 + g.labels.length) + 2);
+    const clearTo = colL(Math.max(b.width, (g.dataStart || 7) + g.labels.length) + 2);
     sh.getRange(`A${g.top}:${clearTo}${b.end}`).clear(Excel.ClearApplyTo.all);
     sh.getRange(`A${g.top}:${colL(b.width - 1)}${b.end}`).formulas = b.out;
     formatBlock(sh, b, spec);
@@ -363,5 +420,5 @@ export async function selectFromExcel() {
 }
 
 export function initExcel() {
-  Object.assign(App, { addToExcel, saveTakeoff, goToRows, loadMeasured, readGroups, selectFromExcel });
+  Object.assign(App, { addToExcel, addToList, saveTakeoff, goToRows, loadMeasured, readGroups, selectFromExcel });
 }

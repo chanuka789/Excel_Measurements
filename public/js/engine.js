@@ -11,6 +11,8 @@ export function inputValue(e, inp) {
   if (inp.source === 'count') return 1;
   if (inp.source === 'type_dim') return dimsOf(e.type)[inp.index ?? 0] ?? null;
   if (inp.source === 'name_dim') return dimsOf(e.name)[inp.index ?? 0] ?? null;
+  if (inp.source === 'first') { for (const n of inp.names || []) if (e.q?.[n]) return e.q[n][0]; return null; }   // first quantity the element has
+  if (inp.source === 'map') return inp.map?.[e.id] ?? inp.default ?? null;                                          // per-element value, e.g. sign x multiplier
   const q = e.q[inp.name];
   return q ? q[0] : null;
 }

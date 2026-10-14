@@ -4,6 +4,7 @@ import { $, esc, App, api, session, status } from './core.js';
 import { Viewer, parseBin, fromLegacy } from './viewer.js';
 import { Toolbar } from './vtools.js';
 import { dimsOf, fmt } from './engine.js';
+import { groupToSpec, groupTotal } from './dims.js';
 import { S, PALETTE, STATUS_COLORS, REV_COLORS, idsOf, count, isVisible, snapshot, undo, redo } from './state.js';
 
 let V = null, TB = null, win = null;
@@ -494,4 +495,29 @@ function onWindowMessage(ev) {
     S.isolated = Boolean(m.isolated); S.level = m.level || ''; $('level').value = S.level;
     update();
   } else if (m.type === 'props' && S.byId.has(m.id)) showProps(m.id);
+  else if (m.type === 'openVersion' && m.versionId && m.versionId !== S.versionId) { followWindow = true; openVersion(m.versionId, m.label || '').finally(() => { followWindow = false; }); }
+  else if (m.type === 'addSchedule') addSchedules(m);
+}
+let followWindow = false;
+/** The 3D window asks for dimension groups as Excel schedules (only the task pane can write to the workbook). */
+async function addSchedules(m) {
+  const reply = (ok, message) => sendToWindow({ type: 'scheduleDone', ok, message });
+  try {
+    const pid = App.currentProjectId?.(); if (!pid) throw new Error('Open the project in the task pane first.');
+    if (m.versionId && m.versionId !== S.versionId) { followWindow = true; try { await openVersion(m.versionId, m.label || ''); } finally { followWindow = false; } }
+    if (m.versionId !== S.versionId) throw new Error('The task pane could not open the same model version.');
+    const tree = await api('GET', `/projects/${pid}/tree`);
+    const groups = (m.groupIds || []).map(id => tree.groups.find(g => g.id === id)).filter(Boolean);
+    if (!groups.length) throw new Error('Those dimension groups were not found.');
+    const refs = [];
+    for (const g of groups) {
+      const spec = groupToSpec(g, S.byId, m.opts || {});
+      if (!spec.ids.length && !spec.manual.length) continue;
+      if (S.inExcel) refs.push(await App.addToExcel(spec)); else { await App.addToList(spec); refs.push(spec.name); }
+    }
+    if (!refs.length) throw new Error('None of the groups has dimensions in this model.');
+    const tables = [...new Set(refs)];
+    const tot = groups.map(g => { const t = groupTotal(g, S.byId); return `${g.name} ${fmt(t.total, t.unit === 'nr' ? '' : t.unit)} ${t.unit}`; }).join('; ');
+    reply(true, S.inExcel ? `Added to Excel: ${tables.join(', ')} (${tot}).` : `Added to the take-off list (${tot}). Open the add-in in Excel to write the sheet.`);
+  } catch (err) { reply(false, err.message); }
 }

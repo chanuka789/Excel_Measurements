@@ -1,15 +1,18 @@
-// Large 3D window: same viewer and tools as the task pane, with drawings and properties side by side.
-// Selection, isolate and hide stay linked with the task pane (and through it, with the Take-off sheet).
+// Large 3D window (CostX style): project tree with drawings, models and dimension groups on the left, the 3D model in
+// the middle, drawings and properties on the right. Selection, isolate and hide stay linked with the task pane (and
+// through it with the Take-off sheet). Schedules are written to Excel by the task pane.
 import { $, esc, api, session, status } from './core.js';
 import { Viewer, parseBin, fromLegacy } from './viewer.js';
 import { Toolbar } from './vtools.js';
 import { fmt, dimsOf } from './engine.js';
 import { openDrawing, canView } from './drawings.js';
+import { menu, closeMenu, dialog } from './wui.js';
+import { initTree, onProjectLoaded, refresh as refreshTree, importObjects, createGroupFor, currentGroup, onScheduleDone } from './wtree.js';
 
 const W = { ticked: new Set(), hidden: new Set(), isolated: false, level: '', byId: new Map(), E: [], colorMap: null, catColor: new Map(),
-  projectId: null, versionId: null, levels: [], side: 'drawings', project: null, mode: 'pane' };
+  projectId: null, versionId: null, levels: [], side: 'drawings', project: null, mode: 'pane', groupColor: null, drawing: null, measure: null, label: '' };
 const PALETTE = ['#8a9aa6', '#c98a2b', '#2f6fa3', '#b5473a', '#6b5b8c', '#7a8a5a', '#3f8f8a', '#a8794f', '#5d6f8f', '#9a5d7a', '#6f8f3f', '#4f7fa8', '#b0905a', '#7d7d7d'];
-let office = false, V, TB;
+let office = false, V, TB, started = false;
 
 // ------------------------------------------------------------------ messaging with the task pane
 function send(msg) {
@@ -24,14 +27,16 @@ function receive(m) {
   else if (m.type === 'state' && V?.loaded) { W.ticked = new Set(m.ticked || []); W.hidden = new Set(m.hidden || []); W.isolated = Boolean(m.isolated); W.level = m.level || ''; paint(); }
   else if (m.type === 'colors') { W.colorMap = m.map ? new Map(m.map) : null; W.mode = m.mode || 'category'; paint(); }
   else if (m.type === 'model' && m.versionId && m.versionId !== W.versionId) init({ ...m, token: session.get()?.token, projectId: W.projectId });
+  else if (m.type === 'scheduleDone') onScheduleDone(m);
 }
 
 async function init(m) {
   if (m.token) session.set({ ...(session.get() || {}), token: m.token });
-  W.projectId = m.projectId; W.versionId = m.versionId;
+  const newProject = m.projectId && m.projectId !== W.projectId;
+  W.projectId = m.projectId || W.projectId; W.versionId = m.versionId; W.label = m.label || 'Model';
   W.ticked = new Set(m.ticked || []); W.hidden = new Set(m.hidden || []); W.isolated = Boolean(m.isolated); W.level = m.level || '';
   W.colorMap = m.colorMap ? new Map(m.colorMap) : null; W.mode = m.colorMode || 'category';
-  $('wTitle').textContent = m.label || 'Model'; $('wSub').textContent = 'Linked with the task pane: selections show in both.';
+  $('wTitle').textContent = W.label; $('wSub').textContent = 'Linked with the task pane: selections show in both.';
   $('vload').hidden = false; $('vload').textContent = 'Loading the model…';
   try {
     const data = await (await api('GET', `/versions/${m.versionId}/model`, null, { raw: true })).json();
@@ -40,13 +45,14 @@ async function init(m) {
     else if (data.geometry?.meshes) g = fromLegacy(data.geometry);
     W.E = data.elements; W.byId = new Map(W.E.map(e => [e.id, e]));
     const cats = new Map(); W.E.forEach(e => cats.set(e.cat, (cats.get(e.cat) || 0) + 1));
-    [...cats].sort((a, b) => b[1] - a[1]).forEach(([c], i) => W.catColor.set(c, PALETTE[i % PALETTE.length]));
-    if (g) V.load(g);
+    W.catColor.clear(); [...cats].sort((a, b) => b[1] - a[1]).forEach(([c], i) => W.catColor.set(c, PALETTE[i % PALETTE.length]));
+    if (g) V.load(g); else V.clear();
     levels(g);
     paint(); V.fit();
     $('vload').hidden = true;
-    if (W.projectId) { try { W.project = await api('GET', `/projects/${W.projectId}`); } catch { W.project = null; } }
+    if (W.projectId && (newProject || !W.project)) { try { W.project = await api('GET', `/projects/${W.projectId}`); } catch { W.project = null; } }
     renderSide();
+    await onProjectLoaded();
   } catch (err) { $('vload').textContent = 'Could not load the model: ' + err.message; }
 }
 function levels(g) {
@@ -59,17 +65,112 @@ function levels(g) {
 const visible = (id) => !W.hidden.has(id) && (W.isolated ? W.ticked.has(id) : !W.level || W.byId.get(id)?.level === W.level);
 function paint() {
   if (!V?.loaded) return;
-  V.paint({ selected: W.ticked, isVisible: visible, colorOf: (id) => (W.colorMap?.get(id)) || W.catColor.get(W.byId.get(id)?.cat) || '#8a9aa6', xray: V.state.xray });
+  V.paint({ selected: W.ticked, isVisible: visible, xray: V.state.xray, solid: W.groupColor ? (id) => W.groupColor.has(id) : null,
+    colorOf: (id) => W.groupColor?.get(id) || (W.colorMap?.get(id)) || W.catColor.get(W.byId.get(id)?.cat) || '#8a9aa6' });
   TB.sync();
   if (W.side === 'props') renderSide();
+}
+
+// ------------------------------------------------------------------ actions shared by the menus and the tree
+function setIds(ids, fit = false) {
+  W.ticked = new Set(ids.filter(id => W.byId.has(id))); paint();
+  if (fit) V.fit([...W.ticked].filter(id => V.hasGeometry(id)));
+  send({ type: 'pick', ids: [...W.ticked], add: false });
+}
+function showOnly(ids) {
+  const keep = new Set(ids); W.isolated = false; W.level = '';
+  W.hidden = new Set(W.E.map(e => e.id).filter(id => !keep.has(id)));
+  paint(); V.fit(ids.filter(id => V.hasGeometry(id))); syncPane();
+  status(`Showing only ${keep.size} object(s). Right-click > Show All Objects to bring the rest back.`);
+}
+function hideIds(ids) {
+  ids.forEach(id => { W.hidden.add(id); W.ticked.delete(id); });
+  paint(); syncPane(); status(`${ids.length} object(s) hidden. Press Show All Objects to see them again.`);
+}
+function showAll() { W.isolated = false; W.hidden.clear(); W.level = ''; paint(); V.fit(); syncPane(); }
+function isolate(ids) { W.ticked = new Set(ids.filter(id => W.byId.has(id))); W.isolated = true; W.hidden.clear(); paint(); V.fit([...W.ticked].filter(id => V.hasGeometry(id))); syncPane(); }
+/** Colour the current dimension group's objects with its positive / negative colours. */
+function setGroupColors(g) {
+  if (!g) { W.groupColor = null; paint(); return; }
+  const pos = g.props.posColor || '#107c10', neg = g.props.negColor || '#d13438';
+  W.groupColor = new Map(g.items.map(i => [i.element_id, i.sign < 0 ? neg : pos]));
+  paint();
+}
+async function openVersion(vid, label) {
+  if (vid === W.versionId) return;
+  send({ type: 'openVersion', versionId: vid, label });          // the task pane follows, so the link stays exact
+  await init({ versionId: vid, label, projectId: W.projectId, token: session.get()?.token });
+}
+function openDrawingSide(d) {
+  W.drawing = d; W.side = 'drawings';
+  showSidePanel(true); renderSide();
+}
+
+// ------------------------------------------------------------------ the CostX right-click menu on an object
+function setsFor(id) {
+  const e = W.byId.get(id); if (!e) return [];
+  const by = (f) => W.E.filter(f).map(x => x.id);
+  return [
+    { label: `${e.cat} (${by(x => x.cat === e.cat).length})`, ids: () => by(x => x.cat === e.cat) },
+    { label: `${e.fam} (${by(x => x.cat === e.cat && x.fam === e.fam).length})`, ids: () => by(x => x.cat === e.cat && x.fam === e.fam) },
+    { label: `${e.type} (${by(x => x.cat === e.cat && x.fam === e.fam && x.type === e.type).length})`, ids: () => by(x => x.cat === e.cat && x.fam === e.fam && x.type === e.type) },
+    { label: `${e.fam} [${e.id}]`, ids: () => [e.id] },
+  ];
+}
+function objectSub(id, act) {
+  return [...setsFor(id).map(s => ({ label: s.label, run: () => act(s.ids()) })), '-',
+    { label: `Current Selection${W.ticked.size ? ` (${W.ticked.size})` : ''}`, key: act === hideIds ? 'H' : '', disabled: !W.ticked.size, run: () => act([...W.ticked]) },
+    { label: 'Custom...', run: () => customSet(act) },
+    { label: 'Area', run: () => { status('Drag a rectangle over the objects (left to right: fully inside; right to left: touched). Esc cancels.'); V.pickArea((ids) => act(ids)); } }];
+}
+function objectMenu(id, x, y) {
+  const e = W.byId.get(id); if (!e) return;
+  const editor = ['owner', 'editor'].includes(W.project?.my_role);
+  const cur = currentGroup();
+  const views = [['Top', 'top'], ['Bottom', 'bottom'], ['Front', 'front'], ['Back', 'back'], ['Left', 'left'], ['Right', 'right'], ['Isometric', 'iso']];
+  menu([
+    { label: 'Object Properties', run: () => { W.ticked = new Set([id]); W.side = 'props'; showSidePanel(true); paint(); renderSide(); send({ type: 'pick', ids: [id], add: false }); } },
+    { label: 'Create Dimension Group', disabled: !editor, run: () => createGroupFor(W.ticked.has(id) ? [...W.ticked] : [id]) }, '-',
+    { label: 'Show Only Objects In', items: objectSub(id, showOnly) },
+    { label: 'Hide Objects In', items: objectSub(id, hideIds) },
+    { label: `Import Objects In${cur ? '' : ''}`, disabled: !editor, title: cur ? `Adds to "${cur.name}"` : 'Creates a dimension group first', items: objectSub(id, importObjects) }, '-',
+    { label: 'Hide Geometry', key: 'H', run: () => hideIds(W.ticked.has(id) ? [...W.ticked] : [id]) },
+    { label: 'Show All Objects', run: showAll }, '-',
+    { label: 'Zoom Area', run: () => { status('Drag a rectangle to zoom to. Esc cancels.'); V.pickArea((ids) => { if (ids.length) V.fit(ids); else status('Nothing inside that area.'); }, { crossing: true }); } },
+    { label: 'Zoom Extents', run: () => V.fit() },
+    { label: 'Reset View', run: () => V.setView('iso', false) },
+    { label: 'Default Views', items: views.map(([l, v]) => ({ label: l, run: () => V.setView(v) })) }, '-',
+    { label: V.imagesHidden ? 'Show Images' : 'Hide Images', title: 'Faded objects and edge lines', run: () => V.setImagesHidden(!V.imagesHidden) }, '-',
+    { label: 'Close Menu' },
+  ], x, y);
+}
+/** "Custom...": objects chosen by category, family, type, level or any property. */
+async function customSet(act) {
+  const opts = (k) => [...new Set(W.E.map(e => e[k] || ''))].filter(Boolean).sort();
+  const propNames = [...new Set(W.E.slice(0, 3000).flatMap(e => Object.keys(e.props || {})))].sort();
+  let picked = [];
+  const match = (d) => {
+    const cat = d.querySelector('#csC').value, fam = d.querySelector('#csF').value, type = d.querySelector('#csT').value, lev = d.querySelector('#csL').value;
+    const pn = d.querySelector('#csP').value, pv = d.querySelector('#csV').value.trim().toLowerCase();
+    return W.E.filter(e => (!cat || e.cat === cat) && (!fam || e.fam === fam) && (!type || e.type === type) && (!lev || e.level === lev) &&
+      (!pn || (pv ? String(e.props?.[pn] ?? '').toLowerCase().includes(pv) : e.props?.[pn] != null))).map(e => e.id);
+  };
+  const sel = (id, label, list) => `<label class="field">${label}<select class="input" id="${id}"><option value="">(any)</option>${list.map(v => `<option>${esc(v)}</option>`).join('')}</select></label>`;
+  const r = await dialog({ title: 'Choose objects', wide: true, body: `<div class="two">${sel('csC', 'Category', opts('cat'))}${sel('csF', 'Family', opts('fam'))}</div>
+      <div class="two">${sel('csT', 'Type', opts('type'))}${sel('csL', 'Level', opts('level'))}</div>
+      <div class="two">${sel('csP', 'Property', propNames)}<label class="field">contains<input class="input" id="csV" placeholder="text (empty: has the property)"></label></div>
+      <p id="csN" class="sum"></p>`,
+    onOpen: (d) => { const upd = () => { picked = match(d); d.querySelector('#csN').textContent = `${picked.length} object(s) match`; }; d.oninput = upd; d.onchange = upd; upd(); },
+    validate: (d) => { picked = match(d); return picked.length ? '' : 'No objects match.'; } });
+  if (r) act(picked);
 }
 
 // ------------------------------------------------------------------ toolbar host
 const HOST = {
   selectedIds: () => [...W.ticked], isIsolated: () => W.isolated,
   toggleIsolate() { if (!W.isolated && !W.ticked.size) return status('Select elements first.'); W.isolated = !W.isolated; paint(); V.fit(); syncPane(); },
-  hideSelected() { W.ticked.forEach(id => W.hidden.add(id)); W.ticked.clear(); paint(); syncPane(); },
-  showAll() { W.isolated = false; W.hidden.clear(); W.level = ''; paint(); V.fit(); syncPane(); },
+  hideSelected() { hideIds([...W.ticked]); },
+  showAll,
   levels: () => W.levels,
   colorModes: () => [{ id: 'pane', label: 'Same as the task pane' }, { id: 'category', label: 'Category' }],
   colorMode: () => (W.colorMap ? 'pane' : 'category'),
@@ -93,7 +194,11 @@ const HOST = {
 };
 function syncPane() { send({ type: 'windowState', ticked: [...W.ticked], hidden: [...W.hidden], isolated: W.isolated, level: W.level }); }
 
-// ------------------------------------------------------------------ side panel: drawings and properties
+// ------------------------------------------------------------------ right panel: drawings and properties
+function showSidePanel(on) {
+  $('wside').hidden = !on; $('wgrip').hidden = !on; $('wmain').classList.toggle('split', on);
+  $('wSide').setAttribute('aria-pressed', String(on)); V.resize();
+}
 function renderSide() {
   const body = $('wbody'); if ($('wside').hidden) return;
   document.querySelectorAll('[data-st]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.st === W.side)));
@@ -111,14 +216,24 @@ function renderSide() {
   const sheets = [];
   (W.project?.models || []).forEach(m => m.versions.filter(v => v.id === W.versionId).forEach(v => (v.stats?.sheets || []).forEach(sh => sheets.push({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }))));
   const all = [...sheets, ...drawings];
-  if (!all.length) { body.innerHTML = '<p class="hint">No viewable drawings in this project yet. Upload PDFs or images in the task pane (Project > Drawings).</p>'; return; }
-  body.innerHTML = `<label class="field">Drawing<select class="input" id="dwSel">${all.map((d, i) => `<option value="${i}">${esc(d.kind === 'sheet' ? 'Sheet: ' + d.name : d.name)}</option>`).join('')}</select></label><div id="drawingHost"></div>`;
-  const show = () => openDrawing(all[+$('dwSel').value], $('drawingHost'));
+  if (W.drawing && !all.some(d => same(d, W.drawing))) all.unshift(W.drawing);
+  if (!all.length) { body.innerHTML = '<p class="hint">No viewable drawings in this project yet. Upload PDFs or images: right-click the Drawings tree > Upload Drawings.</p>'; return; }
+  const at = Math.max(0, all.findIndex(d => W.drawing && same(d, W.drawing)));
+  body.innerHTML = `<label class="field">Drawing<select class="input" id="dwSel">${all.map((d, i) => `<option value="${i}" ${i === at ? 'selected' : ''}>${esc(d.kind === 'sheet' ? 'Sheet: ' + d.name : d.name)}</option>`).join('')}</select></label><div id="drawingHost"></div>`;
+  const show = () => { W.drawing = all[+$('dwSel').value]; openDrawing(W.drawing, $('drawingHost')); };
   $('dwSel').onchange = show; show();
 }
+const same = (a, b) => (a.kind === 'sheet' ? b.kind === 'sheet' && a.versionId === b.versionId && a.index === b.index : a.id === b.id);
 
 // ------------------------------------------------------------------ start
+function grip(el, onMove) {
+  let on = false;
+  el.onpointerdown = (e) => { on = true; el.setPointerCapture(e.pointerId); };
+  el.onpointermove = (e) => { if (on) onMove(e); };
+  el.onpointerup = () => { on = false; V.resize(); };
+}
 function start() {
+  if (started) return; started = true;
   V = new Viewer($('vstage'), {
     onPick: (id, add) => {
       if (!add) W.ticked.clear();
@@ -126,27 +241,40 @@ function start() {
       const e = W.byId.get(id); $('pickInfo').hidden = !e; if (e) $('pickInfo').textContent = `${e.type}  [${e.id}]  ${e.level || ''}`;
       paint(); send({ type: 'pick', ids: [...W.ticked], add: false });
     },
-    onContext: (id) => { W.ticked = new Set([id]); W.side = 'props'; $('wside').hidden = false; $('wgrip').hidden = false; $('wmain').classList.add('split'); paint(); renderSide(); send({ type: 'pick', ids: [id], add: false }); },
+    onContext: (id, x, y) => objectMenu(id, x, y),
     onBoxSelect: (ids, add) => { if (!add) W.ticked.clear(); ids.forEach(id => W.ticked.add(id)); paint(); send({ type: 'pick', ids: [...W.ticked], add: false }); },
-    onMeasure: (t) => { $('mInfo').hidden = !t; $('mInfo').textContent = t || ''; },
+    onMeasure: (t, info) => {
+      $('mInfo').hidden = !t; $('mInfo').textContent = t || '';
+      if (info?.distance != null) W.measure = { text: t.split(' · ')[0], value: info.distance, unit: 'm', kind: 'distance' };
+      if (info?.area != null) W.measure = { text: t, value: info.area, unit: 'm2', kind: 'area' };
+    },
     labelOf: (id) => { const e = W.byId.get(id); return e ? `${e.type} · ${e.level || ''} [${e.id}]` : ''; },
   });
   TB = new Toolbar($('vbar'), $('vstage'), V, HOST);
-  $('wSide').onclick = () => {
-    const on = $('wside').hidden; $('wside').hidden = !on; $('wgrip').hidden = !on; $('wmain').classList.toggle('split', on);
-    $('wSide').setAttribute('aria-pressed', String(on)); V.resize(); renderSide();
+  $('wSide').onclick = () => { showSidePanel($('wside').hidden); renderSide(); };
+  $('wLeft').onclick = () => {
+    const on = $('wleft').hidden; $('wleft').hidden = !on; $('lgrip').hidden = !on; $('wmain').classList.toggle('left', on);
+    $('wLeft').setAttribute('aria-pressed', String(on)); V.resize();
   };
   document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { W.side = b.dataset.st; renderSide(); });
-  let drag = null;
-  $('wgrip').onpointerdown = (e) => { drag = e.clientX; $('wgrip').setPointerCapture(e.pointerId); };
-  $('wgrip').onpointermove = (e) => { if (drag == null) return; const w = Math.max(260, Math.min(window.innerWidth - 300, window.innerWidth - e.clientX)); $('wmain').style.setProperty('--side', w + 'px'); };
-  $('wgrip').onpointerup = () => { drag = null; V.resize(); };
+  grip($('wgrip'), (e) => { const w = Math.max(260, Math.min(window.innerWidth - 400, window.innerWidth - e.clientX)); $('wmain').style.setProperty('--side', w + 'px'); });
+  grip($('lgrip'), (e) => { const w = Math.max(240, Math.min(window.innerWidth - 400, e.clientX)); $('wmain').style.setProperty('--left', w + 'px'); });
+  grip($('hgrip'), (e) => { const r = $('wleft').getBoundingClientRect(); const h = Math.max(120, Math.min(r.height - 160, e.clientY - r.top)); $('wleft').style.setProperty('--top', h + 'px'); });
+  // H hides the selected geometry (CostX shortcut); Esc closes menus
+  document.addEventListener('keydown', (e) => {
+    if (e.target.closest?.('input,select,textarea,#dialog:not([hidden])')) return;
+    if ((e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey && W.ticked.size) { e.preventDefault(); hideIds([...W.ticked]); }
+    if (e.key === 'Escape') closeMenu();
+  });
   window.addEventListener('message', (ev) => { if (ev.origin === location.origin) receive(ev.data); });
   const dark = (() => { try { return localStorage.getItem('dwfxTheme'); } catch { return null; } })();
   if (dark === 'dark' || dark === 'light') document.documentElement.dataset.theme = dark;
   V.setTheme();
+  initTree({ W, V, send, host: HOST, paint, setIds, showOnly, hideIds, isolate, setGroupColors, openVersion,
+    openDrawing: openDrawingSide, lastMeasure: () => W.measure });
 }
 start();
+window.__win = { W, get V() { return V; } };       // used by the automated browser tests
 const ready = typeof Office !== 'undefined' ? Office.onReady().catch(() => ({})) : Promise.resolve({});
 ready.then(() => {
   office = typeof Office !== 'undefined' && Boolean(Office.context?.ui?.messageParent) && !window.opener;
@@ -156,3 +284,4 @@ ready.then(() => {
   send({ type: 'ready' });
   if (!window.opener && !office) { $('vload').textContent = 'Open this window from the task pane (3D window button).'; }
 });
+export { refreshTree };
