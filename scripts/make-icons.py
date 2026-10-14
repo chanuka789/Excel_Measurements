@@ -3,7 +3,8 @@ from PIL import Image, ImageDraw
 import os
 OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'assets', 'ribbon')
 os.makedirs(OUT, exist_ok=True)
-INK, BLUE, AMBER, GREEN = (66, 66, 66, 255), (15, 108, 189, 255), (242, 169, 0, 255), (16, 124, 16, 255)
+# mid grey: readable on both the light and the dark Excel ribbon
+INK, BLUE, AMBER, GREEN = (120, 124, 128, 255), (15, 108, 189, 255), (242, 169, 0, 255), (16, 124, 16, 255)
 S = 320  # draw big on a 32-unit grid, then downscale
 
 def canvas(): return Image.new('RGBA', (S, S), (0, 0, 0, 0))

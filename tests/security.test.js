@@ -28,6 +28,17 @@ test('pages carry security headers and a content security policy', async () => {
   assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(r.headers.get('x-powered-by'), null);
 });
+test('ribbon icons can be cached and loaded by Excel on the web (Office hides icons sent with no-store)', async () => {
+  const r = await fetch(base + '/assets/ribbon/projects-32.png?v=1');
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-type'), /image\/png/);
+  assert.doesNotMatch(r.headers.get('cache-control') || '', /no-store|no-cache/);
+  assert.equal(r.headers.get('cross-origin-resource-policy'), 'cross-origin');
+  const page = await fetch(base + '/taskpane.html');
+  assert.match(page.headers.get('cache-control'), /no-store/);
+  assert.equal(page.headers.get('cross-origin-resource-policy'), 'same-site');
+});
+
 test('an account is locked for 15 minutes after 8 wrong passwords, even with the right one', async () => {
   for (let i = 0; i < 8; i++) assert.equal((await post('/api/auth/login', { email: 'a@test.com', password: 'wrong-' + i })).status, 401);
   const r = await post('/api/auth/login', { email: 'a@test.com', password: 'First-pass-1' });

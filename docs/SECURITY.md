@@ -15,6 +15,7 @@ processing scripts (`py/`), Railway configuration and dependencies.
 | Headers | Only basic headers | Content Security Policy (inline scripts allowed by hash only), HSTS, Permissions-Policy, CORP, `nosniff`, no `X-Powered-By` |
 | Excel | Text from models or the AI starting with `=`, `+`, `-`, `@` could become an Excel formula (formula injection) | All text written to Excel and CSV is made safe |
 | Errors | Unexpected errors were only in the console | Error log with reference numbers, crash handlers, client error reports, Admin view |
+| Ribbon icons | Office does not show ribbon icons sent with `no-store`, and Excel on the web loads them from Microsoft's site | Icons under `/assets/` are cacheable and allowed cross-origin; everything else stays `no-store` / same-site |
 | Start-up | API and worker starting together could apply database changes twice | Migrations run under a database advisory lock |
 
 ## Checked, no change needed
@@ -41,7 +42,7 @@ processing scripts (`py/`), Railway configuration and dependencies.
 
 ## Tests
 
-`npm test` runs 34 automated tests (27 server, 7 processing), including `tests/security.test.js` (headers and CSP, account lockout,
+`npm test` runs 35 automated tests (28 server, 7 processing), including `tests/security.test.js` (headers and CSP, cacheable ribbon icons, account lockout,
 sign-out on password change, API rate limit, error reporting) and the access-control checks in
 `tests/api.test.js` and `tests/features.test.js`.
 

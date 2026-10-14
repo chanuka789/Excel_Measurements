@@ -71,11 +71,14 @@ export function securityHeaders(publicDir) {
     "form-action 'self'",
   ].join('; ');
   return (req, res, next) => {
-    res.setHeader('Cache-Control', req.path.startsWith('/vendor/') || req.path.startsWith('/help/media/') ? 'public, max-age=86400' : 'no-store');
+    // Office only shows ribbon icons that can be cached ("must support caching", no no-cache/no-store),
+    // and Excel on the web loads them from Microsoft's own site, so /assets/ is cacheable and cross-origin.
+    const assets = req.path.startsWith('/assets/');
+    res.setHeader('Cache-Control', assets || req.path.startsWith('/vendor/') || req.path.startsWith('/help/media/') ? 'public, max-age=86400' : 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-    res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+    res.setHeader('Cross-Origin-Resource-Policy', assets ? 'cross-origin' : 'same-site');
     if (req.secure || req.headers['x-forwarded-proto'] === 'https') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     if (mode === 'enforce') res.setHeader('Content-Security-Policy', csp);
     else if (mode === 'report') res.setHeader('Content-Security-Policy-Report-Only', csp);

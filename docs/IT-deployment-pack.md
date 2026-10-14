@@ -7,7 +7,7 @@ support it.
 | | |
 |---|---|
 | Publisher | QSGS (Chanuka Mudiyanselage) |
-| Add-in type | Office web add-in (task pane + ribbon tab), manifest `manifest.xml`, version 0.5.0.0 |
+| Add-in type | Office web add-in (task pane + ribbon tab), manifest `manifest.xml`, version 0.5.1.0 |
 | Hosts | Microsoft 365 Excel for Windows, Mac and the web (ribbon needs the shared runtime, Microsoft 365) |
 | Server | `https://dwfx-addin-production.up.railway.app` (Railway, EU region) |
 | Permissions | `ReadWriteDocument`: reads and writes the open workbook only |

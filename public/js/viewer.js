@@ -149,8 +149,11 @@ export class Viewer {
     this.edges = new THREE.LineSegments(this.geoEdge, this.edgeMat); this.edges.renderOrder = 1;
     for (const o of [this.solid, this.ghost, this.edges]) { o.frustumCulled = false; this.root.add(o); }
     // picking geometry: every triangle, with a BVH built on first use
+    // The BVH re-orders its index array in place, so it gets its own copy: this.tri (and the element
+    // triangle ranges that point into it) must never change, or colours and selection hit the wrong elements.
+    this.pickTri = this.tri.slice();
     this.geoPick = new THREE.BufferGeometry(); this.geoPick.setAttribute('position', this.posAttr);
-    this.geoPick.setIndex(new THREE.BufferAttribute(this.tri, 1));
+    this.geoPick.setIndex(new THREE.BufferAttribute(this.pickTri, 1));
     this.pickMesh = new THREE.Mesh(this.geoPick, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
     this.bvhReady = false;
     if (window.requestIdleCallback) window.requestIdleCallback(() => this.ensureBVH(), { timeout: 1500 }); else setTimeout(() => this.ensureBVH(), 50);
@@ -361,9 +364,12 @@ export class Viewer {
     const r = this.renderer.domElement.getBoundingClientRect();
     return new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
   }
-  elementOfTri(t) {   // binary search in triangle start offsets
-    const ts = this.E.ts; let lo = 0, hi = this.n - 1;
-    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ts[mid] <= t) lo = mid; else hi = mid - 1; }
+  /** Element of a picked triangle. faceIndex is in the BVH's (re-ordered) index, so go through its first
+   * vertex: vertex ranges are never re-ordered and each triangle only uses its own element's vertices. */
+  elementOfPick(face) { return this.elementOfVert(this.pickTri[face * 3]); }
+  elementOfVert(v) {  // binary search in vertex start offsets
+    const vs = this.E.vs; let lo = 0, hi = this.n - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (vs[mid] <= v) lo = mid; else hi = mid - 1; }
     return lo;
   }
   hit(e) {
@@ -373,7 +379,7 @@ export class Viewer {
     ray.firstHitOnly = false;
     const vis = new Set(this.visibleK || []);
     for (const h of ray.intersectObject(this.pickMesh, false)) {
-      const k = this.elementOfTri(h.faceIndex);
+      const k = this.elementOfPick(h.faceIndex);
       if (!vis.has(k) || this.E.id[k] === -1 || this.clipped(h.point)) continue;
       return { k, id: this.E.id[k], point: h.point, face: h.faceIndex, normal: h.face?.normal };
     }
@@ -516,7 +522,7 @@ export class Viewer {
     const t = h.face * 3, p = this.pos, r = this.renderer.domElement.getBoundingClientRect();
     let best = h.point.clone(), bestD = 12;
     for (let j = 0; j < 3; j++) {
-      const vi = this.tri[t + j] * 3, w = new THREE.Vector3(p[vi], p[vi + 1], p[vi + 2]);
+      const vi = this.pickTri[t + j] * 3, w = new THREE.Vector3(p[vi], p[vi + 1], p[vi + 2]);
       const s = w.clone().project(this.camera);
       const dx = (s.x + 1) / 2 * r.width - (e.clientX - r.left), dy = (1 - s.y) / 2 * r.height - (e.clientY - r.top);
       const d = Math.hypot(dx, dy); if (d < bestD) { bestD = d; best = w; }
@@ -556,7 +562,9 @@ export class Viewer {
     const tri = (t) => { const a = T[t * 3] * 3, b = T[t * 3 + 1] * 3, c = T[t * 3 + 2] * 3;
       const A = new THREE.Vector3(p[a], p[a + 1], p[a + 2]), B = new THREE.Vector3(p[b], p[b + 1], p[b + 2]), C = new THREE.Vector3(p[c], p[c + 1], p[c + 2]);
       const n = B.clone().sub(A).cross(C.clone().sub(A)); return { A, B, C, n }; };
-    const f = tri(h.face); const n0 = f.n.clone().normalize(); const d0 = n0.dot(f.A);
+    const P = this.pickTri, fa = P[h.face * 3] * 3, fb = P[h.face * 3 + 1] * 3, fc = P[h.face * 3 + 2] * 3;
+    const A0 = new THREE.Vector3(p[fa], p[fa + 1], p[fa + 2]), B0 = new THREE.Vector3(p[fb], p[fb + 1], p[fb + 2]), C0 = new THREE.Vector3(p[fc], p[fc + 1], p[fc + 2]);
+    const f = { A: A0, n: B0.clone().sub(A0).cross(C0.clone().sub(A0)) }; const n0 = f.n.clone().normalize(); const d0 = n0.dot(f.A);
     let area = 0; const keep = [];
     for (let t = this.E.ts[k], end = this.E.ts[k] + this.E.tc[k]; t < end; t++) {
       const g = tri(t); const len = g.n.length(); if (!len) continue;

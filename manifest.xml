@@ -7,13 +7,13 @@
            xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
            xsi:type="TaskPaneApp">
   <Id>6f1c2a4e-8d3b-4f7a-9c51-2b7e0d4a9f13</Id>
-  <Version>0.5.0.0</Version>
+  <Version>0.5.1.0</Version>
   <ProviderName>QSGS</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="DWFx Measure"/>
   <Description DefaultValue="View any Revit DWFx model in 3D, measure with live Excel formulas, compare revisions, build the BOQ and keep every project on your server."/>
-  <IconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-64.png"/>
+  <IconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-32.png?v=0.5.1.0"/>
+  <HighResolutionIconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-64.png?v=0.5.1.0"/>
   <SupportUrl DefaultValue="https://dwfx-addin-production.up.railway.app/"/>
   <AppDomains>
     <AppDomain>https://dwfx-addin-production.up.railway.app</AppDomain>
@@ -430,96 +430,96 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="I.admin.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/admin-16.png"/>
-        <bt:Image id="I.admin.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/admin-32.png"/>
-        <bt:Image id="I.admin.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/admin-80.png"/>
-        <bt:Image id="I.ai.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/ai-16.png"/>
-        <bt:Image id="I.ai.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/ai-32.png"/>
-        <bt:Image id="I.ai.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/ai-80.png"/>
-        <bt:Image id="I.aicheck.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/aicheck-16.png"/>
-        <bt:Image id="I.aicheck.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/aicheck-32.png"/>
-        <bt:Image id="I.aicheck.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/aicheck-80.png"/>
-        <bt:Image id="I.boq.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-16.png"/>
-        <bt:Image id="I.boq.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-32.png"/>
-        <bt:Image id="I.boq.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-80.png"/>
-        <bt:Image id="I.box.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/box-16.png"/>
-        <bt:Image id="I.box.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/box-32.png"/>
-        <bt:Image id="I.box.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/box-80.png"/>
-        <bt:Image id="I.clear.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/clear-16.png"/>
-        <bt:Image id="I.clear.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/clear-32.png"/>
-        <bt:Image id="I.clear.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/clear-80.png"/>
-        <bt:Image id="I.colour.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/colour-16.png"/>
-        <bt:Image id="I.colour.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/colour-32.png"/>
-        <bt:Image id="I.colour.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/colour-80.png"/>
-        <bt:Image id="I.compare.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/compare-16.png"/>
-        <bt:Image id="I.compare.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/compare-32.png"/>
-        <bt:Image id="I.compare.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/compare-80.png"/>
-        <bt:Image id="I.elements.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/elements-16.png"/>
-        <bt:Image id="I.elements.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/elements-32.png"/>
-        <bt:Image id="I.elements.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/elements-80.png"/>
-        <bt:Image id="I.fit.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fit-16.png"/>
-        <bt:Image id="I.fit.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fit-32.png"/>
-        <bt:Image id="I.fit.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fit-80.png"/>
-        <bt:Image id="I.fromexcel.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-16.png"/>
-        <bt:Image id="I.fromexcel.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-32.png"/>
-        <bt:Image id="I.fromexcel.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-80.png"/>
-        <bt:Image id="I.group.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-16.png"/>
-        <bt:Image id="I.group.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-32.png"/>
-        <bt:Image id="I.group.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-80.png"/>
-        <bt:Image id="I.help.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/help-16.png"/>
-        <bt:Image id="I.help.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/help-32.png"/>
-        <bt:Image id="I.help.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/help-80.png"/>
-        <bt:Image id="I.hide.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/hide-16.png"/>
-        <bt:Image id="I.hide.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/hide-32.png"/>
-        <bt:Image id="I.hide.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/hide-80.png"/>
-        <bt:Image id="I.isolate.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/isolate-16.png"/>
-        <bt:Image id="I.isolate.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/isolate-32.png"/>
-        <bt:Image id="I.isolate.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/isolate-80.png"/>
-        <bt:Image id="I.measure.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-16.png"/>
-        <bt:Image id="I.measure.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-32.png"/>
-        <bt:Image id="I.measure.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-80.png"/>
-        <bt:Image id="I.pdf.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/pdf-16.png"/>
-        <bt:Image id="I.pdf.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/pdf-32.png"/>
-        <bt:Image id="I.pdf.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/pdf-80.png"/>
-        <bt:Image id="I.plan.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/plan-16.png"/>
-        <bt:Image id="I.plan.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/plan-32.png"/>
-        <bt:Image id="I.plan.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/plan-80.png"/>
-        <bt:Image id="I.projects.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-16.png"/>
-        <bt:Image id="I.projects.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-32.png"/>
-        <bt:Image id="I.projects.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-80.png"/>
-        <bt:Image id="I.refresh.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-16.png"/>
-        <bt:Image id="I.refresh.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-32.png"/>
-        <bt:Image id="I.refresh.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-80.png"/>
-        <bt:Image id="I.review.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/review-16.png"/>
-        <bt:Image id="I.review.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/review-32.png"/>
-        <bt:Image id="I.review.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/review-80.png"/>
-        <bt:Image id="I.saved.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/saved-16.png"/>
-        <bt:Image id="I.saved.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/saved-32.png"/>
-        <bt:Image id="I.saved.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/saved-80.png"/>
-        <bt:Image id="I.section.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/section-16.png"/>
-        <bt:Image id="I.section.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/section-32.png"/>
-        <bt:Image id="I.section.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/section-80.png"/>
-        <bt:Image id="I.showall.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/showall-16.png"/>
-        <bt:Image id="I.showall.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/showall-32.png"/>
-        <bt:Image id="I.showall.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/showall-80.png"/>
-        <bt:Image id="I.status.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-16.png"/>
-        <bt:Image id="I.status.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-32.png"/>
-        <bt:Image id="I.status.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-80.png"/>
-        <bt:Image id="I.templates.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/templates-16.png"/>
-        <bt:Image id="I.templates.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/templates-32.png"/>
-        <bt:Image id="I.templates.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/templates-80.png"/>
-        <bt:Image id="I.update.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/update-16.png"/>
-        <bt:Image id="I.update.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/update-32.png"/>
-        <bt:Image id="I.update.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/update-80.png"/>
-        <bt:Image id="I.views.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/views-16.png"/>
-        <bt:Image id="I.views.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/views-32.png"/>
-        <bt:Image id="I.views.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/views-80.png"/>
-        <bt:Image id="I.window.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-16.png"/>
-        <bt:Image id="I.window.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-32.png"/>
-        <bt:Image id="I.window.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-80.png"/>
-        <bt:Image id="I.zones.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/zones-16.png"/>
-        <bt:Image id="I.zones.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/zones-32.png"/>
-        <bt:Image id="I.zones.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/zones-80.png"/>
+        <bt:Image id="I.admin.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/admin-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.admin.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/admin-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.admin.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/admin-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.ai.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/ai-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.ai.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/ai-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.ai.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/ai-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.aicheck.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/aicheck-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.aicheck.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/aicheck-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.aicheck.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/aicheck-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.boq.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.boq.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.boq.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.box.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/box-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.box.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/box-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.box.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/box-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.clear.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/clear-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.clear.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/clear-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.clear.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/clear-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.colour.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/colour-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.colour.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/colour-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.colour.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/colour-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.compare.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/compare-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.compare.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/compare-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.compare.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/compare-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.elements.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/elements-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.elements.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/elements-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.elements.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/elements-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.fit.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fit-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.fit.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fit-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.fit.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fit-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.fromexcel.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.fromexcel.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.fromexcel.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.group.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.group.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.group.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.help.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/help-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.help.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/help-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.help.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/help-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.hide.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/hide-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.hide.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/hide-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.hide.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/hide-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.isolate.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/isolate-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.isolate.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/isolate-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.isolate.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/isolate-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.measure.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.measure.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.measure.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.pdf.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/pdf-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.pdf.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/pdf-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.pdf.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/pdf-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.plan.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/plan-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.plan.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/plan-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.plan.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/plan-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.projects.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.projects.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.projects.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.refresh.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.refresh.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.refresh.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.review.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/review-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.review.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/review-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.review.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/review-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.saved.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/saved-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.saved.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/saved-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.saved.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/saved-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.section.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/section-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.section.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/section-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.section.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/section-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.showall.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/showall-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.showall.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/showall-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.showall.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/showall-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.status.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.status.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.status.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.templates.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/templates-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.templates.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/templates-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.templates.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/templates-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.update.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/update-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.update.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/update-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.update.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/update-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.views.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/views-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.views.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/views-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.views.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/views-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.window.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.window.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.window.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-80.png?v=0.5.1.0"/>
+        <bt:Image id="I.zones.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/zones-16.png?v=0.5.1.0"/>
+        <bt:Image id="I.zones.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/zones-32.png?v=0.5.1.0"/>
+        <bt:Image id="I.zones.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/zones-80.png?v=0.5.1.0"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="PaneUrl" DefaultValue="https://dwfx-addin-production.up.railway.app/taskpane.html"/>

@@ -1,7 +1,7 @@
 """Writes manifest.xml: the DWFx Measure ribbon tab (shared runtime). Run: python3 scripts/make-manifest.py [base-url]"""
 import sys, os
 BASE = (sys.argv[1] if len(sys.argv) > 1 else 'https://dwfx-addin-production.up.railway.app').rstrip('/')
-VERSION = '0.5.0.0'
+VERSION = '0.5.1.0'
 G = [
  ('Project', 'Project', 'group', [('Projects', 'Projects', 'projects', 'openProjects', 'Open your projects: models, drawings, team, saved take-offs and settings.'),
                                   ('Refresh', 'Refresh', 'refresh', 'refreshProject', 'Reload the open project to see new uploads and processing status.')]),
@@ -53,7 +53,7 @@ for gid, glabel, gicon, ctrls in G:
                 </Icon>
 {chr(10).join(cs)}
               </Group>''')
-images = '\n'.join(f'        <bt:Image id="I.{n}.{s}" DefaultValue="{BASE}/assets/ribbon/{n}-{s}.png"/>' for n in icons for s in (16, 32, 80))
+images = '\n'.join(f'        <bt:Image id="I.{n}.{s}" DefaultValue="{BASE}/assets/ribbon/{n}-{s}.png?v={VERSION}"/>' for n in icons for s in (16, 32, 80))
 short = '\n'.join([f'        <bt:String id="G.{g[0]}" DefaultValue="{g[1]}"/>' for g in G] + [f'        <bt:String id="L.{c[0]}" DefaultValue="{c[1]}"/>' for g in G for c in g[3]]
                   + ['        <bt:String id="TabLabel" DefaultValue="DWFx Measure"/>', '        <bt:String id="GetStarted.Title" DefaultValue="DWFx Measure is ready"/>'])
 long = '\n'.join([f'        <bt:String id="T.{c[0]}" DefaultValue="{c[4]}"/>' for g in G for c in g[3]]
@@ -72,8 +72,8 @@ xml = f'''<?xml version="1.0" encoding="UTF-8"?>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="DWFx Measure"/>
   <Description DefaultValue="View any Revit DWFx model in 3D, measure with live Excel formulas, compare revisions, build the BOQ and keep every project on your server."/>
-  <IconUrl DefaultValue="{BASE}/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="{BASE}/assets/icon-64.png"/>
+  <IconUrl DefaultValue="{BASE}/assets/icon-32.png?v={VERSION}"/>
+  <HighResolutionIconUrl DefaultValue="{BASE}/assets/icon-64.png?v={VERSION}"/>
   <SupportUrl DefaultValue="{BASE}/"/>
   <AppDomains>
     <AppDomain>{BASE}</AppDomain>
