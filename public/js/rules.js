@@ -120,6 +120,7 @@ export function kindOf(e) {
     if (/pile/.test(t) && !/cap/.test(t)) return 'pile';
     if (/cap/.test(t)) return 'pilecap';
     if (/raft|mat\b/.test(t) || plan > 50) return 'raft';
+    if (/slab|bed|ground/.test(t)) return 'groundslab';
     if (/beam|tie/.test(t)) return 'groundbeam';
     if (bb) { const h = q(e, 'Geo box height'), wmax = Math.max(q(e, 'Geo box length'), q(e, 'Geo box width')); if (h > 3 * Math.max(wmax, 0.1)) return 'pile'; }
     return 'footing';
@@ -129,7 +130,7 @@ export function kindOf(e) {
   if (/roof/i.test(cat)) return 'roofslab';
   if (/^floors?$|slab/i.test(cat)) {
     const bottom = q(e, 'Geo bottom area') || plan;
-    if (q(e, 'Area on ground') > 0.5 * bottom) return 'groundslab';
+    if (q(e, 'Area on ground') > 0.5 * bottom || /ground|grade|\bsog\b|bed\b/i.test(t) || /ground|gf|level\s*0\b/i.test(lv)) return 'groundslab';
     if (q(e, 'Top exposed') > 0.5 * (q(e, 'Geo top area') || plan) || /roof/i.test(t) || /roof/i.test(lv)) return 'roofslab';
     return 'slab';
   }

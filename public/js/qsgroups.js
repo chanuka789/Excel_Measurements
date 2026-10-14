@@ -85,7 +85,8 @@ export function structureGroupPlan(E, byId, { ids = null, set, setup = {}, root 
     else if (mat === 'precast') name = `Precast ${(KIND_LABEL[kind] || 'units').toLowerCase()}`;
     else if (BY_THICKNESS.has(kind) && mm(e)) name = `${mm(e)} mm ${SINGULAR[kind]}${kind === 'wall' && grp === 'Substructure' ? ' below ground' : ''}`;
     else name = KIND_LABEL[kind] || kind;
-    const path = [...(root ? [root] : []), sectionOf(mat), grp];
+    const subFolder = (['Substructure', 'Superstructure', 'Roof'].includes(grp) && (kind === 'wall' ? 'Walls' : ['slab', 'groundslab', 'roofslab', 'raft'].includes(kind) ? 'Slabs' : null));
+    const path = [...(root ? [root] : []), sectionOf(mat), grp, ...(subFolder ? [subFolder] : [])];
     const key = path.join('\\') + '|' + name;
     if (!buckets.has(key)) buckets.set(key, { path, name, ids: [], mat, kind });
     buckets.get(key).ids.push(e.id);
@@ -107,6 +108,14 @@ export function structureGroupPlan(E, byId, { ids = null, set, setup = {}, root 
     out.push({ path: b.path, name: b.name, mtype: 'Volume', ids: b.ids,
       props: { display: 'Volume', quantity: p.quantity, variables: p.variables, custom: p.custom, rule: p.rule, description: p.note } });
   }
-  const rank = (x) => [POMI_SECTIONS.indexOf(x.path.at(-2)), ELEMENT_GROUPS.indexOf(x.path.at(-1))];
-  return out.sort((a, b) => { const [a1, a2] = rank(a), [b1, b2] = rank(b); return a1 - b1 || a2 - b2 || a.name.localeCompare(b.name, undefined, { numeric: true }); });
+  const rank = (x) => {
+    const sIdx = POMI_SECTIONS.findIndex(s => x.path.includes(s));
+    const gIdx = ELEMENT_GROUPS.findIndex(g => x.path.includes(g));
+    const subIdx = x.path.includes('Slabs') ? 0 : x.path.includes('Walls') ? 1 : 2;
+    return [sIdx >= 0 ? sIdx : 99, gIdx >= 0 ? gIdx : 99, subIdx];
+  };
+  return out.sort((a, b) => {
+    const [a1, a2, a3] = rank(a), [b1, b2, b3] = rank(b);
+    return a1 - b1 || a2 - b2 || a3 - b3 || a.name.localeCompare(b.name, undefined, { numeric: true });
+  });
 }

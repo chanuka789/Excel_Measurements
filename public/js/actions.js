@@ -222,7 +222,7 @@ export async function createStructureGroups(host, a = {}) {
     for (const name of path) {
       let f = folders.find(x => x.name.toLowerCase() === name.toLowerCase() && (x.parent_id || null) === parent);
       if (!f) {
-        const order = POMI_SECTIONS.indexOf(name) >= 0 ? POMI_SECTIONS.indexOf(name) + 1 : ELEMENT_GROUPS.indexOf(name) + 1;     // keeps B..R and Substructure..Roof in order
+        const order = POMI_SECTIONS.indexOf(name) >= 0 ? POMI_SECTIONS.indexOf(name) + 1 : ELEMENT_GROUPS.indexOf(name) >= 0 ? ELEMENT_GROUPS.indexOf(name) + 1 : (name === 'Slabs' ? 1 : name === 'Walls' ? 2 : 0);     // keeps B..R, Substructure..Roof, Slabs/Walls in order
         f = (await api('POST', `/projects/${pid}/folders`, { kind: 'dim', name, parentId: parent, sort: Math.max(order, 0) })).folder; folders.push(f); made.folders.push(f.id);
       }
       parent = f.id;

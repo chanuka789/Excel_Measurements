@@ -101,12 +101,12 @@ test('structural dimension groups: one group per element type and thickness, all
   assert.equal(POMI_SECTIONS.length, 15); assert.equal(POMI_SECTIONS[1], 'Section C - Concrete works');
   const plan = structureGroupPlan(E, byId, { set: 'NRM2', setup: { groundLevel: 0 } });
   const where = Object.fromEntries(plan.map(g => [g.name, g.path.join(' > ')]));
-  assert.equal(where['200 mm suspended slab'], 'Section C - Concrete works > Superstructure');
-  assert.equal(where['350 mm suspended slab'], 'Section C - Concrete works > Superstructure');
+  assert.equal(where['200 mm suspended slab'], 'Section C - Concrete works > Superstructure > Slabs');
+  assert.equal(where['350 mm suspended slab'], 'Section C - Concrete works > Superstructure > Slabs');
   assert.equal(where.Beams, 'Section C - Concrete works > Frame');
   assert.equal(where.Footings, 'Section C - Concrete works > Substructure');
-  assert.equal(where['150 mm ground slab'], 'Section C - Concrete works > Substructure');
-  assert.equal(where['250 mm roof slab'], 'Section C - Concrete works > Roof');
+  assert.equal(where['150 mm ground slab'], 'Section C - Concrete works > Substructure > Slabs');
+  assert.equal(where['250 mm roof slab'], 'Section C - Concrete works > Roof > Slabs');
   assert.equal(where['Steel UKB127x76x13'], 'Section E - Metal work > Frame');
   const asGroup = (g) => ({ id: 'x', name: g.name, mtype: g.mtype, props: g.props, items: g.ids.map(id => ({ element_id: id, sign: 1, multiplier: 1 })) });
   const tot = (g) => { const sp = groupToSpec(asGroup(g), byId); const ev = evaluate(sp, byId); return Object.fromEntries(sp.formulas.map(f => [f.label, ev.tot[f.key]])); };
@@ -136,20 +136,22 @@ test('dimension groups from raw BIM models: slabs and walls split by thickness, 
     el(103, 'Walls', 'Basic Wall: Retaining 300mm Concrete', { 'Volume': 9, 'Area': 30, 'Length': 10, 'Height': 3 }, { props: { conc, Width: 0.3 } }),
     el(104, 'Roofs', 'Flat Roof 250mm', { 'Volume': 12.5, 'Area': 50, 'Perimeter': 30 }, { level: 'Roof' }),
     el(105, 'Floors', 'Roof Slab 200', { 'Volume': 8, 'Area': 40, 'Perimeter': 26 }, { level: 'Roof' }),
+    el(106, 'Floors', 'Ground Slab 150', { 'Volume': 15, 'Area': 100, 'Perimeter': 40 }),
   ];
   const rawById = new Map(rawElements.map(e => [e.id, e]));
 
   const plan = structureGroupPlan(rawElements, rawById, { set: 'NRM2' });
   const where = Object.fromEntries(plan.map(g => [g.name, g.path.join(' > ')]));
 
-  // 1. Slabs and walls split by thickness
-  assert.equal(where['200 mm suspended slab'], 'Section C - Concrete works > Superstructure');
-  assert.equal(where['350 mm suspended slab'], 'Section C - Concrete works > Superstructure');
-  assert.equal(where['300 mm wall'], 'Section C - Concrete works > Superstructure');
+  // 1. Slabs and walls split by thickness and into Slabs and Walls subfolders
+  assert.equal(where['200 mm suspended slab'], 'Section C - Concrete works > Superstructure > Slabs');
+  assert.equal(where['350 mm suspended slab'], 'Section C - Concrete works > Superstructure > Slabs');
+  assert.equal(where['300 mm wall'], 'Section C - Concrete works > Superstructure > Walls');
+  assert.equal(where['150 mm ground slab'], 'Section C - Concrete works > Substructure > Slabs');
 
-  // 2. Roof dimension groups created in Roof folder
-  assert.equal(where['250 mm roof slab'], 'Section C - Concrete works > Roof');
-  assert.equal(where['200 mm roof slab'], 'Section C - Concrete works > Roof');
+  // 2. Roof dimension groups created in Roof > Slabs folder
+  assert.equal(where['250 mm roof slab'], 'Section C - Concrete works > Roof > Slabs');
+  assert.equal(where['200 mm roof slab'], 'Section C - Concrete works > Roof > Slabs');
 
   // 3. Formwork generated and present in the dimension groups
   const asGroup = (g) => ({ id: 'g' + g.name, name: g.name, mtype: g.mtype, props: g.props, items: g.ids.map(id => ({ element_id: id, sign: 1, multiplier: 1 })) });
