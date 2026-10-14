@@ -93,7 +93,9 @@ export async function updateQs(versionId) {
   const work = path.join(os.tmpdir(), 'qs-' + crypto.randomUUID());
   await fs.mkdir(work);
   try {
-    const gunzip = promisify(zlib.gunzip);
+    const gz = promisify(zlib.gunzip);
+    // object storage may hand back the bytes already decoded (Content-Encoding: gzip): unzip only real gzip data
+    const gunzip = async (b) => (b[0] === 0x1f && b[1] === 0x8b ? gz(b) : b);
     const model = JSON.parse((await gunzip(await store.getBuffer(dataKey(v.storage_key, 'model.json.gz')))).toString());
     const mark = () => q(`UPDATE model_versions SET stats = coalesce(stats,'{}'::jsonb) || jsonb_build_object('qs', $2::int) WHERE id=$1`, [v.id, QS_VERSION]);
     if (model.qsVersion >= QS_VERSION || model.geometryFormat !== 'bin2') { await mark(); return; }
