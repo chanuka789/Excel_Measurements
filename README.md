@@ -1,7 +1,7 @@
 # DWFx Measure - Excel add-in
 
 View any Revit DWFx model (architecture, structure, interiors, MEP) in 3D inside Excel, browse its elements
-like CostX, and send measurements to a **Take-off** sheet with live formulas. Models, drawings and saved
+by category, family and type, and send measurements to a **Take-off** sheet with live formulas. Models, drawings and saved
 take-offs are stored on the server per user and per project. An optional AI assistant works out QS
 measurement methods; the add-in always calculates the numbers itself from the model.
 
@@ -46,7 +46,7 @@ After adding the add-in, Excel shows a **DWFx Measure** tab on the ribbon:
    revision (in place, keeps formulas and your assumption values, writes a Change log sheet), **BOQ sheet** (linked
    to named take-off totals; rates you type are kept when you rebuild; optional AI descriptions), **audit PDF**.
 
-8. **3D window** (CostX style): project tree on the left with **folders** for drawings and models and for
+8. **3D window**: project tree on the left with **folders** for drawings and models and for
    **dimension groups** (measured items: Count, Length, Area or Volume, with multiplier, width, height, offset, custom
    quantities, variables, BIM dimensions and measured dimensions, standard groups library). Right-click an object for
    Object Properties, Create Dimension Group, Show Only / Hide / Import Objects In (category, family, type, object,

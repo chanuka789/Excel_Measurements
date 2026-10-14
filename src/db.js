@@ -100,7 +100,7 @@ const MIGRATIONS = [
      id BIGSERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now(), source TEXT NOT NULL, ref TEXT,
      user_id INT REFERENCES users(id) ON DELETE SET NULL, message TEXT NOT NULL, stack TEXT, url TEXT, detail JSONB);
    CREATE INDEX IF NOT EXISTS errors_at ON errors (at DESC);`,
-  // 4: CostX-style project tree: folders for drawings/models and for dimension groups, dimension groups and their dimensions
+  // 4: project tree: folders for drawings/models and for dimension groups, dimension groups and their dimensions
   `CREATE TABLE IF NOT EXISTS folders (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
      kind TEXT NOT NULL CHECK (kind IN ('drawing','dim')), parent_id UUID REFERENCES folders(id) ON DELETE CASCADE,

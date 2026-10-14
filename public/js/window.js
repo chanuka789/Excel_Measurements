@@ -1,4 +1,4 @@
-// Large 3D window (CostX style): project tree with drawings, models and dimension groups on the left, the 3D model in
+// Large 3D window: project tree with drawings, models and dimension groups on the left, the 3D model in
 // the middle, drawings and properties on the right. Selection, isolate and hide stay linked with the task pane (and
 // through it with the Take-off sheet). Schedules are written to Excel by the task pane.
 import { $, esc, api, session, status } from './core.js';
@@ -106,7 +106,7 @@ function openDrawingSide(d) {
   showSidePanel(true); renderSide();
 }
 
-// ------------------------------------------------------------------ the CostX right-click menu on an object
+// ------------------------------------------------------------------ the right-click menu on an object
 function setsFor(id) {
   const e = W.byId.get(id); if (!e) return [];
   const by = (f) => W.E.filter(f).map(x => x.id);
@@ -260,7 +260,7 @@ function start() {
   grip($('wgrip'), (e) => { const w = Math.max(260, Math.min(window.innerWidth - 400, window.innerWidth - e.clientX)); $('wmain').style.setProperty('--side', w + 'px'); });
   grip($('lgrip'), (e) => { const w = Math.max(240, Math.min(window.innerWidth - 400, e.clientX)); $('wmain').style.setProperty('--left', w + 'px'); });
   grip($('hgrip'), (e) => { const r = $('wleft').getBoundingClientRect(); const h = Math.max(120, Math.min(r.height - 160, e.clientY - r.top)); $('wleft').style.setProperty('--top', h + 'px'); });
-  // H hides the selected geometry (CostX shortcut); Esc closes menus
+  // H hides the selected geometry (shortcut); Esc closes menus
   document.addEventListener('keydown', (e) => {
     if (e.target.closest?.('input,select,textarea,#dialog:not([hidden])')) return;
     if ((e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey && W.ticked.size) { e.preventDefault(); hideIds([...W.ticked]); }

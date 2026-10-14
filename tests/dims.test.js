@@ -1,4 +1,4 @@
-// Integration tests for the CostX-style project tree: folders, dimension groups, dimensions and standard groups.
+// Integration tests for the project tree: folders, dimension groups, dimensions and standard groups.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';

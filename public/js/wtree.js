@@ -1,4 +1,4 @@
-// 3D window, left panel (CostX style): Drawings / Model / Views tree on top, Dimension Groups / Dimensions below.
+// 3D window, left panel: Drawings / Model / Views tree on top, Dimension Groups / Dimensions below.
 // Folders can be created by the user for drawings and models, and for dimension groups. "Import Objects In" adds
 // BIM dimensions to the current dimension group. Groups go to Excel as schedules (through the task pane).
 import { $, esc, api, upload, status, fmtDate } from './core.js';
@@ -404,7 +404,7 @@ async function fromStandard(s) {
   catch (err) { status(err.message, 'bad'); }
 }
 
-/** Properties dialog (CostX "Dimension Group Properties"); g = null creates a new group. */
+/** Properties dialog ("Dimension Group Properties"); g = null creates a new group. */
 export async function editGroup(g, folderId, tab = 'props', { importIds = null, name = '', mtype = '' } = {}) {
   const isNew = !g;
   const W = C.W;
@@ -566,7 +566,7 @@ export async function importObjects(list) {
   const idsIn = [...new Set(list)].filter(id => C.W.byId.has(id));
   if (!idsIn.length) { status('No objects to import.', 'bad'); return; }
   let g = G(T.cur);
-  if (!g) {   // CostX asks for a group first
+  if (!g) {   // a group is needed first
     const e = C.W.byId.get(idsIn[0]);
     g = await editGroup(null, null, 'props', { importIds: idsIn, name: commonName(idsIn), mtype: guessType(e?.cat) });
     return;

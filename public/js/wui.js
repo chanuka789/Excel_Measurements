@@ -24,7 +24,7 @@ function showSub(item) {
   const sub = item.querySelector(':scope > .cm-list'); if (!sub) return;
   item.parentElement.querySelectorAll(':scope > .cm-item > .cm-list').forEach(l => { if (l !== sub) l.hidden = true; });
   sub.hidden = false;
-  // open to the right, or to the left when there is no room (like the screenshots of CostX)
+  // open to the right, or to the left when there is no room
   sub.style.left = '100%'; sub.style.right = 'auto'; sub.style.top = '-4px';
   const r = sub.getBoundingClientRect();
   if (r.right > window.innerWidth - 4) { sub.style.left = 'auto'; sub.style.right = '100%'; }

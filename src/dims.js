@@ -1,4 +1,4 @@
-// API routes for the CostX-style project tree: folders (drawings/models and dimension groups),
+// API routes for the project tree: folders (drawings/models and dimension groups),
 // dimension groups (with properties, custom quantities, variables, measured dimensions) and their BIM dimensions.
 import { q, one, tx, audit } from './db.js';
 import { json, wrap, clean, uuidOk, fail, need, versionProject } from './http.js';

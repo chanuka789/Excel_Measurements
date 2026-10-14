@@ -1,4 +1,4 @@
-// Dimension groups (CostX style) and take-off merging. Pure functions, no DOM: shared by the 3D window,
+// Dimension groups and take-off merging. Pure functions, no DOM: shared by the 3D window,
 // the task pane and the unit tests.
 //
 // A dimension group: { id, name, mtype: Count|Length|Area|Volume, props, items: [{ element_id, sign, multiplier }] }
@@ -35,7 +35,7 @@ export function baseValue(g, e) {
   for (const n of quantityNames(g)) if (e.q?.[n]) return e.q[n][0];
   return null;
 }
-/** How the base value turns into the displayed quantity (CostX "Default Display" with width and height). */
+/** How the base value turns into the displayed quantity ("Default Display" with width and height). */
 export function conversion(g) {
   const d = P(g).display || g.mtype, w = factor(P(g).width, 0), h = factor(P(g).height, 0);
   if (g.mtype === 'Length' && d === 'Area' && h > 0) return { display: 'Area', terms: ['Height'] };

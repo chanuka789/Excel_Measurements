@@ -21,7 +21,7 @@ test('base value uses the chosen BIM quantity, then the usual ones', () => {
   assert.equal(baseValue({ mtype: 'Count', props: {} }, byId.get(3)), 1);
 });
 
-test('multiplier, offset, sign and width/height conversion (CostX default display)', () => {
+test('multiplier, offset, sign and width/height conversion (default display)', () => {
   const g = { mtype: 'Length', props: { multiplier: 2, offset: 0.5, display: 'Area', height: 3 } };
   assert.deepEqual(conversion(g), { display: 'Area', terms: ['Height'] });
   assert.equal(dimQuantity(g, 4, { sign: 1, multiplier: 1 }), (4 + 0.5) * 2 * 3);
