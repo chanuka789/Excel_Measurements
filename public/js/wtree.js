@@ -8,7 +8,7 @@ import { MTYPES, UNIT, DETAILS, groupTotal, dimensions, groupToSpec, displayUnit
 import { canView } from './drawings.js';
 
 let C;                                   // context from window.js: { W, V, paint, send, openDrawing, openProps, openVersion, setIds, ... }
-const T = { folders: [], groups: [], standard: [], open: new Set(['std']), cur: null, sel: null, filter: '', dimSel: new Set(), top: 'drawings', bottom: 'groups', zones: [], waiting: null };
+const T = { folders: [], groups: [], standard: [], open: new Set(['std']), shut: new Set(), cur: null, sel: null, filter: '', dimSel: new Set(), top: 'drawings', bottom: 'groups', zones: [], waiting: null };
 const canEdit = () => ['owner', 'editor'].includes(C.W.project?.my_role);
 const G = (id) => T.groups.find(g => g.id === id) || T.standard.find(g => g.id === id);
 const folderPath = (id) => { const out = []; for (let f = T.folders.find(x => x.id === id); f; f = T.folders.find(x => x.id === f.parent_id)) out.unshift(f.name); return out.join('\\'); };
@@ -143,9 +143,28 @@ async function renderViewsTab(host) {
 }
 
 // ================================================================== bottom: dimension groups
+/** Totals of a group's custom quantities (formwork, reinforcement, waterproofing...) on the open model, cached. */
+const subCache = new Map();
+function customTotals(g) {
+  if (!(g.props?.custom || []).length || !g.items.length) return [];
+  const key = `${g.id}|${g.updated_at}|${g.items.length}|${C.W.versionId}|${JSON.stringify(g.props.custom).length}|${JSON.stringify(g.props.variables || []).length}`;
+  if (subCache.has(key)) return subCache.get(key);
+  let out = [];
+  try {
+    const spec = groupToSpec(g, C.W.byId);
+    const ev = evaluate(spec, C.W.byId);
+    out = spec.formulas.filter(f => /^C\d+$/.test(f.key)).map(f => ({ label: f.label, unit: f.unit, total: ev.tot[f.key] ?? 0, rule: f.rule?.ref || '' }));
+  } catch (err) { out = [{ label: 'Custom quantities: ' + err.message, unit: '', total: null }]; }
+  subCache.set(key, out);
+  return out;
+}
 function groupNode(g) {
   const t = groupTotal(g, C.W.byId);
+  const subs = customTotals(g), qk = 'q' + g.id;
   return { key: 'g' + g.id, label: g.name, icon: 'dg-' + g.mtype.toLowerCase(), cols: [nice(t.total, t.unit), t.unit], sel: T.sel === g.id, cur: T.cur === g.id,
+    open: subs.length && !T.shut.has(qk), toggle: () => { T.shut.has(qk) ? T.shut.delete(qk) : T.shut.add(qk); render(); },
+    children: subs.map((c, i) => ({ key: qk + '-' + i, label: c.label, icon: 'qty', muted: true, title: `${c.label}${c.rule ? ' · ' + c.rule : ''} (custom quantity of "${g.name}")`, cols: [nice(c.total, c.unit), c.unit],
+      onClick: () => selectGroup(g.id), onOpen: () => editGroup(g, undefined, 'custom'), onMenu: (x, y) => groupMenu(g, x, y) })),
     title: `${g.name} · ${g.mtype}${t.absent ? ` · ${t.absent} not in this model` : ''}${t.missing ? ` · ${t.missing} without a ${g.mtype.toLowerCase()}` : ''}`,
     drag: { type: 'group', id: g.id }, onClick: () => selectGroup(g.id), onOpen: () => editGroup(g), onMenu: (x, y) => groupMenu(g, x, y) };
 }
@@ -431,7 +450,8 @@ export async function editGroup(g, folderId, tab = 'props', { importIds = null, 
         height: Number(v('dgH').value) || 0, offset: Number(v('dgO').value) || 0, gfa: v('dgG').checked, posColor: v('dgPC').value, negColor: v('dgNC').value, weightUom: v('dgU').value,
         description: v('dgDesc').value });
     } else if (cur === 'custom') {
-      work.props.custom = [...pane.querySelectorAll('tr[data-r]')].map(tr => ({ label: tr.querySelector('[data-f=label]').value.trim(), unit: tr.querySelector('[data-f=unit]').value.trim(), expr: tr.querySelector('[data-f=expr]').value.trim() })).filter(c => c.label || c.expr);
+      work.props.custom = [...pane.querySelectorAll('tr[data-r]')].map(tr => { const was = work.props.custom[+tr.dataset.r] || {}, expr = tr.querySelector('[data-f=expr]').value.trim();
+        return { label: tr.querySelector('[data-f=label]').value.trim(), unit: tr.querySelector('[data-f=unit]').value.trim(), expr, ...(was.rule && was.expr === expr ? { rule: was.rule } : {}) }; }).filter(c => c.label || c.expr);
     } else if (cur === 'vars') {
       work.props.variables = [...pane.querySelectorAll('tr[data-r]')].map(tr => ({ name: tr.querySelector('[data-f=name]').value.trim(), value: Number(tr.querySelector('[data-f=value]').value) || 0, unit: tr.querySelector('[data-f=unit]').value.trim() })).filter(x => x.name);
     } else if (cur === 'meas') {

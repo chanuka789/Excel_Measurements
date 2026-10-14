@@ -32,6 +32,9 @@ export function mountQs(ctx) {
       </div>
       <p class="hint">${esc(RULE_SETS[s.ruleSet].full)}. ${esc(LIMITS_TEXT(s.ruleSet))}</p>
       ${st.setupOpen ? setupHtml(s, gl) : ''}
+      ${ctx.createGroups ? `<div class="card qs-groups"><strong>Structure into dimension groups</strong>
+        <div class="hint">One group per element type (slabs and walls per thickness) with volume, formwork, reinforcement and waterproofing in the same group, in folders Section C - Concrete works › Substructure / Frame / Superstructure / Roof (steel: Section E - Metal work). Running it again updates the groups.</div>
+        <div class="row"><button class="btn small primary" id="qsGroups" ${canEdit() ? '' : 'disabled'}>Create dimension groups${st.use === 'sel' && sel.length ? ` for the selection (${sel.length})` : ''}</button><span class="hint" id="qsGroupsOut"></span></div></div>` : ''}
       <div class="row qs-use"><label><input type="radio" name="qsUse" value="item" ${st.use === 'item' ? 'checked' : ''}> Elements the item finds</label>
         <label><input type="radio" name="qsUse" value="sel" ${st.use === 'sel' ? 'checked' : ''} ${sel.length ? '' : 'disabled'}> The selection (${sel.length})</label></div>
       <input type="search" class="input" id="qsFind" placeholder="Search measure items" value="${esc(st.q)}" aria-label="Search measure items">
@@ -43,6 +46,12 @@ export function mountQs(ctx) {
       }).join('')).join('')}</div>
       <div id="qsPreview"></div>`;
     ctx.host.querySelector('#qsSet').onchange = (e) => saveSetup({ ruleSet: e.target.value });
+    const gb = ctx.host.querySelector('#qsGroups');
+    if (gb) gb.onclick = async () => {
+      gb.disabled = true; const out = ctx.host.querySelector('#qsGroupsOut'); out.textContent = 'Working…';
+      try { const r = await ctx.createGroups(st.use === 'sel' && sel.length ? sel : null); out.textContent = r.text; ctx.status(`Dimension groups: ${r.text}.`, 'ok'); }
+      catch (err) { out.textContent = ''; ctx.status(err.message, 'bad'); } finally { gb.disabled = false; }
+    };
     ctx.host.querySelector('#qsSetupBtn').onclick = () => { st.setupOpen = !st.setupOpen; render(); };
     ctx.host.querySelectorAll('input[name=qsUse]').forEach(r => r.onchange = () => { st.use = r.value; render(); });
     const find = ctx.host.querySelector('#qsFind');

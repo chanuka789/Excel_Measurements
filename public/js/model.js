@@ -20,7 +20,7 @@ export function initModel() {
       showPick(id); if (id != null) revealInTree(id); update();
       if (id != null && S.inExcel) App.goToRows?.([...S.ticked]);
     },
-    onContext: (id) => showProps(id),
+    onContext: (id) => { if (id != null) showProps(id); },
     onBoxSelect: (ids, add) => {
       snapshot(); if (!add) S.ticked.clear(); ids.forEach(id => S.ticked.add(id)); update();
       status(`${ids.length} element${ids.length === 1 ? '' : 's'} selected by the box.`, 'ok');

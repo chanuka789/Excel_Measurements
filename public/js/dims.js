@@ -125,13 +125,16 @@ export function groupToSpec(g, byId, opts = {}) {
         const val = k === 'Multiplier' ? factor(p.multiplier) : factor(p[k.toLowerCase()], 0);
         constants.push({ key: k, label: k, value: val, unit: k === 'Multiplier' ? '' : 'm' }); known.add(k); continue;
       }
+      const baseIn = inputs.find(i => i.key === 'Base');
+      if (baseIn && (baseIn.source === 'property' ? keyOf(baseIn.name) === k : (baseIn.names || []).some(n => keyOf(n) === k))) { expr = expr.replace(new RegExp(`\\{${k}\\}`, 'g'), '{Base}'); continue; }
       const b = bimKeys.get(k);
-      if (b) { inputs.push({ key: k, label: b.n, unit: b.u, source: 'property', name: b.n, sum: true }); known.add(k); continue; }
+      if (b) { inputs.push({ key: k, label: b.n, unit: b.u, source: 'property', name: b.n, sum: !/thickness|level|top$|bottom$/i.test(b.n), ...(/^Thickness/.test(b.n) ? { blankAsZero: true } : {}) }); known.add(k); continue; }
       throw new Error(`Custom quantity "${c.label}" uses {${k}}, which is not a variable or a quantity of these elements.`);
     }
     const key = 'C' + (i + 1);
-    formulas.push({ key, label: c.label, unit: c.unit || '', expr }); known.add(key);
+    formulas.push({ key, label: c.label, unit: c.unit || '', expr, ...(c.rule ? { rule: c.rule } : {}) }); known.add(key);
   }
+  if (p.rule) { const q = formulas.find(f => f.key === 'Qty') || inputs.find(i => i.key === baseKey); if (q) q.rule = p.rule; }
   const manual = measured.map(m => ({ label: m.label, v: { [baseKey]: m.value, ...(hasFactor ? { Factor: (m.sign < 0 ? -1 : 1) * factor(m.multiplier) } : {}) } }));
   return { name: g.name, ids, by: opts.by ?? 'type', note: p.description || `Dimension group (${g.mtype}${conv.display !== g.mtype ? ' shown as ' + conv.display : ''})`,
     details: opts.details || DEFAULT_DETAILS, inputs, constants, formulas, manual, dimGroupId: g.id, parts: [g.name] };

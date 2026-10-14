@@ -94,3 +94,33 @@ test('the library has 60 items and simple items keep only columns the elements h
   assert.equal(ev.tot.F1, 2.25 * 3.5);
   assert.equal(qsSetup({}).ruleSet, 'NRM2');
 });
+
+test('structural dimension groups: one group per element type and thickness, all quantities in it, POMI section folders', async () => {
+  const { structureGroupPlan, POMI_SECTIONS } = await import('../public/js/qsgroups.js');
+  const { groupToSpec, groupTotal } = await import('../public/js/dims.js');
+  assert.equal(POMI_SECTIONS.length, 15); assert.equal(POMI_SECTIONS[1], 'Section C - Concrete works');
+  const plan = structureGroupPlan(E, byId, { set: 'NRM2', setup: { groundLevel: 0 } });
+  const where = Object.fromEntries(plan.map(g => [g.name, g.path.join(' > ')]));
+  assert.equal(where['200 mm suspended slab'], 'Section C - Concrete works > Superstructure');
+  assert.equal(where['350 mm suspended slab'], 'Section C - Concrete works > Superstructure');
+  assert.equal(where.Beams, 'Section C - Concrete works > Frame');
+  assert.equal(where.Footings, 'Section C - Concrete works > Substructure');
+  assert.equal(where['150 mm ground slab'], 'Section C - Concrete works > Substructure');
+  assert.equal(where['250 mm roof slab'], 'Section C - Concrete works > Roof');
+  assert.equal(where['Steel UKB127x76x13'], 'Section E - Metal work > Frame');
+  const asGroup = (g) => ({ id: 'x', name: g.name, mtype: g.mtype, props: g.props, items: g.ids.map(id => ({ element_id: id, sign: 1, multiplier: 1 })) });
+  const tot = (g) => { const sp = groupToSpec(asGroup(g), byId); const ev = evaluate(sp, byId); return Object.fromEntries(sp.formulas.map(f => [f.label, ev.tot[f.key]])); };
+  const slab = plan.find(g => g.name === '200 mm suspended slab');
+  assert.equal(groupTotal(asGroup(slab), byId).total, 9.6);                              // the group quantity is the concrete volume
+  const t = tot(slab);
+  assert.equal(t['Soffits of horizontal work, propping height 0 to 3 m'], 46.2);
+  assert.equal(t['Edges of horizontal work, not exceeding 500 mm high'], 28);
+  assert.ok(Math.abs(t['Bar reinforcement (allowance from kg/m3 rate until the bar schedule is available)'] - 0.96) < 1e-9);
+  assert.equal(slab.props.rule.ref, 'NRM2 11.2');                                        // concrete rule on the group quantity
+  assert.ok(!Object.keys(t).some(l => /^Horizontal work/.test(l)));                       // no second concrete column
+  const roof = tot(plan.find(g => g.name === '250 mm roof slab'));
+  assert.equal(roof['Waterproofing, horizontal (flat), roof'], 48);
+  const steel = tot(plan.find(g => g.name.startsWith('Steel')));
+  assert.ok(Math.abs(steel['Structural steel members'] - 0.052) < 1e-9);
+  assert.equal(new Set(plan.map(g => g.name)).size, plan.length);                        // no duplicate groups
+});

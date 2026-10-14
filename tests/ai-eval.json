@@ -992,22 +992,14 @@
   },
   {
    "id": "q075",
-   "request": "Put one dimension group per structural element type (volume) in a new folder Structure",
+   "request": "Measure the structure into dimension groups: volume, formwork, reinforcement and waterproofing for each element type",
    "expect": {
     "actions": [
      {
-      "do": "create_folder",
-      "name": "Structure"
-     },
-     {
-      "do": "create_dim_group",
-      "folder": "Structure"
+      "do": "create_structure_groups"
      }
     ],
-    "order": [
-     "create_folder",
-     "create_dim_group"
-    ]
+    "no_split_groups": true
    }
   },
   {
@@ -1111,30 +1103,38 @@
    }
   },
   {
-   "id": "q081",
-   "request": "Organise the take-off: a folder per level",
+   "request": "Measure the beams and columns with formwork and rebar into dimension groups in the Frame folder",
    "expect": {
     "actions": [
      {
-      "do": "create_folder"
+      "do": "create_structure_groups"
      }
     ],
-    "no_deletes": true
-   }
+    "no_split_groups": true
+   },
+   "id": "q081"
   },
   {
-   "id": "q082",
-   "request": "Create a dimension group for the precast walls",
+   "request": "Create dimension groups for the slabs by thickness with formwork and reinforcement, then add them to Excel",
    "expect": {
     "actions": [
      {
-      "do": "create_dim_group",
-      "categories": [
-       "Walls"
-      ]
+      "do": "create_structure_groups"
+     },
+     {
+      "do": "groups_to_excel"
      }
-    ]
-   }
+    ],
+    "order": [
+     "create_structure_groups",
+     "groups_to_excel"
+    ],
+    "no_split_groups": true
+   },
+   "state": {
+    "groundLevel": 0
+   },
+   "id": "q082"
   },
   {
    "id": "q083",
@@ -1848,18 +1848,14 @@
    "id": "q122",
    "request": "Measure the slabs and then build the summary by level",
    "expect": {
+    "items_any": [
+     "st-slabs",
+     "st-all"
+    ],
     "actions": [
-     {
-      "do": "measure_item",
-      "item": "st-slabs"
-     },
      {
       "do": "build_summaries"
      }
-    ],
-    "order": [
-     "measure_item",
-     "build_summaries"
     ]
    },
    "state": {
@@ -1870,20 +1866,16 @@
    "id": "q123",
    "request": "Measure the whole structure and create the NRM1 elemental summary",
    "expect": {
+    "items_any": [
+     "st-all"
+    ],
     "actions": [
-     {
-      "do": "measure_item"
-     },
      {
       "do": "build_summaries",
       "kinds": [
        "NRM1"
       ]
      }
-    ],
-    "order": [
-     "measure_item",
-     "build_summaries"
     ]
    },
    "state": {
@@ -2256,22 +2248,19 @@
       "rule_set": "POMI"
      },
      {
-      "do": "create_folder",
-      "name": "Structure"
-     },
-     {
-      "do": "measure_item"
-     },
-     {
       "do": "build_summaries",
       "kinds": [
        "POMI"
       ]
      }
     ],
+    "items_any": [
+     "st-columns",
+     "st-beams",
+     "st-all"
+    ],
     "order": [
      "set_rules",
-     "measure_item",
      "build_summaries"
     ]
    },
@@ -2283,21 +2272,17 @@
    "id": "q147",
    "request": "Ground level is 0.0. Measure the pile caps with waterproofing and build the NRM2 summary",
    "expect": {
+    "items_any": [
+     "st-pilecaps",
+     "st-all"
+    ],
     "actions": [
-     {
-      "do": "measure_item",
-      "item": "st-pilecaps"
-     },
      {
       "do": "build_summaries",
       "kinds": [
        "NRM2"
       ]
      }
-    ],
-    "order": [
-     "measure_item",
-     "build_summaries"
     ],
     "cite": true
    }
@@ -2311,13 +2296,13 @@
       "do": "isolate"
      },
      {
-      "do": "measure_item",
-      "item": "st-roofslabs"
-     },
-     {
       "do": "color_by",
       "mode": "measured"
      }
+    ],
+    "items_any": [
+     "st-roofslabs",
+     "st-all"
     ]
    },
    "state": {

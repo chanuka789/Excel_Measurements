@@ -171,7 +171,9 @@ export function explainRule(set, key) {
 }
 /** Section unit mass (kg/m) from a steel section name: UK/EU names end with the mass, e.g. UKB127x76x13 = 13 kg/m. */
 export function steelMass(type) {
-  const m = /(?:UKB|UKC|UB|UC|PFC)\s*\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\s*[x×]\s*(\d+(?:\.\d+)?)/i.exec(type || '');
+  const t = String(type || '');
+  const m = /(?:UKB|UKC|UB|UC|PFC)\s*\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\s*[x×]\s*(\d+(?:\.\d+)?)/i.exec(t)
+    || /\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:UKB|UKC|UB|UC|PFC)\b/i.exec(t);      // e.g. 100x50x10PFC
   return m ? Number(m[1]) : null;
 }
 

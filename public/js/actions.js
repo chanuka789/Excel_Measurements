@@ -9,7 +9,8 @@ import { evaluate, keyOf, fmt } from './engine.js';
 import { qsSetup } from './rules.js';
 import { ITEMS, itemIds, itemSpecs } from './qsitems.js';
 import { filterIds, matchFilter } from './filter.js';
-import { mergeList } from './dims.js';
+import { mergeList, groupToSpec } from './dims.js';
+import { structureGroupPlan, POMI_SECTIONS, ELEMENT_GROUPS } from './qsgroups.js';
 import { ACTIONS, actionKind, actionText, describeFilter } from './actdefs.js';
 
 export const stepLabel = (t) => ({ test_item: 'Tested a measure item by the rules:', rule_info: 'Read the measurement rules:', project_state: 'Read the project set-up:', find_elements: 'Searched the model:', type_details: 'Read the quantities of a type:', test_plan: 'Tested the method on the model:', search_rules: 'Checked the QS rules:', list_templates: 'Looked at saved methods:', get_template: 'Opened a saved method:' })[t] || t;
@@ -106,7 +107,7 @@ export async function runAction(a, host, ctx = {}) {
       if (!ids.length) return { text: 'already in the group' };
       await api('POST', `/dimgroups/${g.id}/items`, { ids, versionId: host.versionId() });
       host.refreshTree?.();
-      return { text: `${ids.length} added`, undo: async () => { const t2 = await tree(host); const g2 = t2.groups.find(x => x.id === g.id); const rm = (g2?.items || []).filter(i => ids.includes(i.element_id)).map(i => i.id); if (rm.length) await api('POST', `/dimgroups/${g.id}/items/remove`, { ids: rm }); host.refreshTree?.(); } };
+      return { text: `${ids.length} added`, undo: async () => { await api('POST', `/dimgroups/${g.id}/items/remove`, { ids }); host.refreshTree?.(); } };
     }
     case 'create_zone': {
       needEdit(host);
@@ -120,6 +121,30 @@ export async function runAction(a, host, ctx = {}) {
         if (old) await api('POST', `/projects/${host.projectId()}/zones`, { name: old.name, color: old.color, ids: old.ids }); else await api('DELETE', `/zones/${zone.id}`);
         host.refreshZones?.();
       } };
+    }
+    case 'create_structure_groups': return createStructureGroups(host, a);
+    case 'groups_to_excel': {
+      const t = await tree(host);
+      let groups = t.groups;
+      if (a.folder) {
+        const f = t.folders.filter(x => x.kind === 'dim').find(x => x.name.toLowerCase() === String(a.folder).toLowerCase().split('\\').pop());
+        if (!f) throw new Error(`There is no folder "${a.folder}".`);
+        const sub = new Set([f.id]); let grew = true;
+        while (grew) { grew = false; t.folders.forEach(x => { if (x.parent_id && sub.has(x.parent_id) && !sub.has(x.id)) { sub.add(x.id); grew = true; } }); }
+        groups = groups.filter(g => sub.has(g.folder_id));
+      }
+      const byId = host.byId(), refs = [];
+      // folder order (Substructure, Frame, Superstructure, Roof), then names with numbers in order
+      const pathOf = (fid) => { const out = []; for (let f = t.folders.find(x => x.id === fid); f; f = t.folders.find(x => x.id === f.parent_id)) out.unshift(f.name); return out; };
+      const rank = (g) => { const p = pathOf(g.folder_id); return [POMI_SECTIONS.indexOf(p.find(n => POMI_SECTIONS.includes(n))), ELEMENT_GROUPS.indexOf(p.at(-1))]; };
+      groups = [...groups].sort((a, b) => { const [a1, a2] = rank(a), [b1, b2] = rank(b); return a1 - b1 || a2 - b2 || a.name.localeCompare(b.name, undefined, { numeric: true }); });
+      for (const g of groups) {
+        if (!g.items.some(i => byId.has(i.element_id))) continue;
+        const spec = groupToSpec(g, byId, { details: ['type', 'level', 'mark'] });
+        refs.push(await host.addSpec(spec));
+      }
+      if (!refs.length) throw new Error('None of these dimension groups has elements in this model.');
+      return { text: `${refs.length} table${refs.length === 1 ? '' : 's'}` };
     }
     case 'measure_item': {
       const item = ITEMS.find(i => i.id === a.item); if (!item) throw new Error(`Unknown measure item "${a.item}".`);
@@ -177,6 +202,61 @@ export async function runAction(a, host, ctx = {}) {
     case 'delete_sheet': { await host.excel('deleteSheet', { name: a.name }); return { text: 'deleted (use Excel Undo to restore)' }; }
     default: throw new Error(`Unknown action ${a.do}.`);
   }
+}
+
+/** Folders by path (created when missing), then one group per element type with all its quantities. */
+export async function createStructureGroups(host, a = {}) {
+  needEdit(host);
+  const E = host.E(), byId = host.byId();
+  const ids = a.filter ? filterIds(E, a.filter, host.ticked(), host.zoneOf?.()) : null;
+  if (ids && !ids.length) throw new Error(`No elements match: ${describeFilter(a.filter)}.`);
+  const settings = host.project()?.project?.settings || {};
+  const plan = structureGroupPlan(E, byId, { ids, setup: settings.qs || {}, root: a.root || '' });
+  if (!plan.length) throw new Error('No structural concrete or steel elements found.');
+  const pid = host.projectId(), vid = host.versionId();
+  let t = await tree(host);
+  const folders = t.folders.filter(f => f.kind === 'dim');
+  const made = { folders: [], groups: [], updated: [] };
+  const folderFor = async (path) => {
+    let parent = null;
+    for (const name of path) {
+      let f = folders.find(x => x.name.toLowerCase() === name.toLowerCase() && (x.parent_id || null) === parent);
+      if (!f) {
+        const order = POMI_SECTIONS.indexOf(name) >= 0 ? POMI_SECTIONS.indexOf(name) + 1 : ELEMENT_GROUPS.indexOf(name) + 1;     // keeps B..R and Substructure..Roof in order
+        f = (await api('POST', `/projects/${pid}/folders`, { kind: 'dim', name, parentId: parent, sort: Math.max(order, 0) })).folder; folders.push(f); made.folders.push(f.id);
+      }
+      parent = f.id;
+    }
+    return parent;
+  };
+  for (const g of plan) {
+    const fid = await folderFor(g.path);
+    const old = t.groups.find(x => x.folder_id === fid && x.name.toLowerCase() === g.name.toLowerCase());
+    if (old) {
+      await api('PATCH', `/dimgroups/${old.id}`, { name: g.name, mtype: g.mtype, props: { ...old.props, ...g.props } });
+      await api('POST', `/dimgroups/${old.id}/items/remove`, { all: true });
+      await api('POST', `/dimgroups/${old.id}/items`, { ids: g.ids, versionId: vid });
+      made.updated.push(old);
+    } else {
+      const { group } = await api('POST', `/projects/${pid}/dimgroups`, { name: g.name, mtype: g.mtype, folderId: fid, props: g.props });
+      await api('POST', `/dimgroups/${group.id}/items`, { ids: g.ids, versionId: vid });
+      made.groups.push(group.id);
+    }
+  }
+  host.refreshTree?.();
+  const nf = new Set(plan.map(g => g.path.join('\\'))).size;
+  return { text: `${made.groups.length} new, ${made.updated.length} updated group${made.updated.length === 1 ? '' : 's'} in ${nf} folders`, plan,
+    undo: async () => {
+      for (const id of made.groups) await api('DELETE', `/dimgroups/${id}`).catch(() => {});
+      for (const g of made.updated) {
+        await api('PATCH', `/dimgroups/${g.id}`, { name: g.name, mtype: g.mtype, props: g.props });
+        await api('POST', `/dimgroups/${g.id}/items/remove`, { all: true });
+        const by = new Map(); g.items.forEach(i => { const k = `${i.version_id}|${i.sign}`; if (!by.has(k)) by.set(k, []); by.get(k).push(i.element_id); });
+        for (const [k, list] of by) { const [v, sign] = k.split('|'); await api('POST', `/dimgroups/${g.id}/items`, { ids: list, versionId: v === 'null' ? null : v, sign: Number(sign) }); }
+      }
+      for (const id of made.folders.reverse()) await api('DELETE', `/folders/${id}`).catch(() => {});
+      host.refreshTree?.();
+    } };
 }
 
 // ------------------------------------------------------------------ the plan card

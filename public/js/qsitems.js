@@ -60,6 +60,7 @@ function concreteSpec(kind, els, set, setup, gl) {
   B.inputs.push({ key: 'Count', label: 'Count', unit: 'nr', source: 'count', sum: true });
   const V = has(els, 'Net volume') ? input('Net volume', 'Net volume', 'm3') : has(els, 'Geo volume') ? input('Geo volume', 'Geo volume', 'm3') : input('Volume', 'Volume', 'm3');
   const thick = input('Thickness (geometry)', 'Thickness', 'm', false);
+  { const t = B.inputs.find(i => i.name === 'Thickness (geometry)'); if (t) t.blankAsZero = true; }   // no thickness: 'not exceeding 300' (as Excel does with a blank cell)
   const horizontal = ['slab', 'roofslab', 'groundslab', 'beam', 'groundbeam', 'footing', 'pilecap', 'raft'].includes(kind);
   const vertical = ['column', 'wall'].includes(kind);
   const earth = () => constant('Earth', 'Foundation sides cast against earth (1 = yes, 0 = formwork)', setup.earthFaced ? 1 : 0, '');

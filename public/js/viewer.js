@@ -444,7 +444,7 @@ export class Viewer {
       e.preventDefault();
       if (rdown && Math.hypot(e.clientX - rdown.x, e.clientY - rdown.y) > 5) { rdown = null; return; }   // right-drag pans
       rdown = null;
-      const h = this.hit(e); if (h) this.cb.onContext?.(h.id, e.clientX, e.clientY);
+      const h = this.hit(e); this.cb.onContext?.(h ? h.id : null, e.clientX, e.clientY);      // empty space too (view menu)
     });
     el.tabIndex = 0;
     el.setAttribute('aria-label', '3D model. Arrow keys orbit, plus and minus zoom, F fits, 1 to 7 pick a standard view.');

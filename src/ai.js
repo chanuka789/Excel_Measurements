@@ -9,6 +9,7 @@ import { applyFilter, overview } from './modeldata.js';
 import { ITEMS, itemIds, itemSpecs, LIMITS_TEXT } from '../public/js/qsitems.js';
 import { RULES as RULE_ITEMS, RULE_SETS, qsSetup, QS_KNOWLEDGE, NRM1 } from '../public/js/rules.js';
 import { ACTIONS_TEXT, cleanActions } from '../public/js/actdefs.js';
+import { POMI_SECTIONS } from '../public/js/qsgroups.js';
 
 // ------------------------------------------------------------------ providers
 export function providers() {
@@ -159,7 +160,15 @@ Rules for actions:
 - When a quantity depends on a measurement rule, say which in "rules_used" (ref and what it decided), and put the ref in the action's "rule".
 - When data is missing (ground level for waterproofing below ground, a rate, which rules to use when the request depends on it,
   which elements are meant), ask ONE question in "question" and plan no write actions.
-- When the user asks to measure, put the measure_item (or add_groups) actions in the plan so the result reaches Excel.
+- Measuring structure (concrete, formwork, reinforcement, waterproofing, piles, steel): plan create_structure_groups. It makes ONE
+  dimension group per element type (slabs and walls per thickness, named "<thickness> mm <element>") holding volume, formwork,
+  reinforcement and waterproofing together. NEVER make separate dimension groups or tables for formwork, reinforcement or
+  waterproofing of the same elements. If the user wants the result in Excel, follow it with groups_to_excel (one table per group).
+  Use measure_item only when the user asks for Excel tables without dimension groups.
+- Folders follow the POMI sections, then the element group: "${POMI_SECTIONS.join('", "')}";
+  under a section: Substructure, Frame, Superstructure, Roof (e.g. "Section C - Concrete works" > "Frame"). When you create
+  folders or dimension groups for other trades, use the same sections (doors in Section H, finishes in Section J, ...).
+- When the user asks to measure, put the actions in the plan so the result reaches the dimension groups and/or Excel.
 - Summaries, NRM1/NRM2 sheets and new sheets are built by formulas from the take-off; use build_summaries / new_sheet.
 ${QS_KNOWLEDGE}
 When you are done, answer with ONLY this JSON (no tool call):

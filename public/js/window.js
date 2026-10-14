@@ -176,8 +176,31 @@ function objectSub(id, act) {
     { label: 'Custom...', run: () => customSet(act) },
     { label: 'Area', run: () => { status('Drag a rectangle over the objects (left to right: fully inside; right to left: touched). Esc cancels.'); V.pickArea((ids) => act(ids)); } }];
 }
+/** Right-click on empty space (or an object with no data): view commands and the current selection. */
+function viewMenu(x, y) {
+  const editor = ['owner', 'editor'].includes(W.project?.my_role), sel = [...W.ticked], cur = currentGroup();
+  const views = [['Top', 'top'], ['Bottom', 'bottom'], ['Front', 'front'], ['Back', 'back'], ['Left', 'left'], ['Right', 'right'], ['Isometric', 'iso']];
+  menu([
+    { label: `Object Properties${sel.length ? '' : ' (select an object)'}`, disabled: !sel.length, run: () => { W.side = 'props'; showSidePanel(true); renderSide(); } },
+    { label: 'Create Dimension Group from Selection', disabled: !editor || !sel.length, run: () => createGroupFor(sel) },
+    { label: `Import Selection${cur ? ` into "${cur.name}"` : ''}`, disabled: !editor || !sel.length, run: () => importObjects(sel) }, '-',
+    { label: 'Show Only Selection', disabled: !sel.length, run: () => showOnly(sel) },
+    { label: 'Hide Selection', key: 'H', disabled: !sel.length, run: () => hideIds(sel) },
+    { label: 'Clear Selection', disabled: !sel.length, run: () => setIds([]) },
+    { label: 'Show Objects In', items: [{ label: 'Custom...', run: () => customSet(showOnly) }, { label: 'Area', run: () => { status('Drag a rectangle over the objects. Esc cancels.'); V.pickArea((ids) => showOnly(ids)); } }] },
+    { label: 'Select Objects In', items: [{ label: 'Custom...', run: () => customSet((ids) => setIds(ids, true)) }, { label: 'Area', run: () => { status('Drag a rectangle over the objects. Esc cancels.'); V.pickArea((ids) => setIds(ids)); } }] },
+    { label: 'Show All Objects', run: showAll }, '-',
+    { label: 'Zoom Area', run: () => { status('Drag a rectangle to zoom to. Esc cancels.'); V.pickArea((ids) => { if (ids.length) V.fit(ids); else status('Nothing inside that area.'); }, { crossing: true }); } },
+    { label: 'Zoom Extents', run: () => V.fit() },
+    { label: 'Zoom to Selection', disabled: !sel.length, run: () => V.fit(sel.filter(i => V.hasGeometry(i))) },
+    { label: 'Reset View', run: () => V.setView('iso', false) },
+    { label: 'Default Views', items: views.map(([l, v]) => ({ label: l, run: () => V.setView(v) })) }, '-',
+    { label: V.imagesHidden ? 'Show Images' : 'Hide Images', title: 'Faded objects and edge lines', run: () => V.setImagesHidden(!V.imagesHidden) }, '-',
+    { label: 'Close Menu' },
+  ], x, y);
+}
 function objectMenu(id, x, y) {
-  const e = W.byId.get(id); if (!e) return;
+  const e = W.byId.get(id); if (!e) return viewMenu(x, y);
   const editor = ['owner', 'editor'].includes(W.project?.my_role);
   const cur = currentGroup();
   const views = [['Top', 'top'], ['Bottom', 'bottom'], ['Front', 'front'], ['Back', 'back'], ['Left', 'left'], ['Right', 'right'], ['Isometric', 'iso']];

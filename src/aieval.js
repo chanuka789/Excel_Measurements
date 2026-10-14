@@ -38,12 +38,16 @@ function actionMatches(a, want, data, ticked) {
 }
 function scoreActions(x, plan, data, ticked, why) {
   const acts = plan?.actions || [];
-  for (const want of x.actions || []) if (!acts.some(a => actionMatches(a, want, data, ticked))) why.push(`missing action ${want.do}${Object.keys(want).length > 1 ? ' ' + JSON.stringify(want) : ''}`);
-  if (x.items_any && !acts.some(a => a.do === 'measure_item' && x.items_any.includes(a.item))) why.push('expected a measure item: ' + x.items_any.join(' / '));
+  // measuring structure into dimension groups is as good as a measure item (same rules, same quantities)
+  const alias = (want) => (want.do === 'measure_item' && (!want.item || String(want.item).startsWith('st-')) ? [want, { do: 'create_structure_groups' }] : [want]);
+  for (const want of x.actions || []) if (!alias(want).some(w => acts.some(a => actionMatches(a, w, data, ticked)))) why.push(`missing action ${want.do}${Object.keys(want).length > 1 ? ' ' + JSON.stringify(want) : ''}`);
+  const structural = (x.items_any || []).some(i => i.startsWith('st-')) && acts.some(a => a.do === 'create_structure_groups');
+  if (x.items_any && !structural && !acts.some(a => a.do === 'measure_item' && x.items_any.includes(a.item))) why.push('expected a measure item: ' + x.items_any.join(' / '));
+  if (x.no_split_groups && acts.filter(a => a.do === 'create_dim_group' && /formwork|reinforc|rebar|waterproof/i.test(a.name || '')).length) why.push('made separate dimension groups for formwork / reinforcement / waterproofing');
   if (x.no_writes && acts.some(a => WRITE.has(actionKind(a)))) why.push('planned changes it should not make');
   if (x.no_deletes && acts.some(a => actionKind(a) === 'delete')) why.push('planned a delete that was not asked for');
   if (x.cite && !(plan?.rules_used || []).length && !acts.some(a => a.rule)) why.push('did not say which measurement rule it used');
-  if (x.order) { const pos = x.order.map(d => acts.findIndex(a => a.do === d)); if (pos.some(p => p < 0) || pos.some((p, i) => i && p < pos[i - 1])) why.push('actions in the wrong order: expected ' + x.order.join(' > ')); }
+  if (x.order) { const pos = x.order.map(d => { const i = acts.findIndex(a => a.do === d); return i < 0 && d === 'measure_item' ? acts.findIndex(a => a.do === 'create_structure_groups') : i; }); if (pos.some(p => p < 0) || pos.some((p, i) => i && p < pos[i - 1])) why.push('actions in the wrong order: expected ' + x.order.join(' > ')); }
   if (x.max_actions && acts.length > x.max_actions) why.push(`too many actions (${acts.length})`);
 }
 export function scoreCase(c, plan, data, ticked = []) {

@@ -9,6 +9,14 @@ const num = (v, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n :
 const color = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v)) ? String(v) : d);
 const isId = (v) => Number.isSafeInteger(Number(v)) && String(v).trim() !== '';
 
+/** The measurement rule a quantity follows (set, key, reference, work section, NRM1 element...), bounded. */
+function cleanRule(r) {
+  if (!r || typeof r !== 'object') return undefined;
+  const o = {};
+  for (const k of ['set', 'key', 'ref', 'group', 'title', 'nrm1', 'band']) if (r[k] != null && r[k] !== '') o[k] = clean(r[k], 160);
+  for (const k of ['confirm', 'allowance', 'info']) if (r[k]) o[k] = true;
+  return o.set || o.ref ? o : undefined;
+}
 /** Keep only known, bounded fields of a dimension group's properties. */
 export function cleanProps(p = {}, old = {}) {
   const src = { ...old, ...(p && typeof p === 'object' ? p : {}) };
@@ -19,7 +27,8 @@ export function cleanProps(p = {}, old = {}) {
     multiplier: num(src.multiplier, 1), width: num(src.width), height: num(src.height), offset: num(src.offset),
     gfa: Boolean(src.gfa), posColor: color(src.posColor, '#107c10'), negColor: color(src.negColor, '#d13438'),
     weightUom: clean(src.weightUom, 20), zone: clean(src.zone, 120) || undefined, description: clean(src.description, 500) || undefined,
-    custom: list(src.custom, 50).map(c => ({ label: clean(c?.label, 80), unit: clean(c?.unit, 20), expr: clean(c?.expr, 500) })).filter(c => c.label && c.expr),
+    custom: list(src.custom, 50).map(c => ({ label: clean(c?.label, 120), unit: clean(c?.unit, 20), expr: clean(c?.expr, 1500), rule: cleanRule(c?.rule) })).filter(c => c.label && c.expr),
+    rule: cleanRule(src.rule),
     variables: list(src.variables, 50).map(v => ({ name: clean(v?.name, 60), value: num(v?.value), unit: clean(v?.unit, 20) })).filter(v => v.name),
     measured: list(src.measured, 2000).map(m => ({ id: clean(m?.id, 40) || Math.random().toString(36).slice(2, 10), label: clean(m?.label, 200) || 'Measured dimension',
       value: num(m?.value), unit: clean(m?.unit, 20), kind: clean(m?.kind, 20) || 'manual', sign: num(m?.sign, 1) < 0 ? -1 : 1, multiplier: num(m?.multiplier, 1),
@@ -65,8 +74,9 @@ export function registerDims(api) {
     const parent = await folderOk(req.params.pid, req.body?.parentId, kind);
     const n = await one(`SELECT count(*)::int AS n FROM folders WHERE project_id=$1`, [req.params.pid]);
     if (n.n >= 2000) fail(400, 'This project has too many folders.');
-    const f = await one(`INSERT INTO folders (project_id, kind, parent_id, name, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING id, kind, parent_id, name, sort`,
-      [req.params.pid, kind, parent, name, req.user.id]);
+    const sort = Number.isInteger(req.body?.sort) && req.body.sort >= 0 && req.body.sort < 10000 ? req.body.sort : 0;
+    const f = await one(`INSERT INTO folders (project_id, kind, parent_id, name, sort, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, kind, parent_id, name, sort`,
+      [req.params.pid, kind, parent, name, sort, req.user.id]);
     await audit(req.user.id, req.params.pid, 'folder.create', { name, kind });
     res.status(201).json({ folder: f });
   }));

@@ -30,6 +30,8 @@ export function evaluate(spec, byId) {
   const keys = [...spec.inputs, ...spec.constants, ...spec.formulas].map(c => c.key);
   const fns = spec.formulas.map(f => ({ ...f, fn: compile(f.expr, keys) }));
   const rows = [], tot = {}, missing = {};
+  // inputs marked blankAsZero count as 0 when an element has no value, exactly like a blank cell in the Excel formula
+  const zero = new Set(spec.inputs.filter(i => i.blankAsZero).map(i => i.key));
   for (const id of spec.ids) {
     const e = byId.get(id); if (!e) continue;
     const v = {};
@@ -38,7 +40,7 @@ export function evaluate(spec, byId) {
     fns.forEach(f => {
       // a formula has no value if anything it refers to (input or earlier formula) has no value
       const refs = [...String(f.expr).matchAll(/\{(\w+)\}/g)].map(m => m[1]);
-      const ok = refs.every(k => v[k] != null);
+      const ok = refs.every(k => v[k] != null || zero.has(k));
       let r = null; if (ok) { try { r = f.fn(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x ?? 0])), FN); } catch { r = null; } }
       v[f.key] = typeof r === 'number' && isFinite(r) ? r : null;
     });

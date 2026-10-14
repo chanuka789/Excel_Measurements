@@ -2,7 +2,7 @@
 // Excel work is sent to the task pane (askPane); everything else runs here.
 import { esc, api, status } from './core.js';
 import { mountQs } from './qsui.js';
-import { renderPlan, checksText, stepLabel } from './actions.js';
+import { renderPlan, checksText, stepLabel, createStructureGroups } from './actions.js';
 
 let C = null;            // { W, V, askPane, send, setIds, isolate, hideIds, showAll, paint, loadTree }
 let qs = null, aiBox = null, aiForm = null;
@@ -49,7 +49,8 @@ export function renderPanel() {
       const host = document.createElement('div'); host.id = 'qsHost';
       qs = { host, ui: mountQs({ host, E: () => W.E, byId: () => W.byId, ticked: () => [...W.ticked], project: () => W.project,
         onProjectChanged: () => C.send({ type: 'projectChanged' }), selectIds: (ids) => C.setIds(ids, true), status,
-        get inExcel() { return W.inExcel !== false; }, add: (spec) => windowHost.addSpec(spec) }) };
+        get inExcel() { return W.inExcel !== false; }, add: (spec) => windowHost.addSpec(spec),
+        createGroups: (ids) => createStructureGroups(windowHost, ids ? { filter: { ids } } : {}) }) };
     }
     body.replaceChildren(qs.host); qs.ui.render(); return;
   }
