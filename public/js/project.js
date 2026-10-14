@@ -2,12 +2,14 @@
 import { $, esc, App, api, upload, downloadFile, fmtBytes, fmtDate, fmtDay, status, confirmBox, session } from './core.js';
 import { openDrawing, canView } from './drawings.js';
 import { S } from './state.js';
+import { canProcessLocally, processLocally, LOCAL } from './localproc.js';
 
 const P = { list: [], detail: null, filter: '', poll: null, users: null, open: new Set(['models']) };
 const DISCIPLINES = ['Architecture', 'Structure', 'Interiors', 'Mechanical', 'Electrical', 'Plumbing', 'Fire', 'Landscape', 'Other'];
 const ROLE_LABEL = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
 const can = (min) => ({ viewer: 1, editor: 2, owner: 3 }[P.detail?.my_role] || 0) >= ({ viewer: 1, editor: 2, owner: 3 }[min]);
-const STATUS = { queued: ['Waiting', 'neutral'], processing: ['Processing', 'info'], ready: ['Ready', 'ok'], failed: ['Failed', 'bad'] };
+const STATUS = { queued: ['Waiting', 'neutral'], processing: ['Processing', 'info'], local: ['On a computer', 'info'], ready: ['Ready', 'ok'], failed: ['Failed', 'bad'] };
+const LOCAL_OK = canProcessLocally();
 const box = () => $('projectBody');
 
 // ---------------------------------------------------------------- list
@@ -115,6 +117,8 @@ function modelsHtml() {
       <label class="field">Discipline<select class="input" id="upDisc"><option value="">Choose…</option>${DISCIPLINES.map(x => `<option>${x}</option>`).join('')}</select></label></div>
       <label class="field">Revision note (optional)<input class="input" id="upNote" maxlength="300" placeholder="e.g. IFC rev C, 12 Oct"></label>
       <p class="muted">Using an existing model name adds a new version of that model. A new name creates a new model.</p>
+      ${LOCAL_OK ? `<label class="row"><input type="checkbox" id="upLocal" checked> Process on this computer (usually faster; keep this window open until it is ready)</label>
+      <p class="muted small">If this computer cannot finish, the server takes over automatically.</p>` : ''}
       <div class="progress" id="upProg" hidden><div></div></div>
       <div class="actions"><button type="button" class="btn" id="upCancel">Cancel</button><button class="btn primary" id="upGo">Upload and process</button></div>
       <div id="upErr" class="msg bad" hidden></div></form>`;
@@ -129,15 +133,35 @@ function modelsHtml() {
           <span class="pill ${tone}">${label}</span>${isOpen ? ' <span class="pill brand">Open</span>' : ''}</div>
         <div class="muted small">${fmtDate(v.created_at)} · ${esc(v.uploaded_by || '')} · ${fmtBytes(Number(v.size))}${v.stats ? ` · ${v.stats.elements} elements, ${v.stats.withGeometry} in 3D` : ''}${v.note ? ' · ' + esc(v.note) : ''}</div>
         ${v.status === 'processing' || v.status === 'queued' ? `<div class="muted small">${esc(v.progress || '')}</div><div class="progress indet"><div></div></div>` : ''}
+        ${v.status === 'local' ? localHtml(v) : ''}
         ${v.status === 'failed' ? `<div class="msg bad small">${esc(v.error || 'Processing failed.')}</div>` : ''}
         <div class="vact">
           ${v.status === 'ready' ? `<button class="btn small primary" data-open="${v.id}">${isOpen ? 'Reload' : 'Open'}</button>` : ''}
           ${v.stats?.sheets?.length ? `<button class="btn small" data-sheets="${v.id}">2D sheets (${v.stats.sheets.length})</button>` : ''}
           <button class="btn small" data-src="${v.id}" data-name="${esc(v.file_name)}">Download</button>
-          ${v.status === 'failed' && can('editor') ? `<button class="btn small" data-re="${v.id}">Try again</button>` : ''}
+          ${v.status === 'failed' && can('editor') ? `<button class="btn small" data-re="${v.id}">Try again on the server</button>` : ''}
+          ${v.status === 'failed' && can('editor') && LOCAL_OK ? `<button class="btn small" data-here="${v.id}" data-name="${esc(v.file_name)}">Process on this computer</button>` : ''}
+          ${v.status === 'local' && can('editor') ? `<button class="btn small" data-server="${v.id}">Process on the server instead</button>` : ''}
           ${can('owner') ? `<button class="btn small subtle danger-text" data-delv="${v.id}" data-label="${esc(m.name)} v${v.version}">Delete</button>` : ''}
         </div></li>`; }).join('')}</ul></div>`).join('');
 }
+/** A version processed on a computer: this one (live progress) or someone else's (the progress it reports). */
+function localHtml(v) {
+  const me = LOCAL.get(v.id);
+  if (me) return `<div class="muted small">${esc(me.step)} · ${Math.round((Date.now() - me.started) / 1000)} s</div><div class="progress"><div style="width:${me.pct}%"></div></div>`;
+  return `<div class="muted small">${esc(v.progress || 'Processing on the uploader\'s computer')}</div><div class="progress indet"><div></div></div>
+    <div class="muted small">If that computer is closed, the server takes over after ${10} minutes.</div>`;
+}
+
+/** Run processLocally for a version and keep the page up to date; the server takes over if it fails. */
+function runHere(pid, file, versionId) {
+  let last = 0;
+  processLocally(file, versionId, { onUpdate: () => { if (Date.now() - last > 1000 && P.detail?.project.id === pid) { last = Date.now(); renderDetail(); } } })
+    .then(({ ms }) => { status(`${file.name} is ready (processed on this computer in ${Math.round(ms / 1000)} s).`, 'ok'); })
+    .catch((err) => { status(`This computer could not process ${file.name} (${err.message}). The server is processing it instead.`, 'bad'); })
+    .finally(() => { if (P.detail?.project.id === pid) openProject(pid, true); });
+}
+
 function drawingsHtml() {
   const d = P.detail;
   const up = `<form class="card form" id="drForm" ${P.showDrUpload ? '' : 'hidden'}>
@@ -246,11 +270,17 @@ function wireDetail() {
     $('upForm').onsubmit = async (e) => {
       e.preventDefault();
       const f = $('upFile').files[0]; if (!f) return;
-      const fd = new FormData(); fd.append('model', f, f.name); fd.append('modelName', $('upName').value); fd.append('discipline', $('upDisc').value); fd.append('note', $('upNote').value);
+      const here = !!$('upLocal')?.checked;
+      const fd = new FormData(); fd.append('modelName', $('upName').value); fd.append('discipline', $('upDisc').value); fd.append('note', $('upNote').value);
+      if (here) fd.append('local', '1');
+      fd.append('model', f, f.name);
       $('upGo').disabled = true; $('upErr').hidden = true; const bar = $('upProg'); bar.hidden = false;
       try {
-        await upload(`/projects/${pid}/models`, fd, (x) => { bar.firstElementChild.style.width = Math.round(x * 100) + '%'; });
-        P.showUpload = false; status(`${f.name} uploaded. Processing has started.`, 'ok'); await openProject(pid, true);
+        const { version } = await upload(`/projects/${pid}/models`, fd, (x) => { bar.firstElementChild.style.width = Math.round(x * 100) + '%'; });
+        P.showUpload = false;
+        if (here && version?.status === 'local') { status(`${f.name} uploaded. Processing on this computer…`, 'info'); runHere(pid, f, version.id); }
+        else status(`${f.name} uploaded. Processing has started on the server.`, 'ok');
+        await openProject(pid, true);
       } catch (err) { $('upErr').hidden = false; $('upErr').textContent = err.message; $('upGo').disabled = false; bar.hidden = true; }
     };
   }
@@ -260,6 +290,20 @@ function wireDetail() {
   });
   box().querySelectorAll('[data-src]').forEach(b => b.onclick = () => dl(`/versions/${b.dataset.src}/source`, b.dataset.name));
   box().querySelectorAll('[data-re]').forEach(b => b.onclick = async () => { await api('POST', `/versions/${b.dataset.re}/reprocess`); openProject(pid, true); });
+  box().querySelectorAll('[data-server]').forEach(b => b.onclick = async () => {
+    if (LOCAL.has(b.dataset.server)) { status('This computer is processing it now. Wait a little, or close this window and the server takes over.', 'info'); return; }
+    await act(() => api('POST', `/versions/${b.dataset.server}/server`, { reason: 'asked by a user' }), 'The server is processing it now.');
+  });
+  box().querySelectorAll('[data-here]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      await api('POST', `/versions/${b.dataset.here}/local-start`);
+      status(`Downloading ${b.dataset.name} to process it here…`);
+      const res = await api('GET', `/versions/${b.dataset.here}/source`, null, { raw: true });
+      const file = new File([await res.blob()], b.dataset.name);
+      runHere(pid, file, b.dataset.here); openProject(pid, true);
+    } catch (err) { status(err.message, 'bad'); b.disabled = false; }
+  });
   box().querySelectorAll('[data-delv]').forEach(b => b.onclick = async () => {
     if (!await confirmBox({ title: `Delete ${b.dataset.label}?`, body: '<p>The DWFx file and its processed data are deleted from the server. Saved take-off groups stay but lose the link to this version.</p>', confirmLabel: 'Delete version', danger: true })) return;
     await act(() => api('DELETE', `/versions/${b.dataset.delv}`), `${b.dataset.label} deleted.`);
@@ -372,8 +416,8 @@ async function restore(ids) {
 // poll while a version is processing
 function schedulePoll() {
   stopPoll();
-  const busy = P.detail?.models.some(m => m.versions.some(v => ['queued', 'processing'].includes(v.status)));
-  if (busy) P.poll = setTimeout(() => P.detail && openProject(P.detail.project.id, true), 2500);
+  const busy = P.detail?.models.some(m => m.versions.some(v => ['queued', 'processing', 'local'].includes(v.status)));
+  if (busy) P.poll = setTimeout(() => P.detail && openProject(P.detail.project.id, true), LOCAL.size ? 5000 : 2500);
 }
 function stopPoll() { if (P.poll) clearTimeout(P.poll); P.poll = null; }
 export function resetProjects() { stopPoll(); P.detail = null; P.list = []; P.users = null; P.filter = ''; App.setContext?.(); }

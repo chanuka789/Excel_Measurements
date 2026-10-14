@@ -29,6 +29,14 @@ app.use(securityHeaders(path.join(here, 'public')));
 app.use('/vendor/three', express.static(path.join(here, 'node_modules/three')));
 app.use('/vendor/bvh', express.static(path.join(here, 'node_modules/three-mesh-bvh/src')));
 app.use('/vendor/pdfjs', express.static(path.join(here, 'node_modules/pdfjs-dist/build')));
+// processing on the user's computer: the mesh decoder, Pyodide (Python + numpy + shapely in the browser) and the scripts
+app.use('/vendor/dwf-viewer', express.static(path.join(here, 'node_modules/dwf-viewer/dist')));
+app.use('/vendor/pyodide', express.static(process.env.PYODIDE_DIR || path.join(here, 'vendor/pyodide'), { maxAge: '1d', setHeaders: (res, p) => { if (p.endsWith('.wasm')) res.type('application/wasm'); } }));
+const PY_PUBLIC = new Set(['elements.py', 'geometry.py', 'pack.py', 'qs.py', 'sheets.py']);
+app.get('/py/:name', (req, res) => {
+  if (!PY_PUBLIC.has(req.params.name)) return res.status(404).end();
+  res.type('text/plain; charset=utf-8').sendFile(path.join(here, 'py', req.params.name));
+});
 app.use(express.static(path.join(here, 'public'), { index: 'taskpane.html' }));
 app.get('/health', async (_req, res) => {
   let db = false; try { db = Boolean(await one('SELECT 1 AS ok')); } catch { /* db down */ }

@@ -2,7 +2,8 @@
 """QS face analysis of a packed model: which faces of every element are free (need formwork, are exposed
 to the ground or the sky) and which are covered by other elements.
 
-Usage: python3 -I qs.py <geometry.bin> <geometry.json> <out qs.json>
+Usage: python3 -I qs.py <geometry.bin> <geometry.json> <out qs.json> [i/n]
+  i/n: only part i of n of the planes (the browser runs the parts in parallel workers and adds them up).
 
 For every element (all areas m2, lengths m, levels m in the model's up axis):
   soffit   free downward faces (within 15 deg of horizontal) that have something below -> formwork with propping
@@ -26,11 +27,36 @@ covered too (exact clip by that box).
 import sys, json, math
 from collections import defaultdict
 import numpy as np
+# np.bincount needs the platform index type (32-bit in the browser build of numpy)
+_bc = lambda x, *a, **k: np.bincount(np.asarray(x).astype(np.intp, copy=False), *a, **k)
 import shapely
 from shapely.geometry import Polygon, box as sbox
 from shapely.ops import unary_union
 
+# Polygon overlays are exact; if GEOS reports a robustness problem ("non-noded intersection" on nearly coincident
+# edges), the operation is repeated on a 1 micron precision grid (snap rounding), which cannot fail.
+GRID = 1e-6
+from shapely.errors import GEOSException
+def _areal(g):
+    """Only the polygonal part (snap rounding can leave slivers as lines or points, which overlays refuse)."""
+    t = g.geom_type
+    if t in ('Polygon', 'MultiPolygon'): return g
+    if t == 'GeometryCollection':
+        parts = [p for p in g.geoms if p.geom_type in ('Polygon', 'MultiPolygon')]
+        return shapely.union_all(parts, grid_size=GRID) if parts else Polygon()
+    return Polygon()
+def U(geoms):
+    try: return shapely.union_all(geoms)
+    except GEOSException: return _areal(shapely.union_all([_areal(x) for x in geoms], grid_size=GRID))
+def D(x, y):
+    try: return x.difference(y)
+    except GEOSException: return _areal(shapely.difference(_areal(x), _areal(y), grid_size=GRID))
+def I(x, y):
+    try: return x.intersection(y)
+    except GEOSException: return _areal(shapely.intersection(_areal(x), _areal(y), grid_size=GRID))
+
 BIN, GEO, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
+PART = tuple(int(x) for x in sys.argv[4].split('/')) if len(sys.argv) > 4 else None
 TOL = 0.005                       # 5 mm: faces this close touch
 COS15, SIN15 = math.cos(math.radians(15)), math.sin(math.radians(15))
 BANDS = [0, 3.0, 4.5, 6.0, 7.5, 9.0, 10.5, 12.0, 13.5, 15.0]   # NRM2: up to 3 m, 3-4.5 m, then 1.5 m stages
@@ -58,7 +84,12 @@ a, b, c = P[T[:, 0]], P[T[:, 1]], P[T[:, 2]]
 cr = np.cross(b - a, c - a)
 nrm = np.linalg.norm(cr, axis=1)
 area = nrm / 2
-ok = (area > 1e-9) & (el >= 0) & (np.array([ids[k] for k in el.clip(0)]) != -1)
+# only the structure is analysed (formwork, contact, waterproofing): pipes, ducts, furniture and finishes add
+# triangles but no QS quantities, and their faces must not cover concrete faces
+import re as _re
+QS_CAT = _re.compile(r'foundation|column|framing|floor|wall|roof|stair|run|landing|slab|beam|pile|ramp|structural', _re.I)
+el_ok = np.array([ids[k] != -1 and bool(QS_CAT.search(cats.get(ids[k], '') or '')) for k in range(len(rows))] or [False], dtype=bool)
+ok = (area > 1e-9) & (el >= 0) & el_ok[el.clip(0)]
 n = np.divide(cr, np.where(nrm > 0, nrm, 1)[:, None])
 
 # ---------------------------------------------------------------- element boxes, box-likeness
@@ -70,7 +101,7 @@ for k, r in enumerate(rows):
 # volume by divergence (closed shells); box-like = volume fills its bounding box
 cen = np.where(np.isfinite(lo), (lo + hi) / 2, 0)
 sv = np.einsum('ij,ij->i', a - cen[el.clip(0)], cr) / 6
-vol = np.abs(np.bincount(el.clip(0), weights=np.where(ok, sv, 0), minlength=nE))
+vol = np.abs(_bc(el.clip(0), weights=np.where(ok, sv, 0), minlength=nE))
 bbv = np.prod(np.maximum(hi - lo, 0), axis=1)
 boxlike = (bbv > 1e-9) & (vol >= 0.97 * bbv) & (vol <= 1.03 * bbv)
 ext = hi - lo
@@ -83,13 +114,22 @@ cn = n * sgn[:, None]
 cent = (a + b + c) / 3
 d = np.einsum('ij,ij->i', cn, cent)
 nkey = np.round(cn * 200).astype(np.int64)             # ~0.3 degree normal bins
-groups = defaultdict(list)
-for t in np.flatnonzero(ok):
-    groups[(nkey[t, 0], nkey[t, 1], nkey[t, 2])].append(t)
+def group_rows(idx, keys):
+    """idx split by equal key rows, groups in order of first appearance (vectorised)."""
+    if not len(idx): return []
+    _, first_i, inv = np.unique(keys, axis=0, return_index=True, return_inverse=True)
+    inv = inv.reshape(-1); order = np.argsort(inv, kind='stable')
+    cuts = np.flatnonzero(np.diff(inv[order])) + 1
+    parts = np.split(idx[order], cuts)
+    return [parts[g] for g in np.argsort(first_i, kind='stable')]
+_okt = np.flatnonzero(ok)
+groups = {n: g for n, g in enumerate(group_rows(_okt, nkey[_okt]))}
 
+def _cross(p, q):
+    return np.array([p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]])
 def basis(nv):
-    u = np.cross(nv, [0, 0, 1] if abs(nv[2]) < 0.9 else [1, 0, 0]); u /= np.linalg.norm(u)
-    return u, np.cross(nv, u)
+    u = _cross(nv, (0.0, 0.0, 1.0) if abs(nv[2]) < 0.9 else (1.0, 0.0, 0.0)); u /= math.sqrt(float(u @ u))
+    return u, _cross(nv, u)
 
 clusters = []
 for key, ts in groups.items():
@@ -98,14 +138,18 @@ for key, ts in groups.items():
     for part in np.split(ts, cut):
         clusters.append(part)
 
+def tri_polys(ts, X, Y):
+    """Triangles ts as shapely polygons in 2D coordinates X(p), Y(p) (vectorised; slivers dropped)."""
+    ts = np.asarray(ts)
+    if not len(ts): return []
+    ring = np.stack([a[ts], b[ts], c[ts], a[ts]], axis=1)                     # (n, 4, 3)
+    xy = np.stack([X(ring), Y(ring)], axis=-1)                               # (n, 4, 2)
+    pg = shapely.polygons(xy)
+    return pg[shapely.area(pg) > 1e-10]
+
 def poly2d(ts, u, v):
-    out = []
-    for t in ts:
-        pts = [(float(p @ u), float(p @ v)) for p in (a[t], b[t], c[t])]
-        pg = Polygon(pts)
-        if pg.area > 1e-10:
-            out.append(pg.buffer(0))
-    return unary_union(out) if out else Polygon()
+    pgs = tri_polys(ts, lambda r: r @ u, lambda r: r @ v)
+    return U(pgs) if len(pgs) else Polygon()
 
 def plane_box_poly(k, nv, dv, u, v, shrink=0.001):
     """The section of element k's bounding box (shrunk) cut by the plane nv.x = dv, as a 2D polygon."""
@@ -140,21 +184,24 @@ def band(h):
 
 # ---------------------------------------------------------------- exact surfaces in plan, for "what is below / above"
 def plan_surfaces(ts):
-    """Faces grouped per element and height: [(k, z, plan polygon, minz, maxz)] (sloping faces stay one per triangle)."""
-    grp = defaultdict(list)
-    for t in ts:
-        zs = (a[t][UP], b[t][UP], c[t][UP])
-        flat = max(zs) - min(zs) < 0.002
-        grp[(int(el[t]), round(float(np.mean(zs)), 3)) if flat else (int(el[t]), 'tri', int(t))].append(t)
+    """Faces grouped per element and height: [(k, z, plan polygon)] (sloping faces stay one per triangle)."""
+    ts = np.asarray(ts)
+    if not len(ts): return []
+    Z = np.stack([a[ts, UP], b[ts, UP], c[ts, UP]], axis=1)
+    flat = Z.max(axis=1) - Z.min(axis=1) < 0.002
+    zkey = np.where(flat, np.round(Z.mean(axis=1), 3) * 1000, 0).round().astype(np.int64)
+    tkey = np.where(flat, -1, ts)                                  # sloping faces: one group per triangle
     out = []
-    for key, lst in grp.items():
-        polys = [Polygon([(float(p[HZ[0]]), float(p[HZ[1]])) for p in (a[t], b[t], c[t])]) for t in lst]
-        polys = [pg.buffer(0) for pg in polys if pg.area > 1e-10]
-        if not polys: continue
-        z = float(np.mean([cent[t][UP] for t in lst]))
-        out.append((key[0], z, unary_union(polys)))
+    for lst in group_rows(ts, np.stack([el[ts], zkey, tkey], axis=1)):
+        polys = tri_polys(lst, lambda r: r[..., HZ[0]], lambda r: r[..., HZ[1]])
+        if not len(polys): continue
+        out.append((int(el[lst[0]]), float(cent[lst, UP].mean()), U(polys)))
     return out
 S_UP, S_DN = plan_surfaces(up_t), plan_surfaces(dn_t)
+T_UP = shapely.STRtree([pg for _, _, pg in S_UP]) if S_UP else None     # spatial index: only nearby surfaces are tested
+T_DN = shapely.STRtree([pg for _, _, pg in S_DN]) if S_DN else None
+def near(tree, surfaces, geom):
+    return [surfaces[i] for i in tree.query(geom, predicate='intersects')] if tree is not None else []
 
 def plan_of(free, u, v, nv, dv):
     def tr(xy):
@@ -165,31 +212,28 @@ def plan_of(free, u, v, nv, dv):
 def split_below(fplan, z0, k_self):
     """Plan polygon of a soffit at height z0 -> [(clear height, plan area)] to the nearest surface below; rest = None."""
     out, rem = [], fplan
-    cands = sorted(((z, pg) for (k2, z, pg) in S_UP if k2 != k_self and z < z0 - 0.02 and pg.intersects(fplan)), key=lambda x: -x[0])
+    cands = sorted(((z, pg) for (k2, z, pg) in near(T_UP, S_UP, fplan) if k2 != k_self and z < z0 - 0.02), key=lambda x: -x[0])
     for z, pg in cands:
         if rem.is_empty or rem.area <= 1e-9: break
-        inter = rem.intersection(pg)
+        inter = I(rem, pg)
         if inter.area > 1e-9:
-            out.append((z0 - z, inter.area)); rem = rem.difference(pg)
+            out.append((z0 - z, inter.area)); rem = D(rem, pg)
     out.append((None, rem.area if not rem.is_empty else 0.0))
     return out
 
 def exposed_above(fplan, z0, k_self):
     """The part of a top face (plan polygon) with nothing above it."""
     rem = fplan
-    for (k2, z, pg) in S_DN:
+    for (k2, z, pg) in sorted(near(T_DN, S_DN, fplan), key=lambda x: x[1]):
         if k2 != k_self and z > z0 + 0.02 and pg.intersects(rem):
-            rem = rem.difference(pg)
+            rem = D(rem, pg)
             if rem.is_empty: return rem
     return rem
 
 # ---------------------------------------------------------------- building footprint (for outer faces)
-plan_polys = []
-for t in up_t:
-    pts = [(float(p[HZ[0]]), float(p[HZ[1]])) for p in (a[t], b[t], c[t])]
-    pg = Polygon(pts)
-    if pg.area > 1e-8: plan_polys.append(pg.buffer(0))
-footprint = unary_union(plan_polys).buffer(0.05).buffer(-0.05) if plan_polys else Polygon()
+plan_polys = tri_polys(up_t, lambda r: r[..., HZ[0]], lambda r: r[..., HZ[1]])
+footprint = U(plan_polys).buffer(0.05).buffer(-0.05) if len(plan_polys) else Polygon()
+if not footprint.is_empty: shapely.prepare(footprint)
 
 # ---------------------------------------------------------------- priority (who owns a shared face or volume)
 ORDER = ['foundation', 'column', 'wall', 'framing', 'beam', 'floor', 'slab', 'roof', 'stair']
@@ -200,94 +244,147 @@ def prio_of(cat):
     return len(ORDER)
 PRIO = lambda k: (prio_of(cats.get(ids[k], '')), ids[k])
 
+# ---------------------------------------------------------------- spatial index of box-like elements (plan boxes)
+BOX_K = np.flatnonzero(boxlike & np.array([i != -1 for i in ids], dtype=bool))
+BOX_T = shapely.STRtree([sbox(lo[k, HZ[0]] - TOL, lo[k, HZ[1]] - TOL, hi[k, HZ[0]] + TOL, hi[k, HZ[1]] + TOL) for k in BOX_K]) if len(BOX_K) else None
+def boxes_near(qlo, qhi):
+    """Box-like elements whose box meets the 3D box [qlo, qhi] (within TOL)."""
+    if BOX_T is None: return []
+    c = BOX_K[BOX_T.query(sbox(qlo[HZ[0]], qlo[HZ[1]], qhi[HZ[0]], qhi[HZ[1]]))]
+    return c[(lo[c, UP] <= qhi[UP] + TOL) & (hi[c, UP] >= qlo[UP] - TOL)]
+
 # ---------------------------------------------------------------- main pass
-R = [dict(soffit=0.0, soffitBands=defaultdict(float), ground=0.0, slopeSoffit=0.0, side=0.0, sides=[], topSlope=0.0,
+def new_R():
+    return [dict(soffit=0.0, soffitBands=defaultdict(float), ground=0.0, slopeSoffit=0.0, side=0.0, sides=[], topSlope=0.0,
           top=0.0, topExposed=0.0, exposedPerim=0.0, covered=defaultdict(float)) for _ in rows]
 
-for ts in clusters:
-    t0 = ts[0]
-    nv = cn[t0] / np.linalg.norm(cn[t0]); dv = float(np.mean(d[ts]))
-    u, v = basis(nv)
-    by = defaultdict(lambda: {1: [], -1: []})
-    for t in ts:
-        by[int(el[t])][int(sgn[t])].append(t)
-    elems = list(by.keys())
-    polys = {(k, s): poly2d(lst, u, v) for k in elems for s in (1, -1) if (lst := by[k][s])}
-    claimed = {1: Polygon(), -1: Polygon()}       # same-direction faces of overlapping elements: one owner
-    for (k, s), pg in sorted(polys.items(), key=lambda kv: PRIO(kv[0][0])):
-        if pg.is_empty: continue
-        opp = [(k2, p2) for (k2, s2), p2 in polys.items() if k2 != k and s2 == -s and not p2.is_empty]
-        free = pg.difference(claimed[s]) if not claimed[s].is_empty else pg
-        claimed[s] = unary_union([claimed[s], pg]) if not claimed[s].is_empty else pg
-        for k2, p2 in opp:
-            inter = free.intersection(p2)
-            if inter.area > 1e-8:
-                R[k]['covered'][cats.get(ids[k2], 'Other')] += inter.area
-                free = free.difference(p2)
-        if free.area <= 1e-8: continue
-        # inside another box-like element (unjoined overlap)
-        fb = free.bounds
-        p3lo = np.minimum(to3d(np.array([[fb[0], fb[1]]]), u, v, nv, dv), to3d(np.array([[fb[2], fb[3]]]), u, v, nv, dv))[0]
-        cands = np.flatnonzero(boxlike & np.all(lo <= np.maximum(to3d(np.array([[fb[0], fb[1]]]), u, v, nv, dv), to3d(np.array([[fb[2], fb[3]]]), u, v, nv, dv))[0] + TOL, axis=1)
-                               & np.all(hi >= p3lo - TOL, axis=1))
-        for k2 in cands:
-            if k2 == k: continue
-            sec = plane_box_poly(k2, nv, dv, u, v)
-            if sec is None: continue
-            inter = free.intersection(sec)
-            if inter.area > 1e-8:
-                R[k]['covered'][cats.get(ids[k2], 'Other')] += inter.area
-                free = free.difference(sec)
-                if free.area <= 1e-8: break
-        A = free.area
-        if A <= 1e-8: continue
-        nz = float(nv[UP] * s)                                   # outward normal component along up
-        rk = R[k]
-        if nz <= -COS15:
-            # soffit: split exactly by the surface straight below each part (propping height), or the ground
-            fplan = plan_of(free, u, v, nv, dv)
-            scale = A / fplan.area if fplan.area > 1e-12 else 1.0
-            rp = free.representative_point(); z0 = float(to3d(np.array([[rp.x, rp.y]]), u, v, nv, dv)[0][UP])
-            for h, ar in split_below(fplan, z0, k):
-                if ar <= 1e-9: continue
-                if h is None: rk['ground'] += ar * scale
-                else: rk['soffit'] += ar * scale; rk['soffitBands'][band(h)] += ar * scale
-        elif nz < -SIN15:
-            rk['slopeSoffit'] += A
-        elif nz <= SIN15:
-            rk['side'] += A
-            g = free
-            zs = []
-            for geom in (g.geoms if hasattr(g, 'geoms') else [g]):
-                zs.extend([float((to3d(np.array([[x, y]]), u, v, nv, dv)[0])[UP]) for x, y in geom.exterior.coords])
-            zlo, zhi = (min(zs), max(zs)) if zs else (0.0, 0.0)
-            # width across the face (horizontal in-plane direction) and length along it
-            hdir = np.cross(nv, np.eye(3)[UP]); hn = np.linalg.norm(hdir)
-            hdir = hdir / hn if hn > 1e-9 else u
-            hu = np.array([hdir @ u, hdir @ v]); vu = np.array([np.eye(3)[UP] @ u, np.eye(3)[UP] @ v])
-            coords = np.vstack([np.array(geom.exterior.coords) for geom in (g.geoms if hasattr(g, 'geoms') else [g])])
-            wid = float((coords @ hu).max() - (coords @ hu).min()); hgt = float((coords @ vu).max() - (coords @ vu).min())
-            narrow = min(wid, hgt) <= 0.5 + 1e-6
-            vlen = max(wid, hgt) if narrow else 0.0
-            # outer: a point half a metre out from the face is outside the building footprint
-            rp = g.representative_point(); p3 = to3d(np.array([[rp.x, rp.y]]), u, v, nv, dv)[0] + nv * s * 0.5
-            outer = bool(not footprint.is_empty and not footprint.contains(shapely.Point(float(p3[HZ[0]]), float(p3[HZ[1]]))))
-            rk['sides'].append([round(A, 4), round(zlo, 4), round(zhi, 4), outer, bool(narrow), round(vlen, 4)])
-        elif nz < COS15:
-            rk['topSlope'] += A
-        else:
-            rk['top'] += A
-            fplan = plan_of(free, u, v, nv, dv)
-            scale = A / fplan.area if fplan.area > 1e-12 else 1.0
-            rp = free.representative_point(); z0 = float(to3d(np.array([[rp.x, rp.y]]), u, v, nv, dv)[0][UP])
-            ex = exposed_above(fplan, z0, k)
-            if not ex.is_empty:
-                rk['topExposed'] += ex.area * scale
-                rk['exposedPerim'] += ex.length              # plan perimeter of the exposed part (roof upstands)
+def run_clusters(sub):
+    R = new_R()
+    for ts in sub:
+        t0 = ts[0]
+        nv = cn[t0] / np.linalg.norm(cn[t0]); dv = float(np.mean(d[ts]))
+        u, v = basis(nv)
+        by = defaultdict(lambda: {1: [], -1: []})
+        for t in ts:
+            by[int(el[t])][int(sgn[t])].append(t)
+        elems = list(by.keys())
+        polys = {(k, s): poly2d(lst, u, v) for k in elems for s in (1, -1) if (lst := by[k][s])}
+        first = {key: n for n, key in enumerate(polys)}                     # covering faces are checked in their original order
+        items = [(k, s, pg) for (k, s), pg in sorted(polys.items(), key=lambda kv: PRIO(kv[0][0])) if not pg.is_empty]
+        if not items: continue
+        # bounding boxes: on a shared plane (all slab tops of a level...) each face is only compared with the faces near it
+        bx = np.array([pg.bounds for _, _, pg in items]); sx = np.array([s for _, s, _ in items]); kx = np.array([k for k, _, _ in items])
+        for i, (k, s, pg) in enumerate(items):
+            near_i = (bx[:, 0] <= bx[i, 2] + 1e-9) & (bx[:, 2] >= bx[i, 0] - 1e-9) & (bx[:, 1] <= bx[i, 3] + 1e-9) & (bx[:, 3] >= bx[i, 1] - 1e-9)
+            # same-direction faces of overlapping elements: one owner (the earlier, higher-priority element)
+            prev = [items[j][2] for j in np.flatnonzero(near_i[:i] & (sx[:i] == s))]
+            free = D(pg, U(prev)) if prev else pg
+            opp = sorted(((int(kx[j]), items[j][2]) for j in np.flatnonzero(near_i & (sx == -s) & (kx != k))), key=lambda o: first[(o[0], -s)])
+            for k2, p2 in opp:
+                inter = I(free, p2)
+                if inter.area > 1e-8:
+                    R[k]['covered'][cats.get(ids[k2], 'Other')] += inter.area
+                    free = D(free, p2)
+            if free.area <= 1e-8: continue
+            # inside another box-like element (unjoined overlap)
+            fb = free.bounds
+            q1, q2 = to3d(np.array([[fb[0], fb[1]], [fb[2], fb[3]]]), u, v, nv, dv)
+            for k2 in boxes_near(np.minimum(q1, q2), np.maximum(q1, q2)):
+                if k2 == k: continue
+                sec = plane_box_poly(k2, nv, dv, u, v)
+                if sec is None: continue
+                inter = I(free, sec)
+                if inter.area > 1e-8:
+                    R[k]['covered'][cats.get(ids[k2], 'Other')] += inter.area
+                    free = D(free, sec)
+                    if free.area <= 1e-8: break
+            A = free.area
+            if A <= 1e-8: continue
+            nz = float(nv[UP] * s)                                   # outward normal component along up
+            rk = R[k]
+            if nz <= -COS15:
+                # soffit: split exactly by the surface straight below each part (propping height), or the ground
+                fplan = plan_of(free, u, v, nv, dv)
+                scale = A / fplan.area if fplan.area > 1e-12 else 1.0
+                rp = free.representative_point(); z0 = float(to3d(np.array([[rp.x, rp.y]]), u, v, nv, dv)[0][UP])
+                for h, ar in split_below(fplan, z0, k):
+                    if ar <= 1e-9: continue
+                    if h is None: rk['ground'] += ar * scale
+                    else: rk['soffit'] += ar * scale; rk['soffitBands'][band(h)] += ar * scale
+            elif nz < -SIN15:
+                rk['slopeSoffit'] += A
+            elif nz <= SIN15:
+                rk['side'] += A
+                g = free
+                zs = []
+                for geom in (g.geoms if hasattr(g, 'geoms') else [g]):
+                    zs.extend([float((to3d(np.array([[x, y]]), u, v, nv, dv)[0])[UP]) for x, y in geom.exterior.coords])
+                zlo, zhi = (min(zs), max(zs)) if zs else (0.0, 0.0)
+                # width across the face (horizontal in-plane direction) and length along it
+                hdir = np.cross(nv, np.eye(3)[UP]); hn = np.linalg.norm(hdir)
+                hdir = hdir / hn if hn > 1e-9 else u
+                hu = np.array([hdir @ u, hdir @ v]); vu = np.array([np.eye(3)[UP] @ u, np.eye(3)[UP] @ v])
+                coords = np.vstack([np.array(geom.exterior.coords) for geom in (g.geoms if hasattr(g, 'geoms') else [g])])
+                wid = float((coords @ hu).max() - (coords @ hu).min()); hgt = float((coords @ vu).max() - (coords @ vu).min())
+                narrow = min(wid, hgt) <= 0.5 + 1e-6
+                vlen = max(wid, hgt) if narrow else 0.0
+                # outer: points half a metre out from the face (middle of its height, at 1/4, 1/2 and 3/4 of its length) are
+                # outside the building footprint (majority; plain arithmetic, so every GEOS version gives the same answer)
+                hc = coords @ hu; vc = coords @ vu
+                mid_v = (vc.max() + vc.min()) / 2
+                outs = 0
+                det = hu[0] * vu[1] - hu[1] * vu[0]
+                for f in (0.25, 0.5, 0.75):
+                    h_ = hc.min() + f * (hc.max() - hc.min())
+                    # plane coordinates (x, y) with x.hu = h_ and x.vu = mid_v (2 x 2, Cramer's rule)
+                    uv = np.array([(h_ * vu[1] - mid_v * hu[1]) / det, (hu[0] * mid_v - vu[0] * h_) / det]) if abs(det) > 1e-12 else np.zeros(2)
+                    p3 = to3d(np.array([uv]), u, v, nv, dv)[0] + nv * s * 0.5
+                    outs += not shapely.contains_xy(footprint, float(p3[HZ[0]]), float(p3[HZ[1]]))
+                outer = bool(not footprint.is_empty and outs >= 2)
+                rk['sides'].append([round(A, 4), round(zlo, 4), round(zhi, 4), outer, bool(narrow), round(vlen, 4)])
+            elif nz < COS15:
+                rk['topSlope'] += A
+            else:
+                rk['top'] += A
+                fplan = plan_of(free, u, v, nv, dv)
+                scale = A / fplan.area if fplan.area > 1e-12 else 1.0
+                rp = free.representative_point(); z0 = float(to3d(np.array([[rp.x, rp.y]]), u, v, nv, dv)[0][UP])
+                ex = exposed_above(fplan, z0, k)
+                if not ex.is_empty:
+                    rk['topExposed'] += ex.area * scale
+                    rk['exposedPerim'] += ex.length              # plan perimeter of the exposed part (roof upstands)
+    return R
+
+def plain(R):
+    for r in R:
+        r['soffitBands'] = dict(r['soffitBands']); r['covered'] = dict(r['covered'])
+    return R
+def _part(i):
+    return plain(run_clusters(clusters[i::PROCS]))
+
+# Planes are independent: on the server they are shared out over the processor cores (QS_PROCS, default: all of them).
+# In the browser (Pyodide) there are no processes, so it runs in one.
+import os
+PROCS = 1 if sys.platform == 'emscripten' else max(1, min(int(os.environ.get('QS_PROCS', '0') or 0) or (os.cpu_count() or 1), 16))
+if PART:
+    R = plain(run_clusters(clusters[PART[0]::PART[1]]))
+elif PROCS > 1 and len(clusters) > 400:
+    import multiprocessing as mp
+    with mp.get_context('fork').Pool(PROCS) as pool:
+        parts = pool.map(_part, range(PROCS))
+    R = parts[0]
+    for P_ in parts[1:]:
+        for r, q_ in zip(R, P_):
+            for key in ('soffit', 'ground', 'slopeSoffit', 'side', 'topSlope', 'top', 'topExposed', 'exposedPerim'): r[key] += q_[key]
+            r['sides'] += q_['sides']
+            for dk in ('soffitBands', 'covered'):
+                for kk, vv in q_[dk].items(): r[dk][kk] = r[dk].get(kk, 0.0) + vv
+else:
+    R = plain(run_clusters(clusters))
 
 # ---------------------------------------------------------------- overlaps between box-like solids
 overlaps = []
-order = np.argsort(lo[:, 0])
+order = np.argsort(lo[:, 0]) if not PART or PART[0] == 0 else []
 for ii, k in enumerate(order):
     if not boxlike[k] or ids[k] == -1: continue
     for k2 in order[ii + 1:]:
@@ -299,6 +396,17 @@ for ii, k in enumerate(order):
 
 r4 = lambda x: round(float(x), 4)
 out = {}
+if PART:
+    # one part of n: the raw sums (not rounded), so adding the parts up (public/js/modelmerge.js) gives exactly what one run gives
+    for k, r in enumerate(rows):
+        if r[0] == -1 or not r[2]: continue
+        q = R[k]
+        out[str(r[0])] = {key: q[key] for key in ('soffit', 'soffitBands', 'ground', 'slopeSoffit', 'side', 'sides', 'topSlope', 'top', 'topExposed', 'exposedPerim', 'covered')}
+        if PART[0] == 0:
+            out[str(r[0])].update(height=r4(ext[k, UP]), thick=r4(ext[k].min()), box=bool(boxlike[k]), vol=round(float(vol[k]), 6), zlo=r4(lo[k, UP]), zhi=r4(hi[k, UP]))
+    json.dump({'version': 1, 'up': 'xyz'[UP], 'elements': out, 'overlaps': overlaps, 'part': list(PART)}, open(OUT, 'w'))
+    print('qs part', PART, len(out), 'elements')
+    sys.exit(0)
 for k, r in enumerate(rows):
     if r[0] == -1 or not r[2]: continue
     q = R[k]

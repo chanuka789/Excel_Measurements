@@ -119,6 +119,8 @@ const MIGRATIONS = [
      version_id UUID REFERENCES model_versions(id) ON DELETE SET NULL, sign SMALLINT NOT NULL DEFAULT 1,
      multiplier DOUBLE PRECISION NOT NULL DEFAULT 1, added_by INT REFERENCES users(id), added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
      UNIQUE (group_id, element_id));`,
+  // 5: models processed on the user's computer: last sign of life from that computer
+  `ALTER TABLE model_versions ADD COLUMN IF NOT EXISTS local_seen TIMESTAMPTZ;`,
 ];
 
 /** Apply new migrations once, even when the API and the worker start at the same time (advisory lock). */

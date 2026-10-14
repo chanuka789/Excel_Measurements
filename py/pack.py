@@ -2,7 +2,7 @@
 """Pack the placed meshes from geometry.py into a compact binary 3D file and compute exact
 quantities from the geometry of every element.
 
-Usage: python3 -I pack.py <geometry.json> <out geometry.bin> <out metrics.json>
+Usage: python3 -I pack.py <geometry.json> <placed.bin> <out geometry.bin> <out metrics.json>   (placed.bin: py/geometry.py)
 
 geometry.bin layout (little endian):
   4 bytes  b'DWG2'
@@ -21,15 +21,24 @@ metrics.json: {"<id>": {vol, closed, oriented, area, top, bottom, side, plan, bb
   (consistent winding); closed is false when T-junctions or gaps leave open edges.
   top/bottom/side/plan are measured against the detected up axis (header 'up').
 """
-import sys, json, base64
+import sys, json
 import numpy as np
+# np.bincount needs the platform index type (32-bit in the browser build of numpy)
+_bc = lambda x, *a, **k: np.bincount(np.asarray(x).astype(np.intp, copy=False), *a, **k)
 
-SRC, OUT_BIN, OUT_METRICS = sys.argv[1], sys.argv[2], sys.argv[3]
+SRC, PLACED, OUT_BIN, OUT_METRICS = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 FEATURE_COS = np.cos(np.radians(30))     # edges sharper than 30 degrees are drawn
 WELD = 1e-4                              # 0.1 mm: vertices closer than this are the same point
 
 g = json.load(open(SRC))
-meshes = g.get('meshes') or []
+raw = open(PLACED, 'rb').read()
+assert raw[:4] == b'MSH1', 'not a mesh file'
+_hl = int.from_bytes(raw[4:8], 'little'); meshes = json.loads(raw[8:8 + _hl])['meshes']; _off = 8 + _hl
+_nP = sum(m['nv'] for m in meshes) * 3; _nI = sum(m['ni'] for m in meshes)
+_P = np.frombuffer(raw, '<f4', _nP, _off); _I = np.frombuffer(raw, '<u4', _nI, _off + _nP * 4)
+_po = _io = 0
+for m in meshes:
+    m['P'] = _P[_po:_po + m['nv'] * 3]; m['I'] = _I[_io:_io + m['ni']]; _po += m['nv'] * 3; _io += m['ni']
 by_el = {}
 for m in meshes:
     eid = m['id'] if m['id'] is not None else -1
@@ -42,8 +51,8 @@ shell_el = []
 for k, eid in enumerate(sorted(by_el)):
     v0, t0 = v_off, t_off
     for m in by_el[eid]:
-        p = np.frombuffer(base64.b64decode(m['p']), dtype='<f4').astype(np.float64).reshape(-1, 3)
-        i = np.frombuffer(base64.b64decode(m['i']), dtype='<u4').astype(np.int64).reshape(-1, 3)
+        p = m['P'].astype(np.float64).reshape(-1, 3)
+        i = m['I'][:len(m['I']) // 3 * 3].astype(np.int64).reshape(-1, 3)
         if not len(p) or not len(i):
             continue
         i = i[(i < len(p)).all(axis=1)]
@@ -130,7 +139,7 @@ if len(bad_el):
     T[flip] = T[flip][:, [0, 2, 1]]
     E, F, fwd, starts, counts = edge_table(T)
     two = counts == 2; s2 = starts[two]
-still_bad = np.bincount(EL_OF_TRI[F[s2[fwd[s2] == fwd[s2 + 1]]]], minlength=n_el)
+still_bad = _bc(EL_OF_TRI[F[s2[fwd[s2] == fwd[s2 + 1]]]], minlength=n_el)
 
 # ---------------------------------------------------------------- per-triangle geometry
 a, b, c = P[T[:, 0]], P[T[:, 1]], P[T[:, 2]]
@@ -142,20 +151,20 @@ with np.errstate(invalid='ignore', divide='ignore'):
 # tetra volume to the element's own centre (keeps precision); a closed surface gives the same
 # volume about any point, which is tested below with the shell's vector area.
 cen = np.zeros((n_el, 3))
-np.add.at(cen, el_of_vert, P); cen /= np.maximum(np.bincount(el_of_vert, minlength=n_el), 1)[:, None]
+np.add.at(cen, el_of_vert, P); cen /= np.maximum(_bc(el_of_vert, minlength=n_el), 1)[:, None]
 signed = np.einsum('ij,ij->i', a - cen[EL_OF_TRI], cr) / 6
 
 def per_el(w, mask=None):
     w = w if mask is None else np.where(mask, w, 0)
-    return np.bincount(EL_OF_TRI, weights=w, minlength=n_el)
+    return _bc(EL_OF_TRI, weights=w, minlength=n_el)
 
-vol_shell = np.abs(np.bincount(SH, weights=signed, minlength=shell))
-vol = np.bincount(shell_el, weights=vol_shell, minlength=n_el)
+vol_shell = np.abs(_bc(SH, weights=signed, minlength=shell))
+vol = _bc(shell_el, weights=vol_shell, minlength=n_el)
 # geometrically closed shell: its vector area (sum of face normals x area) is ~zero
-va = np.stack([np.bincount(SH, weights=cr[:, j], minlength=shell) for j in range(3)], axis=1)
-sa = np.bincount(SH, weights=nrm, minlength=shell)
+va = np.stack([_bc(SH, weights=cr[:, j], minlength=shell) for j in range(3)], axis=1)
+sa = _bc(SH, weights=nrm, minlength=shell)
 shell_closed = np.linalg.norm(va, axis=1) <= 1e-3 * np.maximum(sa, 1e-12)
-solid = np.bincount(shell_el, weights=(~shell_closed).astype(float), minlength=n_el) == 0
+solid = _bc(shell_el, weights=(~shell_closed).astype(float), minlength=n_el) == 0
 tot = per_el(area)
 top = per_el(area, nz > 0.7)
 bottom = per_el(area, nz < -0.7)
@@ -174,7 +183,7 @@ rep = first                                          # welded id -> one original
 EDGES = rep[E[edge_sel]]
 EDGE_EL = el_of_vert[EDGES[:, 0]]
 # a closed (watertight) element has every welded edge used exactly twice
-open_edges = np.bincount(el_of_vert[rep[E[starts[counts != 2], 0]]], minlength=n_el)
+open_edges = _bc(el_of_vert[rep[E[starts[counts != 2], 0]]], minlength=n_el)
 eo = np.argsort(EDGE_EL, kind='stable'); EDGES, EDGE_EL = EDGES[eo], EDGE_EL[eo]
 e_start = np.searchsorted(EDGE_EL, np.arange(n_el), 'left')
 e_end = np.searchsorted(EDGE_EL, np.arange(n_el), 'right')

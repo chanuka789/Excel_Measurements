@@ -6,3 +6,4 @@ test_*.png
 .data/
 __pycache__/
 *.pyc
+vendor/

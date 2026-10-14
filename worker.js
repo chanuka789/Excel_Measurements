@@ -3,7 +3,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool, migrate, one } from './src/db.js';
-import { claim, finish, fail, enqueue } from './src/jobs.js';
+import { claim, finish, fail, enqueue, heartbeat, failDead } from './src/jobs.js';
 import http from 'http';
 import { processVersion, backupDatabase, updateQs, QS_VERSION } from './src/processing.js';
 import { recordError, installCrashHandlers } from './src/monitor.js';
@@ -16,13 +16,22 @@ const HANDLERS = {
   ai_eval: async (p) => { const m = await import('./src/aieval.js'); m.runEvaluation(p).catch(e => console.error('AI evaluation failed:', e.message)); },
 };
 const MAX_ATTEMPTS = { ai_eval: 1 };
-let running = false, timer = null;
+let running = false, timer = null, localTimer = null;
 
 async function tick() {
+  for (const d of await failDead()) {
+    if (d.kind === 'process_version') {
+      const { q } = await import('./src/db.js');
+      await q(`UPDATE model_versions SET status='failed', progress=NULL, error=$2 WHERE id=$1 AND status IN ('queued','processing')`,
+        [d.payload.versionId, 'Processing stopped 3 times without finishing. The model may be too large for the server: try processing it on your computer.']);
+    }
+  }
   const job = await claim();
   if (!job) return false;
+  const beat = setInterval(() => heartbeat(job.id).catch(() => {}), 60000);
   try { await HANDLERS[job.kind]?.(job.payload); await finish(job.id); }
   catch (e) { await recordError({ source: 'worker', ref: 'JOB' + job.id, message: `job ${job.id} (${job.kind}) failed: ${e.message}`, stack: e.stack, detail: job.payload }); await fail(job, e.message, MAX_ATTEMPTS[job.kind] || 3); }
+  finally { clearInterval(beat); }
   return true;
 }
 async function scheduleBackup() {
@@ -51,10 +60,12 @@ export function startWorker() {
   loop();
   scheduleBackup().catch(() => {});
   scheduleQsUpgrade().catch(() => {});
+  // models a user's computer stopped processing go to the server queue
+  localTimer = setInterval(() => import('./src/localproc.js').then(m => m.localTimeouts()).then(n => { if (n) console.log(`${n} model(s) handed over from a computer to the server`); }).catch(() => {}), 60000);
   timer = setInterval(() => scheduleBackup().catch(() => {}), 60 * 60 * 1000);
   console.log('Worker started');
 }
-export const stopWorker = () => { running = false; if (timer) clearInterval(timer); timer = null; };
+export const stopWorker = () => { running = false; if (timer) clearInterval(timer); timer = null; if (localTimer) clearInterval(localTimer); localTimer = null; };
 
 // Standalone worker service (Railway: start command `node worker.js`). It answers /health on PORT so the
 // platform health check passes; it does not serve the add-in.

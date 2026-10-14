@@ -14,6 +14,7 @@ import { json, wrap, clean, safeName, uuidOk, HttpError, fail, need, versionProj
 import { registerFeatures } from './features.js';
 import { registerDims } from './dims.js';
 import { registerLink } from './link.js';
+import { registerLocal } from './localproc.js';
 import { loginGuard, loginFailed, loginSucceeded, apiLimit } from './security.js';
 import { recordError } from './monitor.js';
 
@@ -119,19 +120,22 @@ api.post('/projects/:pid/models', upload.single('model'), wrap(async (req, res) 
     if (!/\.dwfx$/i.test(req.file.originalname)) fail(400, 'Only .dwfx files can be loaded as models.');
     const name = clean(req.body?.modelName, 80) || req.file.originalname.replace(/\.dwfx$/i, '');
     const pid = req.params.pid;
+    // local=1: the uploader's browser processes the model (public/js/localproc.js); the server only takes over if it cannot
+    const local = req.body?.local === '1';
     const v = await tx(async (x) => {
       const [m] = await x(`INSERT INTO models (project_id, name, discipline) VALUES ($1,$2,$3)
                            ON CONFLICT (project_id, name) DO UPDATE SET discipline=COALESCE(EXCLUDED.discipline, models.discipline) RETURNING *`,
         [pid, name, clean(req.body?.discipline, 40) || null]);
       const [{ n }] = await x(`SELECT COALESCE(max(version),0)+1 AS n FROM model_versions WHERE model_id=$1`, [m.id]);
       const key = `projects/${pid}/models/${m.id}/v${n}/source.dwfx`;
-      const [v] = await x(`INSERT INTO model_versions (model_id, version, file_name, size, storage_key, status, progress, note, uploaded_by)
-                           VALUES ($1,$2,$3,$4,$5,'queued','Waiting to be processed',$6,$7) RETURNING *`,
-        [m.id, n, safeName(req.file.originalname), req.file.size, key, clean(req.body?.note, 300) || null, req.user.id]);
+      const [v] = await x(`INSERT INTO model_versions (model_id, version, file_name, size, storage_key, status, progress, note, uploaded_by, local_seen)
+                           VALUES ($1,$2,$3,$4,$5,$8,$9,$6,$7,$10) RETURNING *`,
+        [m.id, n, safeName(req.file.originalname), req.file.size, key, clean(req.body?.note, 300) || null, req.user.id,
+          local ? 'local' : 'queued', local ? 'Processing on the uploader\'s computer' : 'Waiting to be processed', local ? new Date() : null]);
       return v;
     });
     await store.putFile(v.storage_key, req.file.path, 'application/octet-stream');
-    await enqueue('process_version', { versionId: v.id });
+    if (!local) await enqueue('process_version', { versionId: v.id });
     await q(`UPDATE projects SET updated_at=now() WHERE id=$1`, [pid]);
     await audit(req.user.id, pid, 'model.upload', { model: name, version: v.version, file: v.file_name, size: v.size });
     res.status(201).json({ version: v });
@@ -304,6 +308,7 @@ api.post('/admin/backup', requireAdmin, wrap(async (req, res) => { res.json({ ke
 registerFeatures(api);
 registerDims(api);
 registerLink(api);
+registerLocal(api);
 
 // ---------------------------------------------------------------- error monitoring
 const clientErrors = new Map();     // per user, per hour: stop a looping page from flooding the log

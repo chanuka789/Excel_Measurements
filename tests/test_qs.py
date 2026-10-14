@@ -1,16 +1,15 @@
 """Hand-calculated test models for py/qs.py (formwork faces, contact, propping height, ground, roof, overlaps).
 Every expected value below is worked out by hand from the box sizes (Y is up; plan axes are X and Z)."""
 import json, os, subprocess, sys, tempfile, unittest
-from test_pack import box, ROOT
+from test_pack import box, ROOT, pack
 
 def run(elements, cats):
     d = tempfile.mkdtemp()
     meshes = []
     for eid, (x, y, z, dx, dy, dz) in elements.items():
         p, i = box(x, y, z, dx, dy, dz); meshes.append({'id': eid, 'p': p, 'i': i, 'c': 0})
-    json.dump({'meshes': meshes, 'categories': {str(k): v for k, v in cats.items()}}, open(os.path.join(d, 'g.json'), 'w'))
+    pack(meshes, cats, d)
     py = lambda *a: subprocess.run([sys.executable, '-I', *a], check=True, capture_output=True)
-    py(os.path.join(ROOT, 'py', 'pack.py'), os.path.join(d, 'g.json'), os.path.join(d, 'g.bin'), os.path.join(d, 'm.json'))
     py(os.path.join(ROOT, 'py', 'qs.py'), os.path.join(d, 'g.bin'), os.path.join(d, 'g.json'), os.path.join(d, 'q.json'))
     return json.load(open(os.path.join(d, 'q.json')))
 

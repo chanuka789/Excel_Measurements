@@ -14,6 +14,23 @@ def box(x0, y0, z0, dx, dy, dz, flip_one=False):
     idx = [i for t in f for i in t]
     return base64.b64encode(struct.pack('<%df' % len(pts), *pts)).decode(), base64.b64encode(struct.pack('<%dI' % len(idx), *idx)).decode()
 
+def write_placed(meshes, path):
+    """Meshes [{id, p (base64 f32), i (base64 u32), c}] as a placed.bin mesh file (py/geometry.py output format)."""
+    ps = [base64.b64decode(m['p']) for m in meshes]; ix = [base64.b64decode(m['i']) for m in meshes]
+    head = json.dumps({'meshes': [{'id': m['id'], 'nv': len(p) // 12, 'ni': len(i) // 4, 'c': m.get('c')} for m, p, i in zip(meshes, ps, ix)]}).encode()
+    head += b' ' * ((4 - len(head) % 4) % 4)
+    with open(path, 'wb') as f:
+        f.write(b'MSH1'); f.write(struct.pack('<I', len(head))); f.write(head)
+        for p in ps: f.write(p)
+        for i in ix: f.write(i)
+
+def pack(meshes, cats, d):
+    """Run pack.py on meshes in metres; returns the paths of geometry.json and geometry.bin."""
+    json.dump({'categories': {str(k): v for k, v in cats.items()}}, open(os.path.join(d, 'g.json'), 'w'))
+    write_placed(meshes, os.path.join(d, 'placed.bin'))
+    subprocess.run([sys.executable, '-I', os.path.join(ROOT, 'py', 'pack.py'), os.path.join(d, 'g.json'), os.path.join(d, 'placed.bin'), os.path.join(d, 'g.bin'), os.path.join(d, 'm.json')], check=True, capture_output=True)
+    return os.path.join(d, 'g.json'), os.path.join(d, 'g.bin')
+
 class PackTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -22,8 +39,7 @@ class PackTest(unittest.TestCase):
         p, i = box(0, 0, 0, 2, 0.2, 3); meshes.append({'id': 10, 'p': p, 'i': i, 'c': 0})          # slab 2 x 3 x 0.2 (Y up)
         p, i = box(5, 0, 0, 0.3, 3, 0.3, flip_one=True); meshes.append({'id': 20, 'p': p, 'i': i, 'c': 0})  # column, one bad triangle
         p, i = box(9, 0, 0, 1, 1, 1); meshes.append({'id': None, 'p': p, 'i': i, 'c': 0})       # unmapped geometry
-        json.dump({'meshes': meshes, 'categories': {'10': 'Floors', '20': 'Structural Columns'}}, open(os.path.join(d, 'g.json'), 'w'))
-        subprocess.run([sys.executable, '-I', os.path.join(ROOT, 'py', 'pack.py'), os.path.join(d, 'g.json'), os.path.join(d, 'g.bin'), os.path.join(d, 'm.json')], check=True, capture_output=True)
+        pack(meshes, {10: 'Floors', 20: 'Structural Columns'}, d)
         cls.bin = open(os.path.join(d, 'g.bin'), 'rb').read()
         cls.m = json.load(open(os.path.join(d, 'm.json')))
 
