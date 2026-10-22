@@ -22,3 +22,10 @@ test('APP_USERS parsing: valid lines, comments, bad lines reported', () => {
   assert.deepEqual(users.map(u => [u.email, u.role]), [['a@test.com', 'admin'], ['bob@test.com', 'user']]);
   assert.equal(problems.length, 3);
 });
+
+test('users can be listed in APP_USERS and APP_USERS_MORE', async () => {
+  const { usersText, parseUsers } = await import('../src/auth.js');
+  const t = usersText({ APP_USERS: 'a@x.com | A | admin | scrypt$1$2', APP_USERS_MORE: 'b@x.com | B | user | scrypt$3$4' });
+  assert.equal(parseUsers(t).users.length, 2);
+  assert.equal(usersText({ APP_USERS_MORE: 'b@x.com | B | user | scrypt$3$4' }).split('\n').length, 1);
+});

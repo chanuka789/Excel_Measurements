@@ -41,7 +41,9 @@ export function parseUsers(text) {
 }
 
 /** Make the users table match APP_USERS. Users not listed are disabled (their projects stay). */
-export async function syncUsers(text = process.env.APP_USERS) {
+/** Users can be split over APP_USERS and APP_USERS_MORE (same line format), so one can be added without touching the other. */
+export const usersText = (E = process.env) => [E.APP_USERS, E.APP_USERS_MORE].filter(Boolean).join('\n');
+export async function syncUsers(text = usersText()) {
   const { users, problems } = parseUsers(text);
   problems.forEach(p => console.warn('APP_USERS', p));
   for (const u of users) {
