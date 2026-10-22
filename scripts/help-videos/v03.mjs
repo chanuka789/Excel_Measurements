@@ -1,0 +1,25 @@
+import { session, openProject, openModel, browser } from './lib.mjs';
+await session('03-measure', async (T) => {
+  const { cap, click, type, p, pane, wait } = T;
+  await T.top('#tabs [data-tab="DWFx Measure"]', 300); await T.top('#ribbon [data-fn=openProjects]', 800);
+  await openProject(T); await openModel(T);
+  await cap('Select elements, then open the Measure tab: it lists every quantity they have.', 2600);
+  await pane().evaluate(() => { const S = window.__dwfx.S; S.ticked = new Set(S.E.filter(e => e.cat === 'Structural Columns').map(e => e.id)); window.__dwfx.App.update(); });
+  await click('[data-tab=measure]', 1200);
+  await cap('Tick the quantities you need. "Geo" values are measured exactly from the 3D faces.', 2800);
+  await p.mouse.move(1160, 520, { steps: 6 }); await p.mouse.wheel(0, 300); await wait(900);
+  await cap('Add your own formula columns using the {keys}, for example formwork = {Geo_side_area}.', 2600);
+  await type('#cfLabel', 'Formwork'); await type('#cfExpr', '{Geo_side_area}'); await click('#cfAdd', 900);
+  await pane().selectOption('#gBy', 'level'); await wait(500);
+  await cap('Add to Excel: the rows go to the Take-off sheet with live formulas and sub-totals, and a copy is saved to the project.', 3000);
+  await click('#toExcel', 2500);
+  await cap('The schedule is now in your workbook. Every row keeps the element ID, so it stays linked to the model.', 3600);
+  await cap('Templates and discipline packs: ready methods for Structure, Architecture, Interiors and MEP.', 2600);
+  await pane().evaluate(() => { const d = document.getElementById('tplBox'); d.open = true; d.dispatchEvent(new Event('toggle')); d.scrollIntoView(); });
+  await pane().waitForSelector('.tpl'); await wait(800);
+  const sel = (await pane().$('.tpl:has-text("Formwork to beams (exact geometry)") [data-ap]')) ? '.tpl:has-text("Formwork to beams (exact geometry)") [data-ap]' : '.tpl:not([data-empty]) [data-ap]';
+  await click(sel, 1800);
+  await cap('Apply finds the matching elements and previews the totals. Add it with one click.', 2600);
+  await click('#tpAdd', 2500);
+});
+await browser.close();

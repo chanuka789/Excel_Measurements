@@ -1,0 +1,25 @@
+import { session, openProject, openModel, DWFX2, browser } from './lib.mjs';
+await session('05-revisions-output', async (T) => {
+  const { cap, click, type, p, pane, wait } = T;
+  const tab = async (name) => { try { await T.top(`#sheets [data-sh="${name}"]`, 1800); } catch { /* sheet not there */ } };
+  await T.top('#tabs [data-tab="DWFx Measure"]', 300); await T.top('#ribbon [data-fn=openProjects]', 800);
+  await openProject(T); await openModel(T);
+  await cap('Every group you add is saved to the project. In a new workbook, restore them all in one click.', 3000);
+  await click('[data-tab=project]', 800); await click('[data-sec=takeoffs]', 800); await click('#toRestoreAll', 2600);
+  await cap('A new revision: upload the new DWFx with the same model name. It becomes version 2.', 2800);
+  await click('#upToggle'); await pane().setInputFiles('#upFile', DWFX2); await wait(500);
+  await pane().fill('#upName', ''); await type('#upName', 'Structure'); await click('#upGo', 800);
+  await pane().waitForFunction(() => document.querySelectorAll('[data-open]').length >= 2, null, { timeout: 300000 }); await wait(800);
+  await openModel(T, 'v2');
+  await cap('Review > Revisions: compare the two versions. Added, removed and changed elements, and the quantity differences.', 3200);
+  await click('[data-tab=review]', 600); await click('[data-rsec=revisions]', 900); await click('#cmpRun', 1800);
+  await click('#cmpColor', 1800);
+  await cap('Update take-off re-measures your groups on the new version, keeps formulas and assumptions, and writes a Change log.', 3200);
+  await click('#updRun', 600); await click('#dlgYes', 2200);
+  await tab('Change log');
+  await cap('Output: build a BOQ sheet linked to the take-off totals, and an audit PDF for the file.', 3000);
+  await click('[data-rsec=output]', 1000); await click('#bqRun', 2000);
+  await tab('BOQ');
+  await click('#apRun', 400); await pane().waitForSelector('#apOut .msg', { timeout: 120000 }); await wait(2200);
+});
+await browser.close();

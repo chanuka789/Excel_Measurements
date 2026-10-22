@@ -1,0 +1,34 @@
+import { session, ribbon, openProject, openModel, open3D, box, browser } from './lib.mjs';
+await session('02-3d-tools', async (T) => {
+  const { cap, click, p, pane, dlg, wait } = T;
+  const D = () => dlg(), DF = '#dlgFrame';
+  await T.top('#tabs [data-tab="DWFx Measure"]', 300); await T.top('#ribbon [data-fn=openProjects]', 800);
+  await openProject(T); await openModel(T);
+  await cap('For serious 3D work press Launch Viewer. The large 3D window opens above Excel and stays linked to your sheet.', 3200);
+  await open3D(T);
+  const dc = (sel) => click(sel, 700, D);
+  const c = await box(T, '#vstage canvas', D, DF);
+  await cap('Views: top, front, sides and isometric. Tick Orthographic for a drawing-like view.', 2400);
+  await dc('[data-t=views]'); await dc('[data-v=front]'); await dc('[data-v=iso]'); await dc('.vpop .close');
+  await cap('Section box: drag the sliders to cut the model and see inside.', 2200);
+  await dc('[data-t=section]'); await dc('#secOn');
+  for (const v of [900, 800, 700, 620]) { await D().$eval('.vpop input[data-s=max]', (r, v) => { r.value = v; r.dispatchEvent(new Event('input')); }, v); await wait(350); }
+  await dc('#secReset'); await dc('#secOn'); await dc('.vpop .close');
+  await cap('Level plan: a top view of one level, cut at a set height, like a plan drawing.', 2400);
+  await dc('[data-t=plan]'); await dc('.vpop [data-i]'); await wait(1400);
+  await cap('Box select: drag left to right for elements fully inside, right to left for anything touched.', 2600);
+  await dc('[data-t=box]');
+  await p.mouse.move(c.x + c.w - 60, c.y + 60, { steps: 8 }); await p.mouse.down(); await p.mouse.move(c.x + 160, c.y + c.h - 90, { steps: 22 }); await p.mouse.up(); await wait(1500);
+  await dc('[data-t=box]'); await dc('[data-t=plan]'); await dc('#planExit');
+  await cap('Measure: click two points for a distance (it snaps to corners), or click a face for its area.', 2600);
+  await dc('[data-t=measure]'); await dc('.vpop [data-m=measure]');
+  await p.mouse.move(c.x + c.w * 0.42, c.y + c.h * 0.5, { steps: 8 }); await p.mouse.click(c.x + c.w * 0.42, c.y + c.h * 0.5); await wait(600);
+  await p.mouse.move(c.x + c.w * 0.62, c.y + c.h * 0.56, { steps: 12 }); await p.mouse.click(c.x + c.w * 0.62, c.y + c.h * 0.56); await wait(2300);
+  await p.keyboard.press('Escape'); await wait(300);
+  await cap('Colour by level, material, zone or any property. Click a legend row to select those elements.', 2600);
+  await dc('[data-t=color]'); await D().selectOption('#cMode', { index: 1 }); await wait(1500);
+  await dc('.legend button'); await wait(900); await D().selectOption('#cMode', { index: 0 }); await dc('.vpop .close');
+  await cap('Isolate shows only the selection. Hide removes it. Show all brings everything back. Ctrl+Z undoes.', 2800);
+  await dc('[data-t=isolate]'); await wait(1200); await dc('[data-t=isolate]'); await dc('[data-t=showall]');
+});
+await browser.close();

@@ -19,7 +19,7 @@
   .toc li { break-inside: avoid; }
   .help a { color: var(--brand-text); }
   figure { margin: 12px 0 6px; }
-  video { width: 100%; max-width: 420px; border-radius: var(--r-l); box-shadow: var(--shadow-l); background: #000; display: block; }
+  video { width: 100%; max-width: 880px; aspect-ratio: 16 / 9; border-radius: var(--r-l); box-shadow: var(--shadow-l); background: #000; display: block; }
   figcaption { font-size: 12px; color: var(--fg3); margin-top: 6px; }
   .tip { background: var(--info-bg); border-radius: var(--r-l); padding: 10px 12px; margin: 10px 0; }
   .warn { background: var(--warn-bg); border-radius: var(--r-l); padding: 10px 12px; margin: 10px 0; }
@@ -77,7 +77,7 @@
   <div class="warn">After 8 wrong passwords the account is locked for 15 minutes. If you forgot your password, ask your administrator for a new one.</div>
 
   <h2 id="projects">3. Projects and models</h2>
-  <figure><video controls preload="none" poster="media/01-projects.jpg?v=2" src="media/01-projects.webm?v=2"></video><figcaption>Video, 47 seconds: create a project, upload a DWFx and open it.</figcaption></figure>
+  <figure><video controls preload="none" poster="media/01-projects.jpg?v=3" src="media/01-projects.webm?v=3"></video><figcaption>Video, 1.3 minutes, recorded inside Excel: create a project, upload a DWFx and open it.</figcaption></figure>
   <ol>
     <li><strong>New project</strong>: give it a name, and a code and client if you like.</li>
     <li><strong>Upload DWFx</strong>: choose the file exported from Revit and a model name such as <em>Structure</em> or <em>Architecture</em>. Uploading again with the same model name creates version 2, 3 and so on.</li>
@@ -88,7 +88,7 @@
   </ol>
 
   <h2 id="view">4. The 3D view</h2>
-  <figure><video controls preload="none" poster="media/02-3d-tools.jpg?v=2" src="media/02-3d-tools.webm?v=2"></video><figcaption>Video, 1.5 minutes: views, section box, level plan, box select, measuring, colours and isolate.</figcaption></figure>
+  <figure><video controls preload="none" poster="media/02-3d-tools.jpg?v=3" src="media/02-3d-tools.webm?v=3"></video><figcaption>Video, 2 minutes, recorded inside Excel: views, section box, level plan, box select, measuring, colours and isolate.</figcaption></figure>
   <table class="ref">
     <tr><th>Tool</th><th>What it does</th></tr>
     <tr><td>Mouse</td><td>Left drag: orbit. Right drag: pan. Wheel: zoom. Click: select. <kbd>Ctrl</kbd>+click: add to the selection. Double-click: zoom to an element. Right-click: properties (in the task pane) or the object menu (in the 3D window, see <a href="#dimgroups">section 7</a>).</td></tr>
@@ -114,7 +114,7 @@
   </ul>
 
   <h2 id="measure">6. Measuring</h2>
-  <figure><video controls preload="none" poster="media/03-measure.jpg?v=2" src="media/03-measure.webm?v=2"></video><figcaption>Video, 41 seconds: quantities, a formula column, Add to Excel and templates.</figcaption></figure>
+  <figure><video controls preload="none" poster="media/03-measure.jpg?v=3" src="media/03-measure.webm?v=3"></video><figcaption>Video, 47 seconds, recorded inside Excel: quantities, a formula column, Add to Excel and templates.</figcaption></figure>
   <ol>
     <li>Select the elements, then open the <strong>Measure</strong> tab.</li>
     <li>Tick the quantities you need. The <em>Source</em> column says where each number comes from: <em>Revit</em> (exported values), <em>geometry</em> (measured exactly from the 3D faces), <em>type name</em> (sizes like 200X750) or <em>doors/windows</em> (openings in walls).</li>
@@ -134,7 +134,7 @@
   <div class="tip"><strong>One table for the same elements.</strong> When you add concrete, formwork, reinforcement, waterproofing… for exactly the same elements (from the Measure tab, a template, the AI or a dimension group), the add-in adds the new columns to the table that already holds those elements instead of starting a new table. Different element sets still get their own tables.</div>
 
   <h2 id="dimgroups">7. 3D window: project tree and dimension groups</h2>
-  <figure><video controls preload="none" poster="media/06-dimension-groups.jpg?v=2" src="media/06-dimension-groups.webm?v=2"></video><figcaption>Video, 1.7 minutes: folders, the object menu, dimension groups with custom quantities, import, deductions and one Excel table for concrete and formwork.</figcaption></figure>
+  <figure><video controls preload="none" poster="media/06-dimension-groups.jpg?v=3" src="media/06-dimension-groups.webm?v=3"></video><figcaption>Video, 1.9 minutes, recorded inside Excel: folders, the object menu, dimension groups with custom quantities, import, deductions and one Excel table for concrete and formwork.</figcaption></figure>
   <p>Press <strong>3D window</strong> (ribbon or 3D toolbar). The window is a full measuring workspace: the <strong>project tree</strong> on the left, the model in the middle, drawings and properties on the right (<strong>Drawings and properties</strong> button). Drag the grey bars to resize.</p>
   <h3>Drawings, Model and Views tabs (top left)</h3>
   <ul>
@@ -168,8 +168,17 @@
   </table>
   <p>The <strong>Dimensions</strong> tab lists the dimensions of the current group. Click to select in 3D; right-click to delete, change the multiplier, or make dimensions negative (deductions). <strong>Add measured…</strong> adds the last distance or face area you measured in 3D, or a value you type.</p>
 
+  <h3>Click a schedule row to isolate it in 3D</h3>
+  <figure><video controls preload="none" poster="media/07-schedule-isolate.jpg?v=3" src="media/07-schedule-isolate.webm?v=3"></video><figcaption>Video, 1.2 minutes, recorded inside Excel: restore schedules, click a row, isolate the elements in the 3D window.</figcaption></figure>
+  <p>Every schedule row keeps the Revit ID of its element, so the sheet and the 3D model stay linked both ways.</p>
+  <ol>
+    <li>Click a row number in a schedule (or drag over several row numbers). The elements of those rows are selected in 3D and the view moves to them.</li>
+    <li>Click the group row (G1, G2 …) to select every element of that schedule.</li>
+    <li>Press <strong>Isolate</strong> in the 3D toolbar to show only the selection. <strong>Show all</strong> brings the rest back.</li>
+  </ol>
+
   <h2 id="ai">8. AI assistant</h2>
-  <figure><video controls preload="none" poster="media/04-ai.jpg?v=2" src="media/04-ai.webm?v=2"></video><figcaption>Video, 38 seconds: ask the AI, see its working, add the result and check the take-off.</figcaption></figure>
+  <figure><video controls preload="none" poster="media/04-ai.jpg?v=3" src="media/04-ai.webm?v=3"></video><figcaption>Video, 41 seconds, recorded inside Excel: ask the AI, see its working, add the result and check the take-off.</figcaption></figure>
   <ol>
     <li>Open the <strong>AI</strong> tab and describe what to measure, for example <em>"Formwork to beams on Level 1, soffit and sides less a 200 mm slab"</em>, or pick a common request.</li>
     <li>The AI searches the model, reads the real quantities, tests its formulas and checks your QS rules. Open <em>How the AI worked it out</em> to see its steps.</li>
@@ -186,7 +195,7 @@
   </ul>
 
   <h2 id="revisions">10. Revisions</h2>
-  <figure><video controls preload="none" poster="media/05-revisions-output.jpg?v=2" src="media/05-revisions-output.webm?v=2"></video><figcaption>Video, 1 minute: restore saved groups, upload a revision, compare, update, BOQ and audit PDF.</figcaption></figure>
+  <figure><video controls preload="none" poster="media/05-revisions-output.jpg?v=3" src="media/05-revisions-output.webm?v=3"></video><figcaption>Video, 1.3 minutes, recorded inside Excel: restore saved groups, upload a revision, compare, update, BOQ and audit PDF.</figcaption></figure>
   <ol>
     <li>Upload the new DWFx with the <em>same model name</em>, so it becomes the next version, and open it.</li>
     <li><strong>Review › Revisions › Compare</strong>: added, removed and changed elements, and the quantity differences. <strong>Colour the model by changes</strong> shows them in 3D.</li>

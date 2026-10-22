@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Project XXXXX - Take-off.xlsx - Excel</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; font: 12px/1.3 "Segoe UI", system-ui, Arial, sans-serif; color: #242424; background: #fff; }
+  #title { height: 32px; background: #217346; color: #fff; display: flex; align-items: center; padding: 0 10px; gap: 14px; }
+  #title .logo { width: 18px; height: 18px; border-radius: 3px; background: #fff; color: #217346; font: 700 13px/18px Segoe UI, Arial; text-align: center; }
+  #title .doc { flex: 1; text-align: center; font-size: 12.5px; }
+  #title .search { width: 300px; height: 22px; background: rgba(255,255,255,.22); border-radius: 4px; padding: 2px 8px; color: #e8f3ec; font-size: 12px; }
+  #title .ctl { letter-spacing: 18px; font-size: 13px; padding-left: 8px; }
+  #tabs { height: 28px; background: #f3f3f3; display: flex; align-items: flex-end; padding: 0 8px; gap: 2px; border-bottom: 1px solid #d4d4d4; }
+  #tabs button { all: unset; cursor: pointer; padding: 5px 12px 4px; font-size: 12.5px; color: #333; border-bottom: 2px solid transparent; }
+  #tabs button:hover { background: #e7e7e7; }
+  #tabs button.on { color: #185c37; font-weight: 600; border-bottom-color: #217346; }
+  #ribbon { height: 82px; background: #fbfbfb; border-bottom: 1px solid #d4d4d4; display: flex; padding: 4px 8px; gap: 0; }
+  .grp { display: flex; flex-direction: column; border-right: 1px solid #dcdcdc; padding: 0 10px; min-width: 90px; }
+  .grp .items { flex: 1; display: flex; gap: 4px; align-items: stretch; }
+  .grp .gl { text-align: center; font-size: 11px; color: #666; padding-top: 2px; }
+  .rb { all: unset; cursor: pointer; width: 72px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 3px; border-radius: 4px; font-size: 11.5px; text-align: center; line-height: 1.15; }
+  .rb:hover { background: #e3eee8; outline: 1px solid #b7d4c3; }
+  .rb img { width: 32px; height: 32px; }
+  .ph { width: 70px; margin: 3px 2px; border-radius: 3px; background: #ececec; display: flex; align-items: flex-end; justify-content: center; font-size: 10.5px; color: #8a8a8a; padding-bottom: 4px; }
+  #fbar { height: 24px; display: flex; align-items: center; border-bottom: 1px solid #d4d4d4; background: #fff; }
+  #nameBox { width: 86px; height: 20px; margin: 0 6px; border: 1px solid #c8c8c8; padding: 1px 6px; font-size: 12px; }
+  #fx { color: #777; font: italic 13px Georgia, serif; padding: 0 8px; border-left: 1px solid #d4d4d4; }
+  #fText { flex: 1; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #body { position: absolute; top: 166px; bottom: 22px; left: 0; right: 0; display: flex; }
+  #sheetWrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #grid { flex: 1; overflow: hidden; position: relative; background: #fff; }
+  #grid table { border-collapse: collapse; table-layout: fixed; }
+  #grid th { background: #efefef; border: 1px solid #d0d0d0; font-weight: 400; color: #444; height: 20px; font-size: 12px; position: sticky; top: 0; }
+  #grid th.rh { width: 36px; position: sticky; left: 0; cursor: pointer; }
+  #grid td { border: 1px solid #e1e1e1; height: 20px; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; max-width: 0; cursor: cell; }
+  #grid td.n { text-align: right; }
+  #grid tr.hd td { background: #1f4e79; color: #fff; font-weight: 600; }
+  #grid tr.g td { background: #deebf7; font-weight: 600; }
+  #grid tr.t td { background: #f2f2f2; font-weight: 600; border-top: 1px solid #555; }
+  #grid td.sel, #grid tr.sel td { background: #cfe6d8 !important; outline: 1px solid #217346; outline-offset: -1px; }
+  #grid th.sel { background: #bcd9c8; color: #0b5a2c; font-weight: 600; }
+  #sheets { height: 26px; background: #f3f3f3; border-top: 1px solid #d4d4d4; display: flex; align-items: flex-end; padding: 0 8px; gap: 2px; }
+  #sheets button { all: unset; cursor: pointer; padding: 3px 14px; font-size: 12px; border-radius: 0 0 4px 4px; }
+  #sheets button.on { background: #fff; color: #185c37; font-weight: 600; border-bottom: 2px solid #217346; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  #pane { width: 400px; border-left: 1px solid #c8c8c8; display: flex; flex-direction: column; background: #fff; flex: none; }
+  #pane.hide { display: none; }
+  #paneHead { height: 28px; background: #f3f3f3; border-bottom: 1px solid #d4d4d4; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-size: 12.5px; }
+  #paneHead span:last-child { letter-spacing: 12px; color: #555; }
+  #paneFrame { flex: 1; border: 0; width: 100%; }
+  #status { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; background: #217346; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-size: 11.5px; }
+  #dlg { position: absolute; left: 90px; top: 58px; width: 1180px; height: 650px; background: #fff; border: 1px solid #8a8a8a; box-shadow: 0 12px 40px rgba(0,0,0,.45); display: none; flex-direction: column; z-index: 50; }
+  #dlg.on { display: flex; }
+  #dlgHead { height: 30px; background: #f3f3f3; border-bottom: 1px solid #c8c8c8; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 12.5px; }
+  #dlgFrame { flex: 1; border: 0; width: 100%; }
+</style></head>
+<body>
+<div id="title"><div class="logo">X</div><span>AutoSave &nbsp;<b style="opacity:.85">Off</b></span><div class="doc">Project XXXXX - Take-off.xlsx &nbsp;-&nbsp; Excel</div><div class="search">Search</div><div class="ctl">&#8211;&#9633;&#10005;</div></div>
+<div id="tabs"></div>
+<div id="ribbon"></div>
+<div id="fbar"><div id="nameBox">A1</div><div id="fx">fx</div><div id="fText"></div></div>
+<div id="body">
+  <div id="sheetWrap"><div id="grid"></div><div id="sheets"></div></div>
+  <div id="pane" class="hide"><div id="paneHead"><span>DWFx Measure</span><span>&#8942;&#10005;</span></div><iframe id="paneFrame" title="DWFx Measure task pane"></iframe></div>
+</div>
+<div id="dlg"><div id="dlgHead"><span>DWFx Measure &mdash; 3D window</span><span style="cursor:pointer" id="dlgX">&#10005;</span></div><iframe id="dlgFrame" title="3D window"></iframe></div>
+<div id="status"><span>Ready</span><span id="stat2"></span></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const TABS = ['File', 'Home', 'Insert', 'Page Layout', 'Formulas', 'Data', 'Review', 'View', 'DWFx Measure'];
+const HOME = [['Clipboard', ['Paste', 'Cut', 'Copy']], ['Font', ['Calibri 11', 'B  I  U']], ['Alignment', ['Wrap text', 'Merge']], ['Number', ['General', '%  ,']], ['Styles', ['Conditional', 'Format as table']], ['Cells', ['Insert', 'Delete', 'Format']], ['Editing', ['AutoSum', 'Sort & Filter', 'Find']]];
+const DW = [['Project & Models', 'projects', 'openProjects'], ['Launch Viewer', 'window', 'view3DWindow'], ['Smart Takeoff', 'measure', 'openSmartTakeoff'], ['BOQ & Schedules', 'boq', 'openSmartOutput'], ['AI Audit', 'aicheck', 'aiCheck']];
+let tab = 'Home';
+function drawTabs() {
+  $('tabs').innerHTML = TABS.map(t => `<button class="${t === tab ? 'on' : ''}" data-tab="${t}">${t}</button>`).join('');
+  $('ribbon').innerHTML = tab === 'DWFx Measure'
+    ? `<div class="grp"><div class="items">${DW.map(([l, i, fn]) => `<button class="rb" data-fn="${fn}" data-ribbon="${i}"><img src="/assets/ribbon/${i}-32.png" alt=""><span>${l.replace(' & ', ' &amp;<br>').replace(/^(Launch|Smart|AI) /, '$1<br>')}</span></button>`).join('')}</div><div class="gl">QS workflow</div></div>`
+    : tab === 'Home' ? HOME.map(([g, items]) => `<div class="grp"><div class="items">${items.map(x => `<div class="ph">${x}</div>`).join('')}</div><div class="gl">${g}</div></div>`).join('')
+    : `<div class="grp"><div class="items"><div class="ph" style="width:160px"></div></div><div class="gl">${tab}</div></div>`;
+}
+$('tabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; drawTabs(); } };
+$('ribbon').onclick = (e) => {
+  const b = e.target.closest('[data-fn]'); if (!b) return;
+  const fn = b.dataset.fn, w = $('paneFrame').contentWindow;
+  window.__showPane(true);
+  Promise.resolve().then(() => w.__ribbon?.[fn]?.());
+};
+window.__showPane = (on) => { $('pane').classList.toggle('hide', !on); };
+window.__tab = (t) => { tab = t; drawTabs(); };
+
+// ------------------------------------------------ the dialog (Office displayDialogAsync) is drawn as a floating window
+window.__openDialog = (url) => { $('dlgFrame').src = url; $('dlg').classList.add('on'); };
+window.__dlgPos = (l, t, w, h) => Object.assign($('dlg').style, { left: l + 'px', top: t + 'px', width: w + 'px', height: h + 'px' });
+window.__closeDialog = () => { $('dlg').classList.remove('on'); $('dlgFrame').src = 'about:blank'; };
+$('dlgX').onclick = () => window.__closeDialog();
+
+// ------------------------------------------------ the worksheet, drawn from the add-in's simulated workbook
+const COLS = 16, ROWS = 60;
+const colL = (n) => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - 1 - m) / 26; } return s; };
+let selRows = null, selAddr = 'A1', lastKey = '';
+const fmt = (v) => typeof v === 'number' ? (Number.isInteger(v) ? String(v) : String(Math.round(v * 1000) / 1000)) : String(v ?? '');
+function sheetData() {
+  const w = $('paneFrame').contentWindow, WB = w?.__wb; if (!WB || !WB.active) return null;
+  const vis = WB.sheets.filter(s => s.visibility === 'Visible');
+  let vals = []; try { vals = w.__sheet(WB.active.name) || []; } catch { /* mid-update */ }
+  return { vis, active: WB.active.name, vals };
+}
+function drawGrid() {
+  const d = sheetData(); const sheets = d ? d.vis.map(s => s.name) : ['Sheet1'], active = d ? d.active : 'Sheet1';
+  $('sheets').innerHTML = sheets.map(n => `<button class="${n === active ? 'on' : ''}" data-sh="${n.replace(/"/g, '&quot;')}">${n}</button>`).join('');
+  const vals = d ? d.vals : [];
+  const key = JSON.stringify([active, vals, selRows, selAddr, $('pane').className, $('grid').clientWidth]); if (key === lastKey) return; lastKey = key;
+  const w = $('grid').clientWidth; const widths = Array.from({ length: COLS }, (_, c) => c === 2 ? 190 : c === 0 ? 70 : 86);
+  let html = '<table><colgroup><col style="width:36px">' + widths.map(x => `<col style="width:${x}px">`).join('') + '</colgroup><thead><tr><th class="rh"></th>';
+  for (let c = 0; c < COLS; c++) html += `<th>${colL(c)}</th>`;
+  html += '</tr></thead><tbody>';
+  for (let r = 0; r < ROWS; r++) {
+    const row = vals[r] || [], first = row[0], strs = row.filter(x => x !== '' && x != null);
+    const cls = !strs.length ? '' : (typeof first === 'string' && /^G\d+$/.test(first)) ? 'g' : (strs.length > 2 && strs.every(x => typeof x === 'string') && r < 12) ? 'hd' : (typeof first === 'string' && /^total|^sub-?total/i.test(first)) ? 't' : '';
+    const on = selRows && r + 1 >= selRows[0] && r + 1 <= selRows[1];
+    html += `<tr class="${cls} ${on ? 'sel' : ''}"><th class="rh ${on ? 'sel' : ''}" data-row="${r + 1}">${r + 1}</th>`;
+    if (strs.length === 1 && !cls) { const c0 = row.findIndex(x => x !== '' && x != null); html += `<td colspan="${COLS}" style="max-width:none;overflow:visible;${c0 ? '' : 'font-weight:600'}">${fmt(row[c0]).replace(/</g, '&lt;')}</td></tr>`; continue; }
+    for (let c = 0; c < COLS; c++) { const v = row[c]; html += `<td data-a="${colL(c)}${r + 1}" class="${typeof v === 'number' ? 'n' : ''} ${selAddr === colL(c) + (r + 1) ? 'sel' : ''}">${v == null || v === '' ? '' : fmt(v).replace(/</g, '&lt;')}</td>`; }
+    html += '</tr>';
+  }
+  $('grid').innerHTML = html + '</tbody></table>';
+  $('stat2').textContent = d ? `${vals.length} rows` : '';
+}
+$('sheets').onclick = (e) => { const b = e.target.closest('[data-sh]'); if (!b) return; const WB = $('paneFrame').contentWindow.__wb; WB.active = WB.sheets.find(s => s.name === b.dataset.sh); selRows = null; selAddr = 'A1'; };
+async function select(addr, rows) {
+  selRows = rows || null; selAddr = rows ? '' : addr; $('nameBox').textContent = addr;
+  const d = sheetData(); const cell = d && d.vals; $('fText').textContent = '';
+  if (!rows) { const m = /^([A-Z]+)(\d+)$/.exec(addr); const v = m && cell && cell[+m[2] - 1] ? cell[+m[2] - 1][m[1].charCodeAt(0) - 65] : ''; $('fText').textContent = fmt(v); }
+  try { await $('paneFrame').contentWindow.__selectRange(addr); } catch (err) { console.error(err); }
+}
+$('grid').onclick = (e) => {
+  const th = e.target.closest('th[data-row]'); if (th) { const r = +th.dataset.row; return select(`A${r}:${colL(COLS - 1)}${r}`, [r, r]); }
+  const td = e.target.closest('td[data-a]'); if (td) select(td.dataset.a);
+};
+window.__selectRows = (a, b) => select(`A${a}:${colL(COLS - 1)}${b}`, [a, b]);   // drag over row numbers
+setInterval(drawGrid, 350);
+drawTabs(); drawGrid();
+$('paneFrame').src = '/taskpane.html';
+</script>
+</body></html>
