@@ -11,9 +11,18 @@ export const drawingKey = (d) => (d.kind === 'sheet' ? `s:${d.versionId}:${d.ind
 export const newId = () => Math.random().toString(36).slice(2, 10);
 
 export class TakeoffStore {
-  /** opts: { projectId, canEdit(), source?: { groups(), current(), setCurrent(id), replace(group), reload() } } */
+  /** opts: { projectId, canEdit(), source?: { groups(), current(), setCurrent(id), replace(group), reload() }, api? (tests) } */
   constructor(opts) {
     this.o = opts; this.own = { groups: [], current: null }; this.settings = {}; this.listeners = new Set();
+    this.api = opts.api || api; this.queues = new Map();
+  }
+  /** Run saves of one group one after another: each starts from the group as the previous save left it,
+   * so quick clicks (counts, faces) never overwrite each other's dimensions. */
+  serial(gid, job) {
+    const run = (this.queues.get(gid) || Promise.resolve()).catch(() => {}).then(job);
+    this.queues.set(gid, run);
+    run.finally(() => { if (this.queues.get(gid) === run) this.queues.delete(gid); }).catch(() => {});
+    return run;
   }
   get projectId() { return this.o.projectId(); }
   canEdit() { return Boolean(this.o.canEdit?.()); }
@@ -22,7 +31,7 @@ export class TakeoffStore {
 
   async load() {
     const pid = this.projectId; if (!pid) return;
-    const [t, s] = await Promise.all([this.o.source ? null : api('GET', `/projects/${pid}/tree`), api('GET', `/projects/${pid}/drawing-settings`)]);
+    const [t, s] = await Promise.all([this.o.source ? null : this.api('GET', `/projects/${pid}/tree`), this.api('GET', `/projects/${pid}/drawing-settings`)]);
     if (t) { this.own.groups = t.groups; if (this.own.current && !this.group(this.own.current)) this.own.current = null; }
     this.settings = s.settings || {};
     this.emit('load');
@@ -42,36 +51,39 @@ export class TakeoffStore {
 
   // ---------------------------------------------------------------- dimension groups
   async createGroup({ name, mtype, folderId = null, props = {} }) {
-    const r = await api('POST', `/projects/${this.projectId}/dimgroups`, { name, mtype, folderId,
+    const r = await this.api('POST', `/projects/${this.projectId}/dimgroups`, { name, mtype, folderId,
       props: { posColor: randomColor(), negColor: '#d13438', ...props } });
     const g = this.replace({ ...r.group, items: [] });
     this.setCurrent(g.id); this.emit('groups');
     return g;
   }
-  /** Save a group's measured dimensions (the server keeps the other properties). */
-  async saveMeasured(gid, measured) {
-    const r = await api('PATCH', `/dimgroups/${gid}`, { props: { measured } });
+  /** Save a group's measured dimensions as given (the server keeps the other properties). Prefer addMeasured / updateDims. */
+  saveMeasured(gid, measured) { return this.serial(gid, () => this.put(gid, measured)); }
+  async put(gid, measured) {
+    const r = await this.api('PATCH', `/dimgroups/${gid}`, { props: { measured } });
     const g = this.replace(r.group); this.emit('groups');
     return g;
   }
-  async addMeasured(gid, list) {
-    const g = this.group(gid); if (!g) throw new Error('Choose a dimension group first.');
-    return this.saveMeasured(gid, [...(g.props.measured || []), ...list]);
+  /** Add dimensions to a group, after any save of that group still on its way. */
+  addMeasured(gid, list) {
+    if (!this.group(gid)) return Promise.reject(new Error('Choose a dimension group first.'));
+    return this.serial(gid, () => { const g = this.group(gid); return this.put(gid, [...(g?.props.measured || []), ...list]); });
   }
-  /** Change measured dimensions across groups: fn(m, g) returns the new dimension, null to delete it, or undefined to keep it. */
+  /** Change measured dimensions across groups: fn(m, g) returns the new dimension, null to delete it, or undefined to keep it.
+   * Each group is changed from its latest saved state. Resolves with the number of groups changed. */
   async updateDims(fn) {
-    const changed = [];
-    for (const g of this.groups()) {
-      const list = g.props.measured || []; let dirty = false; const out = [];
-      for (const m of list) {
+    const jobs = this.groups().map(({ id }) => this.serial(id, async () => {
+      const g = this.group(id); if (!g) return 0;
+      let dirty = false; const out = [];
+      for (const m of g.props.measured || []) {
         const r = fn(m, g);
         if (r === undefined) out.push(m);
         else { dirty = true; if (r) out.push(r); }
       }
-      if (dirty) changed.push([g.id, out]);
-    }
-    for (const [id, list] of changed) await this.saveMeasured(id, list);
-    return changed.length;
+      if (!dirty) return 0;
+      await this.put(id, out); return 1;
+    }));
+    return (await Promise.all(jobs)).reduce((a, b) => a + b, 0);
   }
   /** Every measured dimension taken on this drawing page (or in 3D on this model version): [{ g, m }]. */
   dimsOn(srcT, key, page = 1) {
@@ -94,7 +106,7 @@ export class TakeoffStore {
     return this.saveDrawing(dkey, s);
   }
   async saveDrawing(dkey, props) {
-    const r = await api('PUT', `/projects/${this.projectId}/drawing-settings/${encodeURIComponent(dkey)}`, { props });
+    const r = await this.api('PUT', `/projects/${this.projectId}/drawing-settings/${encodeURIComponent(dkey)}`, { props });
     this.settings[dkey] = r.props; this.emit('settings');
     return r.props;
   }

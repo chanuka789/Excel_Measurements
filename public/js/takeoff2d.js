@@ -645,8 +645,13 @@ export class DrawingTakeoff {
     try { await this.store.updateDims((m, g) => (ids.has(m.id) ? fn(m, g) : undefined)); if (msg) this.say(msg, 'ok'); } catch (err) { this.say(err.message, 'bad'); }
     this.drawDims();
   }
+  /** Scale of the page a dimension was taken on (not the page on screen: a queued edit may run after you change page). */
+  scaleFor(m) {
+    const key = m.src?.key || this.dkey, page = m.src?.page || this.page;
+    return this.store.scaleOf(key, page) || (key === this.dkey ? this.cadUnit || 0 : 0);
+  }
   recalc(m, pts) {
-    const q = G2.measure2d(m.shape, pts, this.scale, m);
+    const q = G2.measure2d(m.shape, pts, this.scaleFor(m), m);
     return q ? { ...m, pts, value: q.value, ...(q.len != null ? { len: q.len } : {}), ...(q.bars != null ? { rebar: { ...m.rebar, bars: q.bars } } : {}) } : { ...m, pts };
   }
   /** Apply a point transform to a dimension (its cutout holes too) and recalculate it. */
