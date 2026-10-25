@@ -17,6 +17,7 @@ import { seedFeatures } from './src/features.js';
 import { storageKind } from './src/storage.js';
 import { startWorker } from './worker.js';
 import { securityHeaders } from './src/security.js';
+import { buildBundles, serveBundles } from './src/bundle.js';
 import { requestId, installCrashHandlers, pruneErrors } from './src/monitor.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,8 @@ app.get('/py/:name', (req, res) => {
   if (!PY_PUBLIC.has(req.params.name)) return res.status(404).end();
   res.type('text/plain; charset=utf-8').sendFile(path.join(here, 'py', req.params.name));
 });
+let bundles = null;                              // built in start(); until then (and in tests) the separate files are served
+app.use((req, res, next) => serveBundles(bundles)(req, res, next));
 app.use(express.static(path.join(here, 'public'), { index: 'taskpane.html' }));
 app.get('/health', async (_req, res) => {
   let db = false; try { db = Boolean(await one('SELECT 1 AS ok')); } catch { /* db down */ }
@@ -66,6 +69,7 @@ app.use('/api', api);
 
 export async function start(port = process.env.PORT || 3000) {
   if (!pool) throw new Error('DATABASE_URL is not set. Add a Postgres database and set DATABASE_URL.');
+  if (process.env.BUNDLE !== '0') bundles = await buildBundles(path.join(here, 'public'));
   await migrate();
   await seedFeatures();
   await pruneErrors();
