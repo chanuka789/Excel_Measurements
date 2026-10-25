@@ -242,8 +242,17 @@ export async function keepDrawingHere(d) {
 /** Save a copy of a file kept on the computers (asks for it if this computer does not have it). */
 export async function saveCopy(item) {
   const blob = await fileFor(item);
+  const name = item.file_name || item.name;
+  // Excel desktop's web view ignores plain downloads, so use the "Save as" window where the browser has it
+  // (Windows: WebView2 / Edge, Chrome). The file never leaves the computer.
+  if (typeof window.showSaveFilePicker === 'function') {
+    let h;
+    try { h = await window.showSaveFilePicker({ suggestedName: name }); }
+    catch (err) { if (err?.name === 'AbortError') return; h = null; }
+    if (h) { const w = await h.createWritable(); await w.write(blob); await w.close(); return; }
+  }
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = item.file_name || item.name; document.body.append(a); a.click();
+  a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
 }
 
