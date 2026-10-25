@@ -215,7 +215,37 @@
     <li><strong>Face area</strong>: one click takes the whole flat face of an element (for example a slab soffit or a wall face).</li>
     <li>The dimensions are drawn on the model in the group's colour. In the 3D window, click a dimension in the <strong>Dimensions</strong> tab to show it on its drawing or in 3D.</li>
   </ol>
-  <p class="hint">Not in this version (CostX features you may know): Auto Count by image search, Convert to Cutout (use negative dimensions instead, the quantity is the same), drawing comparison overlay, working area, rebar mode, and measuring DWG/DXF files directly (export them to PDF first).</p>
+  <h3>Auto Count</h3>
+  <ol>
+    <li>Make a <strong>Count</strong> group current, then press <strong>Auto Count</strong>.</li>
+    <li>Press <strong>Capture</strong> and drag a box tightly around one symbol (a door, a light fitting). Set a working area or hide layers first to search only part of the drawing.</li>
+    <li>Press <strong>Search</strong>. Copies are found even when they are rotated or mirrored. <strong>Show matches above</strong> hides weak matches; <strong>Auto accept above</strong> accepts the close ones.</li>
+    <li>Yellow = to check, green = accepted, red = rejected. Click yellow once to accept or twice to reject; click green to reject; click red to accept. Shift-click a symbol it missed to add it.</li>
+    <li>Press <strong>Save accepted</strong>: each one becomes a count dimension. The captured symbol stays, so you can search other drawings with it.</li>
+  </ol>
+  <h3>Cutouts</h3>
+  <ol>
+    <li>Measure the large area as a positive dimension and the void or opening as a <strong>negative</strong> dimension.</li>
+    <li>Select the negative dimension (and the positive one too if several are stacked), right-click &gt; <strong>Convert to Cutout</strong>.</li>
+    <li>The negative dimension becomes a hole in the positive one (or a notch, or the positive one is split into two dimensions). Area and perimeter are recalculated.</li>
+    <li>To take a hole away, right-click inside it &gt; <strong>Remove Cutout</strong> (the negative dimension is not restored).</li>
+  </ol>
+  <h3>Rebar mode</h3>
+  <ol>
+    <li>Make a <strong>Length</strong> group current and press <strong>Rebar</strong>.</li>
+    <li>Click the two ends of the <strong>spacing line</strong> (the distance the bars cover), then the two ends of <strong>one bar</strong>.</li>
+    <li>Enter the <strong>spacing</strong> and any <strong>extra length per bar</strong> (laps, hooks). Bars = distance ÷ spacing + 1; total = bars × (bar length + extra). The covered bars are drawn faintly.</li>
+  </ol>
+  <h3>Compare two drawings</h3>
+  <ol>
+    <li><strong>View &gt; Compare with Another Drawing</strong>, choose the drawing and page.</li>
+    <li>This drawing shows in <span style="color:#10962a">green</span>, the other in <span style="color:#d62828">red</span>; lines in both look dark, so changes stand out. Use the sliders to fade either one.</li>
+    <li>Press <strong>Align</strong> and drag to line them up. You can measure while comparing: dimensions are saved on this drawing.</li>
+  </ol>
+  <h3>Working area</h3>
+  <p><strong>View &gt; Set Working Area</strong>, then drag a box: only that part of the drawing is shown, snapped to and searched by Auto Count, and Extents zooms to it. Use it for one unit on a typical floor plan, or a detail at another scale. <strong>Reset Working Area</strong> shows the whole page.</p>
+  <h3>DWG and DXF drawings</h3>
+  <p>Upload DWG or DXF files like any drawing and press <strong>Open &amp; measure</strong>. The first time, the server reads the file (this can take a minute). CAD drawings are measured 1:1 in the file's own units, so no scale or calibration is needed; check one known length with Distance. <strong>View &gt; Layers</strong> shows or hides CAD layers, and the cursor snaps only to visible layers. If a DWG cannot be read (some older versions), save it as DWG 2013-2018, DXF or PDF and upload it again.</p>
 
   <h2 id="ai">9. AI assistant</h2>
   <figure><video controls preload="none" poster="media/04-ai.jpg?v=3" src="media/04-ai.webm?v=3"></video><figcaption>Video, 41 seconds, recorded inside Excel: ask the AI, see its working, add the result and check the take-off.</figcaption></figure>

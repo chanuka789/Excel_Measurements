@@ -1,7 +1,7 @@
 // Projects tab: list, create, details (models + versions, drawings, team, saved take-offs, activity, export, delete).
 import { $, esc, App, api, upload, downloadFile, fmtBytes, fmtDate, fmtDay, status, confirmBox, session } from './core.js';
 import { openDrawing, canView } from './drawings.js';
-import { DrawingTakeoff, canMeasure } from './takeoff2d.js';
+import { DrawingTakeoff, canMeasure, measurableDrawings } from './takeoff2d.js';
 import { TakeoffStore } from './tkstore.js';
 import { S } from './state.js';
 import { canProcessLocally, processLocally, LOCAL } from './localproc.js';
@@ -20,7 +20,7 @@ function openMeasure(d) {
   if (d.kind !== 'sheet' && !canMeasure(d.name)) return openDrawing(d);
   const box = $('drawingViewer'); box.hidden = false;
   tk2d?.destroy();
-  tk2d = new DrawingTakeoff(box, tkStore, { close: true, onClose: () => { box.hidden = true; tk2d = null; } });
+  tk2d = new DrawingTakeoff(box, tkStore, { close: true, onClose: () => { box.hidden = true; tk2d = null; }, drawings: () => measurableDrawings(P.detail) });
   tk2d.open(d);
 }
 window.__tk2d = () => tk2d;                // used by the automated browser tests
@@ -189,7 +189,7 @@ function drawingsHtml() {
   if (!d.drawings.length) return up + '<div class="empty-state"><p>No drawings yet. Upload the drawing set so the team keeps everything for this project in one place.</p></div>';
   return up + `<table class="tbl"><thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody>${d.drawings.map(x => `
     <tr><td class="wrap">${esc(x.name)}</td><td class="num">${fmtBytes(Number(x.size))}</td><td class="small">${fmtDay(x.created_at)}<br><span class="muted">${esc(x.uploaded_by || '')}</span></td>
-    <td class="right">${canView(x.name) ? `<button class="btn small" data-view="${x.id}" title="${canMeasure(x.name) ? 'Open the drawing to view and measure it' : 'Open the drawing'}">${canMeasure(x.name) ? 'Open &amp; measure' : 'View'}</button> ` : ''}<button class="btn small" data-dl="${x.id}" data-name="${esc(x.name)}">Download</button>${can('editor') ? ` <button class="btn small subtle danger-text" data-deld="${x.id}" data-name="${esc(x.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+    <td class="right">${canView(x.name) || canMeasure(x.name) ? `<button class="btn small" data-view="${x.id}" title="${canMeasure(x.name) ? 'Open the drawing to view and measure it' : 'Open the drawing'}">${canMeasure(x.name) ? 'Open &amp; measure' : 'View'}</button> ` : ''}<button class="btn small" data-dl="${x.id}" data-name="${esc(x.name)}">Download</button>${can('editor') ? ` <button class="btn small subtle danger-text" data-deld="${x.id}" data-name="${esc(x.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 function takeoffsHtml() {
   const d = P.detail;

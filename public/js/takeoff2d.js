@@ -12,6 +12,7 @@ import * as G2 from './geom2d.js';
 import { drawingKey, makeDim, measurable, newId, randomColor } from './tkstore.js';
 import { UNIT, dimQuantity, displayUnit } from './dims.js';
 import { fmt, uLabel } from './engine.js';
+import { installExtras } from './tkextras.js';
 
 let pdfjs = null;
 async function loadPdfJs() {
@@ -37,7 +38,7 @@ export class DrawingTakeoff {
     this.z = 1; this.tx = 0; this.ty = 0; this.rot = 0; this.page = 1; this.pages = 1;
     this.unsub = store.on((w) => { if (w !== 'current') this.drawDims(); this.syncBar(); });
   }
-  destroy() { this.unsub?.(); this.renderTask?.cancel?.(); this.doc?.destroy?.(); this.host.innerHTML = ''; document.removeEventListener('keyup', this.keyUp); }
+  destroy() { this.closeCompare?.(); this.unsub?.(); this.renderTask?.cancel?.(); this.doc?.destroy?.(); this.host.innerHTML = ''; document.removeEventListener('keyup', this.keyUp); }
 
   // ================================================================== open a drawing
   async open(d) {
@@ -55,10 +56,11 @@ export class DrawingTakeoff {
     this.bindEvents();
     try {
       await this.store.load().catch(() => {});
-      const res = await api('GET', d.kind === 'sheet' ? `/versions/${d.versionId}/sheets/${d.index}` : `/drawings/${d.id}/file?inline=1`, null, { raw: true });
+      if (d.kind !== 'sheet' && /\.(dwg|dxf)$/i.test(d.name || '')) this.el.load.textContent = 'Reading the CAD drawing… (the first time can take a minute)';
+      const res = await api('GET', d.kind === 'sheet' ? `/versions/${d.versionId}/sheets/${d.index}` : /\.(dwg|dxf)$/i.test(d.name || '') ? `/drawings/${d.id}/cad` : `/drawings/${d.id}/file?inline=1`, null, { raw: true });
       const type = res.headers.get('content-type') || d.content_type || '', name = (d.name || '').toLowerCase();
       if (/pdf/.test(type) || name.endsWith('.pdf')) { this.kind = 'pdf'; const lib = await loadPdfJs(); this.doc = await lib.getDocument({ data: new Uint8Array(await res.arrayBuffer()), standardFontDataUrl: '/vendor/pdfjs-fonts/', cMapUrl: '/vendor/pdfjs-cmaps/', cMapPacked: true }).promise; this.pages = this.doc.numPages; this.ocg = await this.doc.getOptionalContentConfig().catch(() => null); }
-      else if (/svg/.test(type) || d.kind === 'sheet' || name.endsWith('.svg')) { this.kind = d.kind === 'sheet' ? 'sheet' : 'svg'; this.svgText = await res.text(); }
+      else if (/svg/.test(type) || d.kind === 'sheet' || name.endsWith('.svg')) { this.kind = d.kind === 'sheet' ? 'sheet' : /\.(dwg|dxf)$/.test(name) ? 'cad' : 'svg'; this.svgText = await res.text(); }
       else if (/image\//.test(type) || /\.(png|jpe?g|gif|webp|bmp)$/.test(name)) { this.kind = 'image'; this.imgUrl = URL.createObjectURL(await res.blob()); }
       else throw new Error('This file type cannot be measured here. Upload it as PDF or an image.');
       await this.showPage(Math.min(this.page, this.pages));
@@ -68,7 +70,8 @@ export class DrawingTakeoff {
   }
   q(s) { return this.host.querySelector(s); }
   get paperMm() { return G2.PAPER_MM[this.kind] || 0; }
-  get scale() { return this.store.scaleOf(this.dkey, this.page); }
+  /** Metres per drawing unit: the scale set for the page, or for CAD drawings the file's own units (1:1). */
+  get scale() { return this.store.scaleOf(this.dkey, this.page) || this.cadUnit || 0; }
   get settings() { return this.store.drawing(this.dkey); }
   src() { return { t: this.d.kind === 'sheet' ? 's' : 'd', key: this.dkey, page: this.page, name: this.d.name + (this.pages > 1 ? ` (page ${this.page})` : '') }; }
 
@@ -85,13 +88,14 @@ export class DrawingTakeoff {
       this.detail = document.createElement('canvas'); this.detail.className = 'tk-detail'; this.detail.hidden = true; base.append(this.detail);
       await this.pdfPage.render({ canvasContext: c.getContext('2d'), viewport: v2, ...this.layerOpt() }).promise.catch(() => {});
       this.pdfVectors().catch(() => {});
-    } else if (this.kind === 'sheet' || this.kind === 'svg') {
+    } else if (this.kind === 'sheet' || this.kind === 'svg' || this.kind === 'cad') {
       const holder = document.createElement('div'); holder.innerHTML = this.svgText;
       const el = holder.querySelector('svg'); if (!el) throw new Error('The drawing could not be read.');
       const vb = (el.getAttribute('viewBox') || `0 0 ${el.getAttribute('width') || 1000} ${el.getAttribute('height') || 700}`).split(/[ ,]+/).map(Number);
       this.W = vb[2]; this.H = vb[3];
       el.setAttribute('viewBox', `0 0 ${this.W} ${this.H}`); el.removeAttribute('width'); el.removeAttribute('height');
-      el.classList.add('tk-svg'); base.append(el);
+      el.classList.add('tk-svg'); base.append(el); this.svgEl = el;
+      this.cadUnit = this.kind === 'cad' ? Number(el.getAttribute('data-unit-m')) || 0 : 0;
       setTimeout(() => this.svgVectors(el), 0);
     } else {
       const img = new Image(); img.src = this.imgUrl; await img.decode(); this.W = img.naturalWidth; this.H = img.naturalHeight;
@@ -99,8 +103,9 @@ export class DrawingTakeoff {
     }
     for (const x of [this.el.page, this.el.ov]) { x.style.width = this.W + 'px'; x.style.height = this.H + 'px'; }
     this.el.ov.setAttribute('viewBox', `0 0 ${this.W} ${this.H}`);
-    this.applyMono(); this.fit(); this.renderBar(); this.drawDims();
-    if (!this.scale && this.store.canEdit()) this.say(this.paperMm ? 'Set the scale of this page first (Scale list, or Calibrate with a known length).' : 'This image has no scale: press Calibrate and click two points a known distance apart.', 'warn');
+    this.closeCompare(); this.applyArea(); this.applyMono(); this.fit(); this.renderBar(); this.drawDims();
+    if (this.kind === 'cad' && this.cadUnit && !this.store.scaleOf(this.dkey, this.page)) this.say(`CAD drawing in ${({ 0.001: 'millimetres', 0.01: 'centimetres', 1: 'metres', 0.0254: 'inches', 0.3048: 'feet' })[this.cadUnit] || this.cadUnit + ' m units'}: measured 1:1, no scale needed. Check one known length with Distance (M).`, 'ok');
+    else if (!this.scale && this.store.canEdit()) this.say(this.paperMm ? 'Set the scale of this page first (Scale list, or Calibrate with a known length).' : 'This image has no scale: press Calibrate and click two points a known distance apart.', 'warn');
   }
 
   // ================================================================== drawing lines for the sticky cursor
@@ -137,6 +142,7 @@ export class DrawingTakeoff {
     const root = svg.getCTM()?.inverse();
     for (const el of svg.querySelectorAll('path, line, polyline, polygon, rect')) {
       if (segs.length > 1.6e6) break;
+      if (el.closest('[display="none"]')) continue;
       const m0 = el.getCTM?.(); if (!m0) continue;
       const m = root ? root.multiply(m0) : m0;
       const T = (x, y) => [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f];
@@ -165,8 +171,8 @@ export class DrawingTakeoff {
   fit(box = null) {
     if (!this.el?.view || !this.W) return;                 // not loaded yet
     const vw = this.el.view.clientWidth || 600, vh = this.el.view.clientHeight || 400;
-    const pad = box ? Math.max(this.W, this.H) * 0.02 : 0;
-    const b = box ? { x0: box.x0 - pad, y0: box.y0 - pad, x1: box.x1 + pad, y1: box.y1 + pad } : { x0: 0, y0: 0, x1: this.W, y1: this.H };
+    const pad = box ? Math.max(this.W, this.H) * 0.02 : 0, wa = !box && this.areaHere();
+    const b = box ? { x0: box.x0 - pad, y0: box.y0 - pad, x1: box.x1 + pad, y1: box.y1 + pad } : wa || { x0: 0, y0: 0, x1: this.W, y1: this.H };
     const save = [this.tx, this.ty]; this.tx = 0; this.ty = 0; const zz = this.z; this.z = 1;
     const corners = [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]].map(p => this.toScreen(p));
     const xs = corners.map(c => c[0]), ys = corners.map(c => c[1]);
@@ -209,7 +215,14 @@ export class DrawingTakeoff {
   }
   // ================================================================== layers (PDF optional content)
   layerOpt() { return this.ocg ? { optionalContentConfigPromise: Promise.resolve(this.ocg) } : {}; }
-  layerList() { const groups = this.ocg?.getGroups?.() || {}; return Object.entries(groups).map(([id, g]) => ({ id, name: g.name || id, on: g.visible })); }
+  layerList() {
+    if (this.kind === 'cad') return [...(this.svgEl?.querySelectorAll('g[data-layer]') || [])].map(g => ({ id: g.dataset.layer, name: g.dataset.layer, on: g.getAttribute('display') !== 'none' }));
+    const groups = this.ocg?.getGroups?.() || {}; return Object.entries(groups).map(([id, g]) => ({ id, name: g.name || id, on: g.visible }));
+  }
+  setLayer(id, on) {
+    if (this.kind === 'cad') { const g = [...this.svgEl.querySelectorAll('g[data-layer]')].find(x => x.dataset.layer === id); if (g) { if (on) g.removeAttribute('display'); else g.setAttribute('display', 'none'); } }
+    else this.ocg?.setVisibility(id, on);
+  }
   async rerender() {
     if (this.kind !== 'pdf') return;
     const c = this.baseCanvas, x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height);
@@ -218,14 +231,17 @@ export class DrawingTakeoff {
   }
   async layers() {
     const list = this.layerList();
-    if (!list.length) return this.say(this.kind === 'pdf' ? 'This PDF has no layers.' : 'Layers are available for PDF drawings that have them.', 'warn');
+    if (!list.length) return this.say(this.kind === 'pdf' ? 'This PDF has no layers.' : 'Layers are available for CAD drawings and PDFs that have them.', 'warn');
     const r = await dialog({ title: 'Layers', body: `<p class="hint">Hide layers you do not need, so it is easier to see and measure. The drawing file is not changed.</p>
       <div class="row"><button type="button" data-l="all">Show All</button><button type="button" data-l="none">Hide All</button><button type="button" data-l="inv">Invert</button></div>
       <div class="dg-list">${list.map(l => `<label class="check"><input type="checkbox" data-id="${esc(l.id)}" ${l.on ? 'checked' : ''}> ${esc(l.name)}</label>`).join('')}</div>`,
       buttons: [{ label: 'Cancel', value: null }, { label: 'Apply', value: 'ok', primary: true }],
       onOpen: (d) => d.querySelectorAll('[data-l]').forEach(b => b.onclick = () => d.querySelectorAll('[data-id]').forEach(c => { c.checked = b.dataset.l === 'all' ? true : b.dataset.l === 'none' ? false : !c.checked; })),
-      validate: (d) => { d.querySelectorAll('[data-id]').forEach(c => this.ocg.setVisibility(c.dataset.id, c.checked)); return ''; } });
-    if (r) { await this.rerender(); this.say('Layers updated.', 'ok'); }
+      validate: (d) => { d.querySelectorAll('[data-id]').forEach(c => this.setLayer(c.dataset.id, c.checked)); return ''; } });
+    if (r) {
+      if (this.kind === 'cad') this.svgVectors(this.svgEl); else await this.rerender();          // snapping follows the visible layers
+      this.say('Layers updated: the cursor snaps only to visible layers.', 'ok');
+    }
   }
   applyMono() { this.el.base.classList.toggle('mono', this.mono); }
 
@@ -234,7 +250,7 @@ export class DrawingTakeoff {
     const st = this.store, g = st.current(), groups = st.groups(), ed = st.canEdit();
     const opt = (x) => `<option value="${x.id}" ${x.id === g?.id ? 'selected' : ''}>${esc(x.name)} (${x.mtype})</option>`;
     const ratio = this.settings.pages[this.page]?.ratio, sc = this.scale;
-    const scaleLabel = !sc ? 'Not set' : ratio ? `1:${Math.round(ratio * 100) / 100}` : this.settings.pages[this.page]?.calibrated ? 'Calibrated' : 'Custom';
+    const scaleLabel = !sc ? 'Not set' : this.cadUnit && !this.store.scaleOf(this.dkey, this.page) ? '1:1 (CAD units)' : ratio ? `1:${Math.round(ratio * 100) / 100}` : this.settings.pages[this.page]?.calibrated ? 'Calibrated' : 'Custom';
     const b = (k, label, title, pressed) => `<button class="vbtn" data-k="${k}" title="${esc(title)}" ${pressed != null ? `aria-pressed="${Boolean(pressed)}"` : ''}>${esc(label)}</button>`;
     this.el.bar.innerHTML = `
       <span class="tk-grp"><label class="sr-only" for="tkCur">Current dimension group</label>
@@ -245,6 +261,8 @@ export class DrawingTakeoff {
       ${b('measure', 'Measure', 'Measure into the current group: click points; Enter, double-click or right-click finishes; Shift + 2 clicks = rectangle', this.tool === 'measure')}
       ${b('sign', this.sign < 0 ? 'Negative' : 'Positive', 'New dimensions are positive, or negative (deductions such as openings)', this.sign < 0)}
       ${b('distance', 'Distance', 'Measure distance (M): click points, nothing is saved', this.tool === 'distance')}
+      ${b('rebar', 'Rebar', 'Rebar mode (Length group): click the spacing line, then one bar; set the spacing', this.tool === 'rebar')}
+      ${b('autocount', 'Auto Count', 'Auto Count (Count group): capture a symbol and find every copy on the drawing', this.tool === 'autocount' || this.tool === 'capture')}
       <span class="sep"></span>
       <label class="tk-scale" title="Scale of this page">Scale <select class="input small" id="tkScale" ${ed ? '' : 'disabled'}>
         <option value="">${esc(scaleLabel)}</option>${this.paperMm ? G2.RATIOS.map(r => `<option value="${r}">1:${r}</option>`).join('') : ''}
@@ -283,6 +301,8 @@ export class DrawingTakeoff {
       case 'measure': this.setTool('measure'); break;
       case 'sign': this.sign = -this.sign; this.renderBar(); break;
       case 'distance': this.setTool(this.tool === 'distance' ? 'select' : 'distance'); break;
+      case 'rebar': this.setTool(this.tool === 'rebar' ? 'select' : 'rebar'); break;
+      case 'autocount': if (this.ac) this.acStop(); else this.acStart(); break;
       case 'angle': this.angle = !this.angle; this.renderBar(); break;
       case 'snap': this.snapOn = !this.snapOn; this.renderBar(); break;
       case 'zin': this.zoomAt(1.25, this.el.view.clientWidth / 2, this.el.view.clientHeight / 2); break;
@@ -313,18 +333,24 @@ export class DrawingTakeoff {
       { label: 'Legend', checked: this.legend, run: () => this.act('legend') },
       { label: 'Markups', checked: this.markupsOn, run: () => this.act('markups') },
       { label: 'Monochrome Drawing', checked: this.mono, run: () => this.act('mono') },
+      { label: 'Set Working Area', title: 'Show, snap and search only part of the drawing', run: () => this.setTool('warea') },
+      { label: 'Reset Working Area', disabled: !this.areaHere(), run: () => this.resetWorkingArea() },
+      { label: this.cmp ? 'Close Comparison' : 'Compare with Another Drawing...', disabled: !this.cmp && !this.o.drawings, run: () => (this.cmp ? this.closeCompare() : this.compareWith()) }, '-',
       { label: 'Layers...', disabled: !this.layerList().length, title: this.layerList().length ? '' : 'This drawing has no layers', run: () => this.layers() },
       { label: 'Show Every Dimension Group', checked: this.showAll, title: 'Off: only the current group', run: () => this.act('all') }, '-',
       { label: 'Drawing Properties...', run: () => this.drawingProps() },
       { label: 'Picture of the Drawing', run: () => this.picture() }, '-', { label: 'Close Menu' }], r.left, r.bottom + 2);
   }
   setTool(t) {
-    if (t === 'measure' && !this.ready()) return;
+    if ((t === 'measure' || t === 'rebar') && !this.ready()) return;
+    if (t === 'rebar' && this.store.current()?.mtype !== 'Length') { this.say('Rebar mode measures into a Length group: choose one as the current group (or + Group).', 'warn'); return; }
     this.cancelDraft(); this.tool = t;
     this.el.view.style.cursor = t === 'select' ? '' : 'crosshair';
     this.renderBar(); this.el.view.focus();
     if (t === 'distance') this.say('Distance: click points along the line. Double-click or Enter to finish. Nothing is saved.');
     if (t === 'calibrate') this.say('Calibrate: click the two ends of a length you know (for example a dimension line).');
+    if (t === 'rebar') this.say('Rebar: click the two ends of the spacing line (the distance the bars cover).');
+    if (t === 'warea') this.say('Working area: drag a box around the part of the drawing to keep.');
   }
   /** Is everything in place to measure into the current group? Explains what is missing. */
   ready() {
@@ -376,12 +402,16 @@ export class DrawingTakeoff {
     const v = this.el.view;
     let down = null, panning = false;
     this.keys = new Set();
-    v.addEventListener('wheel', (e) => { e.preventDefault(); const r = v.getBoundingClientRect(); this.zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+    const inPanel = (e) => Boolean(e.target.closest?.('.tk-panel, .tk-legend'));      // the floating panels handle their own clicks
+    v.addEventListener('wheel', (e) => { if (inPanel(e)) return; e.preventDefault(); const r = v.getBoundingClientRect(); this.zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
     v.addEventListener('pointerdown', (e) => {
+      if (inPanel(e)) return;
       v.focus();
       const p = this.evPage(e);
       down = { x: e.clientX, y: e.clientY, tx: this.tx, ty: this.ty, p, btn: e.button, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey };
       panning = e.button === 1 || (e.button === 0 && this.keys.has(' '));
+      if (e.button === 0 && !panning && (this.tool === 'warea' || this.tool === 'capture')) { down.box = true; down.rectTool = this.tool; }
+      else if (e.button === 0 && !panning && this.cmp?.align) down.cmp = { dx: this.cmp.dx, dy: this.cmp.dy };
       if (e.button === 0 && !panning && this.tool === 'select') {
         const mk = this.hitMarkup(p);
         if (mk) { down.markup = mk; }
@@ -405,6 +435,7 @@ export class DrawingTakeoff {
       this.cursor = p; this.cursorScreen = [e.clientX, e.clientY];
       if (down) {
         const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+        if (down.cmp) { this.cmp.dx = down.cmp.dx + (p[0] - down.p[0]) / this.cmp.k; this.cmp.dy = down.cmp.dy + (p[1] - down.p[1]) / this.cmp.k; this.moveCompare(); return; }
         if (moved > 4 && !down.box && !down.move && !down.handle && !down.markup && (panning || down.btn === 0)) panning = true;
         if (panning) { this.tx = down.tx + e.clientX - down.x; this.ty = down.ty + e.clientY - down.y; this.apply(); return; }
         if (down.box && moved > 4) { this.boxRect = [down.p, p]; this.drawDraft(); return; }
@@ -419,15 +450,22 @@ export class DrawingTakeoff {
       if (!d) return;
       const moved = Math.hypot(e.clientX - d.x, e.clientY - d.y);
       if (panning) { panning = false; if (moved > 4) return; }
-      if (d.box) { this.boxSelect(d.p, this.evPage(e), d.ctrl); this.boxRect = null; this.drawDraft(); return; }
+      if (d.cmp) return;
+      if (d.box) {
+        const q = this.evPage(e); this.boxRect = null; this.drawDraft();
+        if (d.rectTool === 'warea') return this.setWorkingArea(d.p, q);
+        if (d.rectTool === 'capture') return this.acCapture(d.p, q);
+        this.boxSelect(d.p, q, d.ctrl); return;
+      }
       if ((d.move || d.handle || d.markup) && moved > 3) { this.dragEnd(d); return; }
       if (e.button !== 0 || moved > 4) return;
       const p = this.snapPoint(this.evPage(e));
       if (this.tool === 'select') { if (!this.hitDim(d.p) && !d.ctrl && !d.markup) { this.sel.clear(); this.drawDims(); this.emitSel(); } return; }
       this.click(p, e);
     });
-    v.addEventListener('dblclick', (e) => { e.preventDefault(); if (this.draft) this.finish(); else if (this.tool === 'select') { const h = this.hitDim(this.evPage(e)); if (h) this.editDim(h); } });
+    v.addEventListener('dblclick', (e) => { if (inPanel(e)) return; e.preventDefault(); if (this.draft) this.finish(); else if (this.tool === 'select') { const h = this.hitDim(this.evPage(e)); if (h) this.editDim(h); } });
     v.addEventListener('contextmenu', (e) => {
+      if (inPanel(e)) return;
       e.preventDefault();
       if (this.draft && this.draft.pts.length) { this.finish(); return; }
       this.contextMenu(this.evPage(e), e.clientX, e.clientY);
@@ -444,7 +482,7 @@ export class DrawingTakeoff {
     this.keys.add(k === ' ' ? ' ' : k);
     if (k === ' ') { e.preventDefault(); return; }
     if (k === 'escape') { if (this.draft) this.cancelDraft(); else if (this.tool !== 'select') this.setTool('select'); else { this.sel.clear(); this.drawDims(); this.emitSel(); } e.preventDefault(); return; }
-    if (k === 'enter') { if (this.draft) { this.finish(); e.preventDefault(); } return; }
+    if (k === 'enter') { if (this.draft && this.draft.shape !== 'rebar') { this.finish(); e.preventDefault(); } return; }
     if (k === 'backspace') { if (this.draft?.pts.length) { this.draft.pts.pop(); if (!this.draft.pts.length) this.draft = null; this.drawDraft(); } e.preventDefault(); return; }
     if (k === 'delete') { if (this.sel.size) this.deleteSel(); e.preventDefault(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'a') { e.preventDefault(); this.visibleDims().forEach(x => this.sel.add(x.m.id)); this.drawDims(); this.emitSel(); return; }
@@ -467,7 +505,7 @@ export class DrawingTakeoff {
       const extra = [];
       for (const { m } of this.dimsHere()) if (!this.dragging?.ids?.has(m.id)) G2.pairs(m.pts || []).forEach(x => extra.push(x));
       if (this.draft) G2.pairs(G2.flat(this.draft.pts)).forEach(x => extra.push(x));
-      const s = this.snapIdx?.find(p, tol, extra);
+      const s = this.inArea(p) ? this.snapIdx?.find(p, tol, extra) : null;
       if (s) { q = s.p; kind = s.kind; }
     }
     const last = this.draft?.pts[this.draft.pts.length - 1];
@@ -478,6 +516,8 @@ export class DrawingTakeoff {
 
   // ================================================================== measuring
   click(p, e) {
+    if (this.tool === 'rebar') { if (this.ready()) this.rebarClick(p); return; }
+    if (this.tool === 'autocount') return this.acClick(p, e);
     if (this.tool === 'measure') {
       const g = this.store.current(); if (!this.ready()) return;
       if (g.mtype === 'Count') return this.addCount(g, p);
@@ -549,7 +589,7 @@ export class DrawingTakeoff {
   hitDim(p) {
     const tol = 6 / this.z; let best = null, bestD = tol, bestA = Infinity;
     for (const x of this.visibleDims()) {
-      const d = G2.distToShape(p, x.m.shape, x.m.pts || []);
+      const d = G2.distToShape(p, x.m.shape, x.m.pts || [], x.m.holes);
       const a = x.m.shape === 'area' ? G2.polyArea(x.m.pts) : 0;
       if (d < bestD || (d === 0 && bestD === 0 && a < bestA)) { best = x; bestD = d; bestA = a; }
     }
@@ -569,7 +609,7 @@ export class DrawingTakeoff {
     const tip = this.el.tip;
     if (!h) { tip.hidden = true; return; }
     const g = h.g, m = h.m, u = UNIT[g.mtype], du = displayUnit(g), qty = dimQuantity(g, m.value, m);
-    tip.innerHTML = `<strong>${esc(m.label)}</strong><br>Group: ${esc(g.name)}<br>${g.mtype} = ${esc(nice(m.value, u))} ${uLabel(u)}${m.len != null ? `<br>Perimeter = ${esc(nice(m.len, 'm'))} m` : ''}
+    tip.innerHTML = `<strong>${esc(m.label)}</strong><br>Group: ${esc(g.name)}<br>${g.mtype} = ${esc(nice(m.value, u))} ${uLabel(u)}${m.len != null ? `<br>Perimeter = ${esc(nice(m.len, 'm'))} m` : ''}${m.holes?.length ? `<br>Cutouts: ${m.holes.length}` : ''}${m.shape === 'rebar' ? `<br>Bars = ${m.rebar?.bars} at ${m.rebar?.spacing} m${m.rebar?.extra ? ` · +${m.rebar.extra} m per bar` : ''}` : ''}
       ${du !== u ? `<br>${({ m: 'Length', m2: 'Area', m3: 'Volume', nr: 'Count' })[du]} = ${esc(nice(qty, du))} ${uLabel(du)}` : ''}${(m.multiplier || 1) * (m.dmult || 1) !== 1 ? `<br>Effective multiplier = ${(m.multiplier || 1) * (m.dmult || 1)}` : ''}${m.sign < 0 ? '<br><em>Negative (deduction)</em>' : ''}`;
     tip.hidden = false; this.placeTip(e.clientX, e.clientY);
   }
@@ -605,7 +645,12 @@ export class DrawingTakeoff {
     try { await this.store.updateDims((m, g) => (ids.has(m.id) ? fn(m, g) : undefined)); if (msg) this.say(msg, 'ok'); } catch (err) { this.say(err.message, 'bad'); }
     this.drawDims();
   }
-  recalc(m, pts) { const q = G2.measure2d(m.shape, pts, this.scale); return q ? { ...m, pts, value: q.value, ...(q.len != null ? { len: q.len } : {}) } : { ...m, pts }; }
+  recalc(m, pts) {
+    const q = G2.measure2d(m.shape, pts, this.scale, m);
+    return q ? { ...m, pts, value: q.value, ...(q.len != null ? { len: q.len } : {}), ...(q.bars != null ? { rebar: { ...m.rebar, bars: q.bars } } : {}) } : { ...m, pts };
+  }
+  /** Apply a point transform to a dimension (its cutout holes too) and recalculate it. */
+  xform(m, f) { return this.recalc(m.holes ? { ...m, holes: m.holes.map(f) } : m, f(m.pts)); }
   async deleteSel() {
     if (!this.sel.size || !this.store.canEdit()) return;
     const n = this.sel.size;
@@ -626,13 +671,13 @@ export class DrawingTakeoff {
     if (dr.handle) {
       const id = dr.handle.x.m.id, i = dr.handle.i;
       await this.store.updateDims((m) => { if (m.id !== id) return undefined; const pts = [...m.pts]; pts[2 * i] = dr.p[0]; pts[2 * i + 1] = dr.p[1]; return this.recalc(m, pts); });
-    } else await this.updateSel((m) => this.recalc(m, G2.movePts(m.pts, dr.dx, dr.dy)), 'Moved.');
+    } else await this.updateSel((m) => this.xform(m, (p) => G2.movePts(p, dr.dx, dr.dy)), 'Moved.');
     this.drawDims();
   }
   transformSel(kind) {
     const all = this.selected().flatMap(x => x.m.pts || []); if (!all.length) return;
     const b = G2.bbox(all), c = [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
-    return this.updateSel((m) => this.recalc(m, kind === 'rot' ? G2.rotatePts(m.pts, 90, c) : G2.mirrorPts(m.pts, kind, c)), kind === 'rot' ? 'Rotated 90°.' : 'Mirrored.');
+    return this.updateSel((m) => this.xform(m, (p) => (kind === 'rot' ? G2.rotatePts(p, 90, c) : G2.mirrorPts(p, kind, c))), kind === 'rot' ? 'Rotated 90°.' : 'Mirrored.');
   }
   copySel() {
     const items = this.selected(); if (!items.length) return this.say('Select dimensions first (click, Ctrl+click or Shift+drag).', 'warn');
@@ -649,8 +694,9 @@ export class DrawingTakeoff {
     const by = new Map(); const ids = [];
     for (const it of clip.items) {
       const g = this.store.group(it.gid) || this.store.current(); if (!g) continue;
-      const pts = G2.movePts(it.m.pts, dx, dy), q = G2.measure2d(it.m.shape, pts, this.scale) || { value: it.m.value };
-      const m = { ...it.m, id: newId(), pts, value: q.value, ...(q.len != null ? { len: q.len } : {}), src: this.src(), dmult: this.settings.multiplier || 1, at: new Date().toISOString() };
+      const holes = it.m.holes?.map(h => G2.movePts(h, dx, dy));
+      const pts = G2.movePts(it.m.pts, dx, dy), q = G2.measure2d(it.m.shape, pts, this.scale, { ...it.m, holes }) || { value: it.m.value };
+      const m = { ...it.m, id: newId(), pts, ...(holes ? { holes } : {}), value: q.value, ...(q.len != null ? { len: q.len } : {}), src: this.src(), dmult: this.settings.multiplier || 1, at: new Date().toISOString() };
       if (m.dmult === 1) delete m.dmult;
       if (!by.has(g.id)) by.set(g.id, []); by.get(g.id).push(m); ids.push(m.id);
     }
@@ -664,6 +710,9 @@ export class DrawingTakeoff {
       <label for="dmN">Name:</label><input class="input" id="dmN" value="${esc(m.label)}" ${this.store.canEdit() ? '' : 'disabled'}>
       <label>Group:</label><span>${esc(g.name)} (${g.mtype})</span>
       <label for="dmM">Multiplier:</label><span><input class="input" id="dmM" type="number" step="any" value="${m.multiplier ?? 1}" ${this.store.canEdit() ? '' : 'disabled'}> × drawing ${m.dmult || 1} = ${(m.multiplier ?? 1) * (m.dmult || 1)}</span>
+      ${m.shape === 'rebar' ? `<label for="dmSp">Spacing (m):</label><input class="input" id="dmSp" type="number" step="any" min="0" value="${m.rebar?.spacing ?? 0.2}" ${this.store.canEdit() ? '' : 'disabled'}>
+      <label for="dmEx">Extra per bar (m):</label><input class="input" id="dmEx" type="number" step="any" value="${m.rebar?.extra ?? 0}" ${this.store.canEdit() ? '' : 'disabled'}>
+      <label>Bars:</label><span>${m.rebar?.bars ?? ''}</span>` : ''}
       <label for="dmS">Type:</label><select class="input" id="dmS" ${this.store.canEdit() ? '' : 'disabled'}><option value="1" ${m.sign >= 0 ? 'selected' : ''}>Positive</option><option value="-1" ${m.sign < 0 ? 'selected' : ''}>Negative (deduction)</option></select>
       <label>${g.mtype}:</label><span>${esc(nice(m.value, u))} ${uLabel(u)}</span>
       ${m.len != null ? `<label>Perimeter:</label><span>${esc(nice(m.len, 'm'))} m</span>` : ''}
@@ -671,10 +720,13 @@ export class DrawingTakeoff {
       <label>Drawing:</label><span>${esc(m.src?.name || '')}</span>
       <label>Date added:</label><span>${esc(new Date(m.at || Date.now()).toLocaleString())}</span></div>`,
       buttons: this.store.canEdit() ? [{ label: 'Cancel', value: null }, { label: 'Update', value: 'ok', primary: true }] : [{ label: 'Close', value: null }],
-      validate: (d) => { v = { label: d.querySelector('#dmN').value.trim() || m.label, multiplier: Number(d.querySelector('#dmM').value), sign: Number(d.querySelector('#dmS').value) }; return Number.isFinite(v.multiplier) ? '' : 'Enter a multiplier.'; } });
+      validate: (d) => {
+        v = { label: d.querySelector('#dmN').value.trim() || m.label, multiplier: Number(d.querySelector('#dmM').value), sign: Number(d.querySelector('#dmS').value) };
+        if (m.shape === 'rebar') { v.rebar = { ...m.rebar, spacing: Number(d.querySelector('#dmSp').value), extra: Number(d.querySelector('#dmEx').value) || 0 }; if (!(v.rebar.spacing > 0)) return 'Enter the spacing.'; }
+        return Number.isFinite(v.multiplier) ? '' : 'Enter a multiplier.'; } });
     if (!r) return;
     this.sel = new Set([m.id]);
-    await this.updateSel((x0) => ({ ...x0, ...v }), 'Dimension updated.');
+    await this.updateSel((x0) => (m.shape === 'rebar' ? this.recalc({ ...x0, ...v }, x0.pts) : { ...x0, ...v }), 'Dimension updated.');
   }
   async moveToGroup() {
     const items = this.selected(); if (!items.length) return;
@@ -727,7 +779,12 @@ export class DrawingTakeoff {
     const h = this.hitDim(p);
     if (h && !this.sel.has(h.m.id)) { this.sel = new Set([h.m.id]); this.drawDims(); this.emitSel(); }
     const ed = !this.store.canEdit(), n = this.sel.size;
-    const dimItems = n ? [
+    const hh = h?.m.holes?.length ? h : this.visibleDims().find(x => x.m.holes?.length && G2.holeAt(p, x.m.holes) >= 0);   // a click inside a hole
+    const hole = hh ? G2.holeAt(p, hh.m.holes, 6 / this.z) : -1;
+    const negSel = this.selected().some(x => x.m.shape === 'area' && x.m.sign < 0);
+    const dimItems = n || hole >= 0 ? [
+      { label: 'Convert to Cutout', disabled: ed || !negSel, title: negSel ? 'Cut the selected negative area out of the positive areas it overlaps' : 'Select a negative area dimension first', run: () => this.convertToCutout() },
+      ...(hole >= 0 ? [{ label: 'Remove Cutout', disabled: ed, run: () => this.removeCutout(hh, hole) }] : []), '-',
       { label: `Edit Dimension Properties...`, disabled: n !== 1, run: () => this.editDim(this.selected()[0]) },
       { label: 'Move Dimension to Another Dimension Group...', disabled: ed, run: () => this.moveToGroup() },
       { label: 'Change Multiplier...', disabled: ed, run: async () => { const v = await ask('Change multiplier', 'Multiplier', '1', { type: 'number' }); if (v != null) this.updateSel(m => ({ ...m, multiplier: v }), 'Multiplier changed.'); } },
@@ -767,23 +824,27 @@ export class DrawingTakeoff {
     const sw = (k) => `stroke-width="${k / z}"`;              // screen pixels (the page is scaled with a CSS transform)
     this.el.defs.innerHTML = '';
     for (const { g, m } of list) {
-      let pts = m.pts || [];
-      if (dr?.ids?.has(m.id)) pts = dr.handle ? (() => { const q = [...pts]; q[2 * dr.handle.i] = dr.p[0]; q[2 * dr.handle.i + 1] = dr.p[1]; return q; })() : G2.movePts(pts, dr.dx, dr.dy);
+      let pts = m.pts || [], holes = m.holes || [];
+      if (dr?.ids?.has(m.id)) { pts = dr.handle ? (() => { const q = [...pts]; q[2 * dr.handle.i] = dr.p[0]; q[2 * dr.handle.i + 1] = dr.p[1]; return q; })() : G2.movePts(pts, dr.dx, dr.dy); if (!dr.handle) holes = holes.map(h => G2.movePts(h, dr.dx, dr.dy)); }
       const neg = m.sign < 0, col = neg ? (g.props.negColor || '#d13438') : (g.props.posColor || '#107c10');
       const sel = this.sel.has(m.id), hov = this.hover === m.id, dim = this.showAll && g.id !== cur ? ' opacity=".75"' : '';
       const stroke = sel ? '#0078d4' : hov ? '#0a5ab0' : col, w = sel || hov ? 3 : 2;
       const P = G2.pairs(pts).map(q => q.join(',')).join(' ');
-      if (m.shape === 'area') out.push(`<polygon points="${P}" fill="${neg ? this.pattern(col) : col}" fill-opacity="${neg ? 1 : sel ? 0.45 : 0.3}" stroke="${stroke}" ${sw(w)}${dim}/>`);
+      if (m.shape === 'area' && holes.length) {
+        const ring = (r) => 'M' + G2.pairs(r).map(q => q.join(',')).join('L') + 'Z';
+        out.push(`<path d="${ring(pts)}${holes.map(ring).join('')}" fill-rule="evenodd" fill="${neg ? this.pattern(col) : col}" fill-opacity="${neg ? 1 : sel ? 0.45 : 0.3}" stroke="${stroke}" ${sw(w)}${dim}/>`);
+      } else if (m.shape === 'area') out.push(`<polygon points="${P}" fill="${neg ? this.pattern(col) : col}" fill-opacity="${neg ? 1 : sel ? 0.45 : 0.3}" stroke="${stroke}" ${sw(w)}${dim}/>`);
+      else if (m.shape === 'rebar') out.push(this.rebarSvg(m, pts, col, z, sel || hov));
       else if (m.shape === 'length') out.push(`<polyline points="${P}" fill="none" stroke="${stroke}" ${sw(w + 2)} stroke-linecap="round" stroke-linejoin="round"${neg ? ` stroke-dasharray="${6 / z} ${4 / z}"` : ''}${dim}/>`);
       else if (m.shape === 'count') { const r = 6 / z; out.push(`<circle cx="${pts[0]}" cy="${pts[1]}" r="${r}" fill="${col}" fill-opacity=".85" stroke="${sel ? '#0078d4' : '#fff'}" ${sw(sel ? 3 : 1.5)}${dim}/>${neg ? `<line x1="${pts[0] - r}" y1="${pts[1]}" x2="${pts[0] + r}" y2="${pts[1]}" stroke="#fff" ${sw(2)}/>` : ''}`); }
-      if (sel && this.sel.size === 1 && m.shape !== 'count') G2.pairs(pts).forEach(q => out.push(`<rect x="${q[0] - 4 / z}" y="${q[1] - 4 / z}" width="${8 / z}" height="${8 / z}" fill="#fff" stroke="#0078d4" ${sw(1.5)}/>`));
+      if (sel && this.sel.size === 1 && m.shape !== 'count' && m.shape !== 'rebar') G2.pairs(pts).forEach(q => out.push(`<rect x="${q[0] - 4 / z}" y="${q[1] - 4 / z}" width="${8 / z}" height="${8 / z}" fill="#fff" stroke="#0078d4" ${sw(1.5)}/>`));
       if (this.labels && m.shape !== 'count') {
         const c = m.shape === 'area' ? G2.centroid(pts) : G2.pairs(pts)[Math.floor(G2.pairs(pts).length / 2)] || [0, 0];
         const u = UNIT[g.mtype];
-        labels.push(`<text x="${c[0]}" y="${c[1]}" font-size="${11 / z}" text-anchor="middle" class="tk-lbl"><tspan x="${c[0]}" font-weight="600">${esc(m.label)}</tspan><tspan x="${c[0]}" dy="${13 / z}">${esc(nice(m.value, u))} ${uLabel(u)}</tspan></text>`);
+        labels.push(`<text x="${c[0]}" y="${c[1]}" font-size="${11 / z}" text-anchor="middle" class="tk-lbl"><tspan x="${c[0]}" font-weight="600">${esc(m.label)}</tspan><tspan x="${c[0]}" dy="${13 / z}">${m.shape === 'rebar' ? `${m.rebar?.bars || 0} bars · ` : ''}${esc(nice(m.value, u))} ${uLabel(u)}</tspan></text>`);
       }
     }
-    this.el.dims.innerHTML = out.join('') + labels.join('');
+    this.el.dims.innerHTML = this.areaSvg(z) + out.join('') + labels.join('') + this.acSvg(z);
     // markups
     this.el.mk.innerHTML = !this.markupsOn ? '' : this.markupsHere().map(m0 => {
       let m = m0;
@@ -816,11 +877,15 @@ export class DrawingTakeoff {
       let pts = d.pts.map(p => [...p]);
       if (cur) pts = d.rect ? G2.pairs(G2.rectPts(d.pts[0], cur)) : [...pts, cur];
       const P = pts.map(q => q.join(',')).join(' ');
-      if (d.shape === 'area' && pts.length >= 3) out.push(`<polygon points="${P}" fill="${col}" fill-opacity=".2" stroke="${col}" ${sw(2)} ${dash}/>`);
+      if (d.shape === 'rebar') {
+        const ln = (a, b2, dashed) => (a && b2 ? `<line x1="${a[0]}" y1="${a[1]}" x2="${b2[0]}" y2="${b2[1]}" stroke="${col}" ${sw(dashed ? 2 : 3)} ${dashed ? dash : ''}/>` : '');
+        out.push(ln(pts[0], pts[1], true), ln(pts[2], pts[3], false));
+      } else if (d.shape === 'area' && pts.length >= 3) out.push(`<polygon points="${P}" fill="${col}" fill-opacity=".2" stroke="${col}" ${sw(2)} ${dash}/>`);
       else out.push(`<polyline points="${P}" fill="none" stroke="${col}" ${sw(2)} ${dash}/>`);
       pts.forEach(q => out.push(`<circle cx="${q[0]}" cy="${q[1]}" r="${3 / z}" fill="${col}"/>`));
       const q = G2.measure2d(d.shape, G2.flat(pts), this.scale || 0);
-      if (q) tipText = d.shape === 'area' ? `Area ${q.value.toFixed(3)} m² · perimeter ${q.len.toFixed(3)} m` : `${d.shape === 'distance' ? 'Distance' : 'Length'} ${q.value.toFixed(3)} m`;
+      if (d.shape === 'rebar' && this.scale && pts.length >= 2) { const last = pts.length >= 4 ? [pts[2], pts[3]] : pts.length === 3 ? [pts[2], pts[2]] : [pts[0], pts[1]]; tipText = `${pts.length <= 2 ? 'Spacing line' : 'Bar'} ${(Math.hypot(last[1][0] - last[0][0], last[1][1] - last[0][1]) * this.scale).toFixed(3)} m`; }
+      else if (q) tipText = d.shape === 'area' ? `Area ${q.value.toFixed(3)} m² · perimeter ${q.len.toFixed(3)} m` : `${d.shape === 'distance' ? 'Distance' : 'Length'} ${q.value.toFixed(3)} m`;
       if (pts.length >= 2) {
         const a = pts[pts.length - 2], b = pts[pts.length - 1], seg = Math.hypot(b[0] - a[0], b[1] - a[1]) * (this.scale || 0);
         const ang = (Math.atan2(-(b[1] - a[1]), b[0] - a[0]) * 180 / Math.PI + 360) % 360;
@@ -881,4 +946,11 @@ export async function newGroupDialog(store, say = () => {}) {
     return g;
   } catch (err) { say(err.message, 'bad'); return null; }
 }
-export const canMeasure = (name) => /\.(pdf|png|jpe?g|gif|webp|bmp|svg)$/i.test(name || '');
+/** Every drawing of a project you can measure on (uploaded drawings and the 2D sheets of model versions), for Compare. */
+export function measurableDrawings(detail) {
+  if (!detail) return [];
+  return [...(detail.drawings || []).filter(d => canMeasure(d.name)),
+    ...(detail.models || []).flatMap(m => m.versions.flatMap(v => (v.stats?.sheets || []).map(sh => ({ kind: 'sheet', versionId: v.id, index: sh.index, name: `${sh.name} (${m.name} v${v.version})` }))))];
+}
+export const canMeasure = (name) => /\.(pdf|png|jpe?g|gif|webp|bmp|svg|dwg|dxf)$/i.test(name || '');
+installExtras(DrawingTakeoff);

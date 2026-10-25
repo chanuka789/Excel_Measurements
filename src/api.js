@@ -13,6 +13,7 @@ import { login, logout, requireUser, requireAdmin, hashPassword, syncUsers, publ
 import { json, wrap, clean, safeName, uuidOk, HttpError, fail, need, versionProject, RANK } from './http.js';
 import { registerFeatures } from './features.js';
 import { registerDims } from './dims.js';
+import { registerCad } from './cad.js';
 import { registerLink } from './link.js';
 import { registerLocal } from './localproc.js';
 import { loginGuard, loginFailed, loginSucceeded, apiLimit } from './security.js';
@@ -313,6 +314,7 @@ api.post('/admin/backup', requireAdmin, wrap(async (req, res) => { res.json({ ke
 
 registerFeatures(api);
 registerDims(api);
+registerCad(api);
 registerLink(api);
 registerLocal(api);
 

@@ -85,6 +85,14 @@ export class TakeoffStore {
   // ---------------------------------------------------------------- drawing settings
   drawing(dkey) { const s = this.settings[dkey] || {}; return { multiplier: 1, pages: {}, markups: [], ...s }; }
   scaleOf(dkey, page) { return this.drawing(dkey).pages[page]?.scale || 0; }
+  /** Working area of a page (CostX "Set Working Area"): { x0, y0, x1, y1 } in drawing units, or null. */
+  areaOf(dkey, page) { return this.drawing(dkey).pages[page]?.area || null; }
+  async setArea(dkey, page, area) {
+    const s = this.drawing(dkey), pg = { ...(s.pages[page] || { scale: 0 }) };
+    if (area) pg.area = area; else delete pg.area;
+    s.pages = { ...s.pages, [page]: pg };
+    return this.saveDrawing(dkey, s);
+  }
   async saveDrawing(dkey, props) {
     const r = await api('PUT', `/projects/${this.projectId}/drawing-settings/${encodeURIComponent(dkey)}`, { props });
     this.settings[dkey] = r.props; this.emit('settings');
@@ -93,12 +101,12 @@ export class TakeoffStore {
   /** New scale for one page: saves it and recalculates every dimension already measured on that page. */
   async setScale(dkey, page, scale, extra = {}) {
     const s = this.drawing(dkey);
-    s.pages = { ...s.pages, [page]: { scale, ...extra } };
+    s.pages = { ...s.pages, [page]: { ...(s.pages[page]?.area ? { area: s.pages[page].area } : {}), scale, ...extra } };
     await this.saveDrawing(dkey, s);
     const n = await this.updateDims((m) => {
       if (m.src?.t === '3d' || m.src?.key !== dkey || (m.src.page || 1) !== page || !m.pts) return undefined;
-      const q = measure2d(m.shape, m.pts, scale); if (!q) return undefined;
-      return { ...m, value: q.value, ...(q.len != null ? { len: q.len } : {}) };
+      const q = measure2d(m.shape, m.pts, scale, m); if (!q) return undefined;
+      return { ...m, value: q.value, ...(q.len != null ? { len: q.len } : {}), ...(q.bars != null ? { rebar: { ...m.rebar, bars: q.bars } } : {}) };
     });
     if (n) status(`Scale changed: ${n} dimension group(s) recalculated.`, 'ok');
   }
@@ -111,11 +119,11 @@ export class TakeoffStore {
 }
 
 /** A new measured dimension for group g. */
-export function makeDim(g, { shape, pts, value, len, src, sign = 1, dmult = 1, label }) {
+export function makeDim(g, { shape, pts, value, len, src, sign = 1, dmult = 1, label, rebar }) {
   const n = (g.props.measured || []).length + 1;
-  const base = { area: 'Area', length: 'Length', count: 'Count', distance: 'Distance', face: 'Face area' }[shape] || 'Dimension';
+  const base = { area: 'Area', length: 'Length', count: 'Count', distance: 'Distance', face: 'Face area', rebar: 'Rebar' }[shape] || 'Dimension';
   return { id: newId(), label: label || `${base} ${String(n).padStart(4, '0')}`, value, unit: UNIT[g.mtype], kind: src.t === '3d' ? '3d' : '2d',
-    sign: sign < 0 ? -1 : 1, multiplier: 1, ...(dmult !== 1 ? { dmult } : {}), shape, src, pts, ...(len != null ? { len } : {}), at: new Date().toISOString() };
+    sign: sign < 0 ? -1 : 1, multiplier: 1, ...(dmult !== 1 ? { dmult } : {}), shape, src, pts, ...(len != null ? { len } : {}), ...(rebar ? { rebar } : {}), at: new Date().toISOString() };
 }
 /** Is the group's type one you can measure on screen? */
 export const measurable = (g) => Boolean(g && shapeFor(g.mtype));

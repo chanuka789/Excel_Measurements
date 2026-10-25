@@ -38,13 +38,21 @@ export function bbox(pts) {
 export const rectPts = (a, b) => [a[0], a[1], b[0], a[1], b[0], b[1], a[0], b[1]];
 
 /**
- * Quantity of a 2D shape in metres: area → { value m², len perimeter m }, length → { value m }, count → { value 1 },
- * distance → { value m }. Returns null when there are too few points or no scale.
+ * Quantity of a 2D shape in metres: area → { value m², len perimeter m } (less its cutout holes, whose edges count in
+ * the perimeter), length → { value m }, count → { value 1 }, distance → { value m },
+ * rebar → { value total bar length, bars } (see rebarQty). Returns null when there are too few points or no scale.
+ * m: the dimension, for its holes and rebar settings.
  */
-export function measure2d(shape, pts, scale) {
+export function measure2d(shape, pts, scale, m = {}) {
   if (!(scale > 0)) return null;
   const n = pts.length / 2;
-  if (shape === 'area') return n >= 3 ? { value: polyArea(pts) * scale * scale, len: polyLength(pts, true) * scale } : null;
+  if (shape === 'area') {
+    if (n < 3) return null;
+    const holes = (m.holes || []).filter(h => h.length >= 6);
+    return { value: Math.max(0, polyArea(pts) - holes.reduce((s, h) => s + polyArea(h), 0)) * scale * scale,
+      len: (polyLength(pts, true) + holes.reduce((s, h) => s + polyLength(h, true), 0)) * scale };
+  }
+  if (shape === 'rebar') return n >= 4 ? rebarQty(pts, scale, m.rebar || {}) : null;
   if (shape === 'length' || shape === 'distance') return n >= 2 ? { value: polyLength(pts) * scale } : null;
   if (shape === 'count') return n >= 1 ? { value: 1 } : null;
   return null;
@@ -73,6 +81,15 @@ export function nearestOnSegment(p, a, b) {
   const q = [a[0] + t * dx, a[1] + t * dy];
   return { q, d: Math.hypot(p[0] - q[0], p[1] - q[1]) };
 }
+/**
+ * Rebar mode (CostX): pts = spacing line (2 points) then one bar (2 points). Bars = distance covered / spacing + 1,
+ * total length = bars x (bar length + extra length per bar). spacing and extra in metres.
+ */
+export function rebarQty(pts, scale, { spacing = 0, extra = 0 } = {}) {
+  const dist = Math.hypot(pts[2] - pts[0], pts[3] - pts[1]) * scale, bar = Math.hypot(pts[6] - pts[4], pts[7] - pts[5]) * scale;
+  const bars = spacing > 0 ? Math.floor(dist / spacing + 1e-6) + 1 : 1;          // 5 m at 0.2 m = 26 bars, even when clicks give 4.9999999 m
+  return { value: bars * (bar + (Number(extra) || 0)), bars, dist, bar };
+}
 /** Point inside polygon (even-odd). */
 export function inside(p, pts) {
   let c = false; const n = pts.length / 2;
@@ -83,15 +100,23 @@ export function inside(p, pts) {
   return c;
 }
 /** Distance from p to a dimension's outline (lines and areas) or its point (counts). */
-export function distToShape(p, shape, pts) {
+export function distToShape(p, shape, pts, holes = null) {
   const P = pairs(pts);
   if (!P.length) return Infinity;
   if (shape === 'count') return Math.min(...P.map(q => Math.hypot(p[0] - q[0], p[1] - q[1])));
-  if (shape === 'area' && P.length >= 3 && inside(p, pts)) return 0;
+  if (shape === 'area' && P.length >= 3 && inside(p, pts) && !(holes || []).some(h => inside(p, h))) return 0;
   let best = Infinity;
-  const segs = shape === 'area' ? P.length : P.length - 1;
-  for (let i = 0; i < segs; i++) best = Math.min(best, nearestOnSegment(p, P[i], P[(i + 1) % P.length]).d);
+  const rings = shape === 'area' ? [P, ...(holes || []).map(pairs)] : [P];
+  for (const R of rings) {
+    const segs = shape === 'area' ? R.length : shape === 'rebar' ? 0 : R.length - 1;
+    for (let i = 0; i < segs; i++) best = Math.min(best, nearestOnSegment(p, R[i], R[(i + 1) % R.length]).d);
+  }
+  if (shape === 'rebar' && P.length >= 4) best = Math.min(nearestOnSegment(p, P[0], P[1]).d, nearestOnSegment(p, P[2], P[3]).d);
   return best;
+}
+/** Index of the cutout hole of an area dimension at p (on its edge or inside it), or -1. */
+export function holeAt(p, holes = [], tol = 0) {
+  return holes.findIndex(h => inside(p, h) || pairs(h).some((q, i, R) => nearestOnSegment(p, q, R[(i + 1) % R.length]).d <= tol));
 }
 /** Move, rotate (degrees about c) and mirror (axis 'x' flips left-right, 'y' flips up-down about c) flat 2D points. */
 export const movePts = (pts, dx, dy) => pts.map((v, i) => v + (i % 2 ? dy : dx));

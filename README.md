@@ -64,8 +64,17 @@ Run `npm run standards` after updating the source-checked JSON catalogues. Run `
    typical floors. In 3D: **Measure > Take-off into a dimension group** (point mode: areas, lengths, counts; one-click
    face area). Dimensions keep their points (`props.measured[].pts`, `src`), are drawn again on the drawing or model,
    are recalculated when the scale changes, and go to Excel with the group's schedule. Scales, multipliers and markups
-   are stored per drawing (`drawing_settings` table). Not yet: Auto Count, cutouts (use negative dimensions), drawing
-   compare, working area, rebar mode, DWG/DXF measuring.
+   are stored per drawing (`drawing_settings` table).
+   More CostX tools on drawings: **Auto Count** (capture a symbol, search the page for rotated and mirrored copies,
+   accept / reject, save as counts), **Convert to Cutout** / Remove Cutout (holes and splits in area dimensions),
+   **Rebar mode** (spacing line + one bar, spacing and extra length per bar), **Compare** with another drawing
+   (green / red overlay, intensity sliders, drag to align, measure on it), **Working area**, and **DWG / DXF**
+   measuring: the server converts them once to an SVG by layer in the file's units (1:1, no calibration), cached next
+   to the file (`/api/drawings/:id/cad`).
+
+**DWG reading uses LibreDWG** (`@mlightcad/libredwg-web`, GPL-3.0) on the server only, in a worker thread; it is never
+sent to browsers. DXF uses `dxf-parser` (MIT). Some DWG versions (for example 2000) cannot be read by this build: users
+get a message to save the file as DWG 2013-2018, DXF or PDF. Check that the GPL licence fits how you distribute the app.
 
 **One table for the same elements**: concrete, formwork, reinforcement, waterproofing… measured on exactly the same
 elements (Measure tab, templates, AI or dimension groups) are added as new columns to the existing table.

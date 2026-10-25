@@ -329,7 +329,7 @@ table.q td.v { text-align: right; font-variant-numeric: tabular-nums; white-spac
 #drawingViewer .dv-bar { display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--stroke2); flex-wrap: wrap; }
 #drawingViewer .dv-bar strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #drawingViewer .dv-body { flex: 1; overflow: auto; background: var(--bg3); display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px; touch-action: pan-x pan-y; }
-#drawingViewer canvas, #drawingViewer img, #drawingViewer svg { box-shadow: var(--shadow); background: #fff; max-width: none; }
+#drawingViewer .dv-body canvas, #drawingViewer .dv-body img, #drawingViewer .dv-body svg { box-shadow: var(--shadow); background: #fff; max-width: none; }   /* plain viewer only: the take-off overlay must stay transparent */
 .split { display: grid; grid-template-columns: 1fr; }
 .badge.ok { background: var(--ok-bg); color: var(--ok); }
 details.box { border: 1px solid var(--stroke2); border-radius: var(--r-l); padding: 8px 10px; margin: 8px 0; background: var(--bg); }
@@ -432,3 +432,18 @@ label.check { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
 .tk-stat { flex: none; min-height: 24px; padding: 4px 10px; font-size: 12px; line-height: 16px; border-top: 1px solid var(--stroke2); color: var(--fg2); background: var(--bg2); }
 .tk-stat.ok { color: var(--ok); } .tk-stat.warn { color: var(--warn); background: var(--warn-bg); } .tk-stat.bad { color: var(--bad); background: var(--bad-bg); }
 #drawingViewer .tk { flex: 1; }
+
+/* take-off panels: Auto Count and Compare */
+.tk-panel { position: absolute; top: 8px; right: 8px; z-index: 7; width: 230px; max-height: calc(100% - 16px); overflow: auto; background: var(--bg); color: var(--fg); box-shadow: var(--shadow-l); border-radius: var(--r-l); padding: 8px 10px; font-size: 12px; }
+.tk-panel .tk-ph { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.tk-panel .close { border: 0; background: none; cursor: pointer; color: var(--fg3); font-size: 16px; }
+.tk-panel .row { margin: 6px 0; }
+.tk-panel .rng1 { display: grid; gap: 2px; margin: 6px 0; }
+.tk-panel .rng1 input { width: 100%; accent-color: var(--brand); }
+.tk-cmpbar { top: auto; bottom: 8px; }
+.tk-thumb { display: grid; place-items: center; min-height: 54px; background: #fff; border: 1px solid var(--stroke2); border-radius: var(--r); padding: 4px; }
+.tk-thumb img { max-width: 100%; max-height: 90px; image-rendering: pixelated; }
+.tk-acsum { margin: 6px 0; } .tk-acsum .acc { color: #16a34a; font-weight: 600; } .tk-acsum .unc { color: #a37f00; font-weight: 600; } .tk-acsum .rej { color: var(--bad); font-weight: 600; }
+.tk-cmp { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #fff; overflow: hidden; }
+.tk-cmp canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.tk-cmp .tk-cmp-mine { mix-blend-mode: multiply; }

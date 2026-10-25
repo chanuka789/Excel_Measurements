@@ -225,3 +225,24 @@ test('one-time download links work once, for one path, for the user who asked', 
   assert.equal((await call('POST', '/api/download-ticket', { token: T.user, body: { path: '../etc' } })).status, 400);
   assert.equal((await call('POST', '/api/download-ticket', { body: { path: '/x' } })).status, 401);
 });
+
+test('DWG / DXF drawings are converted on the server to a measurable SVG; unreadable files get a clear message', async () => {
+  const dxf = ['0', 'SECTION', '2', 'HEADER', '9', '$INSUNITS', '70', '4', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES',
+    '0', 'LINE', '8', 'Walls', '10', '0', '20', '0', '30', '0', '11', '5000', '21', '0', '31', '0',
+    '0', 'CIRCLE', '8', 'Columns', '10', '2500', '20', '1000', '30', '0', '40', '200', '0', 'ENDSEC', '0', 'EOF'].join('\n');
+  const form = new FormData();
+  form.append('files', new Blob([dxf], { type: 'application/dxf' }), 'plan.dxf');
+  form.append('files', new Blob([Buffer.from('AC1032 this is not really a drawing')], { type: 'application/acad' }), 'broken.dwg');
+  const up = await call('POST', `/api/projects/${P.id}/drawings`, { token: T.user, form });
+  assert.equal(up.status, 201);
+  const [a, bad] = up.data.drawings;
+  const r = await fetch(`${base}/api/drawings/${a.id}/cad`, { headers: { Authorization: 'Bearer ' + T.other } });   // viewers can read it
+  assert.equal(r.status, 200);
+  const svg = await r.text();
+  assert.match(svg, /data-unit-m="0.001"/); assert.match(svg, /data-layer="Walls"/); assert.match(svg, /data-layer="Columns"/);
+  assert.equal((await fetch(`${base}/api/drawings/${a.id}/cad`, { headers: { Authorization: 'Bearer ' + T.user } })).status, 200);   // second time from the cache
+  const b = await call('GET', `/api/drawings/${bad.id}/cad`, { token: T.user });
+  assert.equal(b.status, 422); assert.ok(b.data.error.length > 10);
+  const png = (await call('GET', `/api/projects/${P.id}`, { token: T.user })).data.drawings.find(x => x.name === 'plan.png');
+  if (png) assert.equal((await call('GET', `/api/drawings/${png.id}/cad`, { token: T.user })).status, 400);
+});

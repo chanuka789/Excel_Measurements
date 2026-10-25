@@ -10,7 +10,7 @@ import { openDrawing, canView } from './drawings.js';
 import { menu, closeMenu, dialog } from './wui.js';
 import { initTree, onProjectLoaded, refresh as refreshTree, loadTree, importObjects, createGroupFor, currentGroup, onScheduleDone, tkSource } from './wtree.js';
 import { TakeoffStore, drawingKey } from './tkstore.js';
-import { DrawingTakeoff, newGroupDialog } from './takeoff2d.js';
+import { DrawingTakeoff, newGroupDialog, measurableDrawings } from './takeoff2d.js';
 import { PointTakeoff } from './takeoff3d.js';
 import { initPanel, renderPanel, loadZones } from './wpanel.js';
 
@@ -196,7 +196,7 @@ async function openDrawingCentre(d) {
   let t = TABS.find(x => x.key === key);
   if (!t) {
     const host = document.createElement('div'); $('w2d').append(host);
-    const tk = new DrawingTakeoff(host, STORE, { onDimSelect: () => {} });
+    const tk = new DrawingTakeoff(host, STORE, { onDimSelect: () => {}, drawings: () => measurableDrawings(W.project) });
     t = { key, d, host, tk, ready: null }; TABS.push(t);
     showCTab(key);
     t.ready = tk.open(d);

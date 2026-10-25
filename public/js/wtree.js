@@ -6,6 +6,7 @@ import { fmt, keyOf, evaluate } from './engine.js';
 import { menu, dialog, ask, confirmIt } from './wui.js';
 import { MTYPES, UNIT, DETAILS, groupTotal, dimensions, groupToSpec, displayUnit, baseValue, quantityNames } from './dims.js';
 import { canView } from './drawings.js';
+import { canMeasure } from './takeoff2d.js';
 
 let C;                                   // context from window.js: { W, V, paint, send, openDrawing, openProps, openVersion, setIds, ... }
 const T = { folders: [], groups: [], standard: [], open: new Set(['std']), shut: new Set(), cur: null, sel: null, filter: '', dimSel: new Set(), top: 'drawings', bottom: 'groups', zones: [], waiting: null };
@@ -94,10 +95,10 @@ function renderTop() {
       children: (v.stats?.sheets || []).map(sh => ({ key: `s${v.id}.${sh.index}`, label: 'Sheet: ' + sh.name, icon: 'sheet', cols: ['sheet'],
         onOpen: () => C.openDrawing({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }),
         onClick: () => C.openDrawing({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }) })) })) });
-  const drawingNode = (d) => ({ key: 'd' + d.id, label: d.name, icon: canView(d.name) ? 'drawing' : 'file', cols: [(d.name.split('.').pop() || '').toUpperCase()],
-    drag: { type: 'drawing', id: d.id }, muted: !canView(d.name),
-    onClick: () => canView(d.name) && C.openDrawing(d), onOpen: () => (canView(d.name) ? C.openDrawing(d) : status('This file type opens outside the add-in. Download it from the task pane.')),
-    onMenu: (x, y) => menu([{ label: 'Open and Measure', disabled: !canView(d.name), run: () => C.openDrawing(d) },
+  const drawingNode = (d) => ({ key: 'd' + d.id, label: d.name, icon: canMeasure(d.name) ? 'drawing' : 'file', cols: [(d.name.split('.').pop() || '').toUpperCase()],
+    drag: { type: 'drawing', id: d.id }, muted: !canMeasure(d.name),
+    onClick: () => canMeasure(d.name) && C.openDrawing(d), onOpen: () => (canMeasure(d.name) ? C.openDrawing(d) : status('This file type opens outside the add-in. Download it from the task pane.')),
+    onMenu: (x, y) => menu([{ label: 'Open and Measure', disabled: !canMeasure(d.name), run: () => C.openDrawing(d) },
       { label: 'Open Side by Side', disabled: !canView(d.name), run: () => C.openDrawingSide?.(d) }, '-',
       { label: 'Change Folder...', disabled: !canEdit(), run: () => moveTo('drawing', d.id, d.folder_id) }, '-', { label: 'Close Menu' }], x, y) });
   const folderNode = (f) => {

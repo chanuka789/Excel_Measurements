@@ -35,7 +35,7 @@ export function cleanProps(p = {}, old = {}) {
       at: clean(m?.at, 40) || new Date().toISOString(), ...cleanGeometry(m) })),
   };
 }
-export const SHAPES = ['area', 'length', 'count', 'distance', 'face'];
+export const SHAPES = ['area', 'length', 'count', 'distance', 'face', 'rebar'];
 /** Where an on-screen dimension was taken and its points (bounded): src {t, key, page, name}, shape, pts, len, dmult. */
 export function cleanGeometry(m) {
   const o = {};
@@ -50,6 +50,12 @@ export function cleanGeometry(m) {
     const pts = m.pts.slice(0, 3000).map(Number);
     if (pts.length && pts.every(Number.isFinite)) o.pts = pts.map(v => Math.round(v * 1e5) / 1e5);
   }
+  if (Array.isArray(m.holes)) {                                  // cutouts of an area dimension
+    const holes = m.holes.slice(0, 100).filter(h => Array.isArray(h) && h.length >= 6 && h.length <= 3000 && h.every(v => Number.isFinite(Number(v))))
+      .map(h => h.map(v => Math.round(Number(v) * 1e5) / 1e5));
+    if (holes.length && o.shape === 'area') o.holes = holes;
+  }
+  if (o.shape === 'rebar' && m.rebar && typeof m.rebar === 'object') o.rebar = { spacing: Math.max(0, num(m.rebar.spacing)), extra: num(m.rebar.extra), bars: Math.max(0, Math.round(num(m.rebar.bars))) };
   if (m.len != null && Number.isFinite(Number(m.len))) o.len = num(m.len);
   if (m.dmult != null && Number.isFinite(Number(m.dmult)) && Number(m.dmult) !== 1) o.dmult = num(m.dmult, 1);
   return o;
@@ -286,8 +292,10 @@ export function cleanDrawingSettings(p = {}) {
   const pages = {};
   for (const [k, v] of Object.entries(src.pages && typeof src.pages === 'object' ? src.pages : {}).slice(0, 2000)) {
     const n = Math.round(Number(k)); const scale = num(v?.scale, 0);
-    if (!(n >= 1 && n <= 10000) || !(scale > 0 && scale < 1e6)) continue;
-    pages[n] = { scale, ratio: num(v?.ratio, 0) > 0 ? num(v.ratio) : undefined, calibrated: Boolean(v?.calibrated) || undefined };
+    const a = v?.area, area = a && ['x0', 'y0', 'x1', 'y1'].every(k => Number.isFinite(Number(a[k]))) && Number(a.x1) > Number(a.x0) && Number(a.y1) > Number(a.y0)
+      ? { x0: num(a.x0), y0: num(a.y0), x1: num(a.x1), y1: num(a.y1) } : undefined;
+    if (!(n >= 1 && n <= 10000) || !(scale >= 0 && scale < 1e6) || (!scale && !area)) continue;     // a page can keep a working area before it has a scale
+    pages[n] = { scale, ratio: num(v?.ratio, 0) > 0 ? num(v.ratio) : undefined, calibrated: Boolean(v?.calibrated) || undefined, area };
   }
   const markups = (Array.isArray(src.markups) ? src.markups.slice(0, 1000) : []).map(m => ({
     id: clean(m?.id, 40) || Math.random().toString(36).slice(2, 10), page: Math.max(1, Math.round(num(m?.page, 1))),
