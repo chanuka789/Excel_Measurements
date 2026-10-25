@@ -11,12 +11,14 @@ import { binHeader } from './modelmerge.js';
 export const isCad = (name) => /\.(dwg|dxf)$/i.test(name || '');
 
 // ---------------------------------------------------------------- versions
-const metas = new Map();
-/** The server's record of a model version (cached for this page; fresh = ask again). */
+const metas = new Map();          // versionId -> { v, at }
+const META_MS = 5000;             // short: a teammate may process or move the version at any time
+/** The server's record of a model version (kept a few seconds so one open asks once; fresh = ask again). */
 export async function versionMeta(vid, { fresh = false } = {}) {
-  if (!fresh && metas.has(vid)) return metas.get(vid);
+  const hit = metas.get(vid);
+  if (!fresh && hit && Date.now() - hit.at < META_MS) return hit.v;
   const { version } = await api('GET', `/versions/${vid}`);
-  metas.set(vid, version);
+  metas.set(vid, { v: version, at: Date.now() });
   return version;
 }
 export const isLocal = (x) => x?.location === 'local';
@@ -127,7 +129,7 @@ export async function addModel(pid, file, { modelName, discipline, note, onUpdat
   const sha = await library.putFile(file, { name: file.name });
   const { version } = await api('POST', `/projects/${pid}/models/local`, { fileName: file.name, size: file.size, sha256: sha, modelName, discipline, note });
   const meta = { ...version, sha256: sha, file_name: version.file_name };
-  metas.set(version.id, meta);
+  metas.set(version.id, { v: meta, at: Date.now() });
   processHere(meta, file, { onUpdate }).catch(() => { /* shown in the version list */ });
   return version;
 }
