@@ -208,7 +208,9 @@ export async function keepVersionHere(vid) {
 async function cloudSheets(vid, meta) {
   const out = [];
   for (const s of meta.stats?.sheets || []) {
-    try { out.push({ ...s, svg: await (await api('GET', `/versions/${vid}/sheets/${s.index}`, null, { raw: true })).blob() }); } catch { /* sheet missing */ }
+    // a sheet that cannot be saved stops the move, so the server copy is never deleted with a sheet missing here
+    try { out.push({ ...s, svg: await (await api('GET', `/versions/${vid}/sheets/${s.index}`, null, { raw: true })).blob() }); }
+    catch (err) { throw new Error(`2D sheet "${s.name || s.index}" could not be saved on this computer (${err.message}). Nothing was changed; try again.`); }
   }
   return out;
 }
@@ -219,6 +221,14 @@ export async function keepDrawingHere(d) {
   const cad = await library.getCad(`cloud:d:${d.id}`).catch(() => null);
   if (cad) await library.putCad(sha, await cad.text());
   await api('POST', `/drawings/${d.id}/keep-local`, { sha256: sha });
+}
+
+/** Save a copy of a file kept on the computers (asks for it if this computer does not have it). */
+export async function saveCopy(item) {
+  const blob = await fileFor(item);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = item.file_name || item.name; document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
 }
 
 /** For AI requests on a model kept on the computers: its elements go with the request (the server keeps none). */

@@ -6,7 +6,7 @@ import { TakeoffStore } from './tkstore.js';
 import { S } from './state.js';
 import { canProcessLocally, processLocally, LOCAL } from './localproc.js';
 import { library, sha256 } from './localstore.js';
-import { addModel, addDrawings, processHere, fileFor, versionMeta, keepVersionHere, keepDrawingHere, isLocal } from './localfiles.js';
+import { addModel, addDrawings, processHere, fileFor, versionMeta, keepVersionHere, keepDrawingHere, isLocal, saveCopy } from './localfiles.js';
 
 const P = { list: [], detail: null, filter: '', poll: null, users: null, open: new Set(['models']) };
 const DISCIPLINES = ['Architecture', 'Structure', 'Interiors', 'Mechanical', 'Electrical', 'Plumbing', 'Fire', 'Landscape', 'Other'];
@@ -158,7 +158,7 @@ function modelsHtml() {
         <div class="vact">
           ${v.status === 'ready' ? `<button class="btn small primary" data-open="${v.id}">${isOpen ? 'Reload' : 'Open'}</button>` : ''}
           ${v.stats?.sheets?.length ? `<button class="btn small" data-sheets="${v.id}">2D sheets (${v.stats.sheets.length})</button>` : ''}
-          ${isLocal(v) ? '' : `<button class="btn small" data-src="${v.id}" data-name="${esc(v.file_name)}">Download</button>`}
+          ${isLocal(v) ? `<button class="btn small" data-savev="${v.id}" title="Save a copy of the DWFx kept on this computer">Save a copy</button>` : `<button class="btn small" data-src="${v.id}" data-name="${esc(v.file_name)}">Download</button>`}
           ${v.status === 'failed' && can('editor') && !isLocal(v) ? `<button class="btn small" data-re="${v.id}">Try again on the server</button>` : ''}
           ${v.status === 'failed' && can('editor') && LOCAL_OK ? `<button class="btn small" data-here="${v.id}" data-name="${esc(v.file_name)}">Process on this computer</button>` : ''}
           ${v.status === 'local' && can('editor') && isLocal(v) && LOCAL_OK && !LOCAL.has(v.id) ? `<button class="btn small" data-here="${v.id}" data-name="${esc(v.file_name)}">Process here</button>` : ''}
@@ -222,7 +222,7 @@ function drawingsHtml() {
   if (!d.drawings.length) return up + '<div class="empty-state"><p>No drawings yet. Add the drawing set to measure on it. The files stay on this computer.</p></div>';
   return up + `<table class="tbl"><thead><tr><th>Name</th><th>Size</th><th>Added</th><th></th></tr></thead><tbody>${d.drawings.map(x => `
     <tr><td class="wrap">${esc(x.name)}<br>${whereHtml(x)}</td><td class="num">${fmtBytes(Number(x.size))}</td><td class="small">${fmtDay(x.created_at)}<br><span class="muted">${esc(x.uploaded_by || '')}</span></td>
-    <td class="right">${canView(x.name) || canMeasure(x.name) ? `<button class="btn small" data-view="${x.id}" title="${canMeasure(x.name) ? 'Open the drawing to view and measure it' : 'Open the drawing'}">${canMeasure(x.name) ? 'Open &amp; measure' : 'View'}</button> ` : ''}${isLocal(x) ? '' : `<button class="btn small" data-dl="${x.id}" data-name="${esc(x.name)}">Download</button>`}${can('owner') && !isLocal(x) ? ` <button class="btn small" data-keepd="${x.id}" title="Save the file here and delete the server copy">Keep on computers only</button>` : ''}${can('editor') ? ` <button class="btn small subtle danger-text" data-deld="${x.id}" data-name="${esc(x.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+    <td class="right">${canView(x.name) || canMeasure(x.name) ? `<button class="btn small" data-view="${x.id}" title="${canMeasure(x.name) ? 'Open the drawing to view and measure it' : 'Open the drawing'}">${canMeasure(x.name) ? 'Open &amp; measure' : 'View'}</button> ` : ''}${isLocal(x) ? `<button class="btn small" data-saved="${x.id}" title="Save a copy of the file kept on this computer">Save a copy</button>` : `<button class="btn small" data-dl="${x.id}" data-name="${esc(x.name)}">Download</button>`}${can('owner') && !isLocal(x) ? ` <button class="btn small" data-keepd="${x.id}" title="Save the file here and delete the server copy">Keep on computers only</button>` : ''}${can('editor') ? ` <button class="btn small subtle danger-text" data-deld="${x.id}" data-name="${esc(x.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 function takeoffsHtml() {
   const d = P.detail;
@@ -418,6 +418,9 @@ function wireDetail() {
     };
   }
   box().querySelectorAll('[data-dl]').forEach(b => b.onclick = () => dl(`/drawings/${b.dataset.dl}/file`, b.dataset.name));
+  const save = (item) => saveCopy(item).catch(err => status(err.message, 'bad'));
+  box().querySelectorAll('[data-saved]').forEach(b => b.onclick = () => save(d.drawings.find(x => x.id === b.dataset.saved)));
+  box().querySelectorAll('[data-savev]').forEach(b => b.onclick = () => save(d.models.flatMap(m => m.versions).find(x => x.id === b.dataset.savev)));
   box().querySelectorAll('[data-keepd]').forEach(b => b.onclick = async () => {
     const x = d.drawings.find(y => y.id === b.dataset.keepd);
     if (!await confirmBox({ title: `Keep ${x.name} on the computers only?`, body: '<p>The file is saved on this computer, then the copy on the server is deleted. Measurements on it stay in the project. Teammates then open it by choosing the same file.</p>', confirmLabel: 'Move it here' })) return;
