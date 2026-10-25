@@ -12,7 +12,7 @@ const R = { open: new Set(['checks']), compare: null, checkResult: null, overlap
 export function renderReview() {
   const box = $('reviewBody');
   const sec = (key, title, body) => `<section class="sec"><div class="sec-h"><button class="sec-t" data-rsec="${key}" aria-expanded="${R.open.has(key)}"><span class="chev" aria-hidden="true">${R.open.has(key) ? '▾' : '▸'}</span>${title}</button></div>${R.open.has(key) ? `<div class="sec-b" id="rs-${key}">${body}</div>` : ''}</section>`;
-  if (!S.data) { box.innerHTML = '<div class="empty">Open a model version from the Project tab to check, compare and report the take-off.</div>'; return; }
+  if (!S.data) { box.innerHTML = '<div class="empty">Open a model in Project &amp; Models to check, compare and report the take-off.</div>'; return; }
   box.innerHTML = sec('checks', 'Model checks and measured status', checksHtml()) +
     sec('aicheck', 'AI take-off check', aiCheckHtml()) +
     sec('revisions', 'Revisions: compare and update', '<div class="loading">Loading versions…</div>') +

@@ -136,11 +136,12 @@ function formatBlock(sh, b, spec) {
 }
 async function setNames(ctx, sh, names) {
   // update the reference of an existing name (BOQ formulas keep working) or add a new one
-  for (const n of names) {
-    const old = ctx.workbook.names.getItemOrNullObject(n.name); await ctx.sync();
-    if (!old.isNullObject) old.formula = `='${SHEET}'!${n.address}`;
+  const olds = names.map(n => ctx.workbook.names.getItemOrNullObject(n.name));
+  if (names.length) await ctx.sync();                     // one round trip for all names, not one per name
+  names.forEach((n, i) => {
+    if (!olds[i].isNullObject) olds[i].formula = `='${SHEET}'!${n.address}`;
     else ctx.workbook.names.add(n.name, sh.getRange(n.address), `${n.label} (${n.unit})`);
-  }
+  });
 }
 
 // ================================================================== add a group
@@ -161,9 +162,9 @@ export async function addToExcel(spec, { save = true, takeoffId = null, merge = 
     await Excel.run(async (ctx) => {
       const sh = await ensureSheet(ctx);
       const used = sh.getUsedRangeOrNullObject(true); used.load('rowCount,rowIndex');
-      const colA = sh.getRange('A1:A60000'); colA.load('values');
+      const colA = sh.getRange('A:A').getUsedRangeOrNullObject(true); colA.load('values');      // only the filled part of column A
       await ctx.sync();
-      const nums = colA.values.map(r => String(r[0])).filter(v => /^G\d+$/.test(v)).map(v => +v.slice(1));
+      const nums = (colA.isNullObject ? [] : colA.values).map(r => String(r[0])).filter(v => /^G\d+$/.test(v)).map(v => +v.slice(1));
       ref = 'G' + ((nums.length ? Math.max(...nums) : 0) + 1);
       const top = (used.isNullObject ? 2 : used.rowIndex + used.rowCount) + 2;
       const b = buildBlock(spec, ref, top, evRows);
@@ -409,6 +410,17 @@ export async function goToRows(ids) {
     sh.getRanges(rows.map(r => `A${r}:G${r}`).join(',')).select(); await ctx.sync();
   }).catch(() => {});
 }
+/** Rows of the Smart Links sheet, cached for 20 s so clicking around other sheets stays fast in big workbooks. */
+let linkCache = null;
+async function smartLinkRows(ctx) {
+  if (linkCache && Date.now() - linkCache.at < 20000) return linkCache.rows;
+  const links = ctx.workbook.worksheets.getItemOrNullObject('Smart Links'); await ctx.sync();
+  if (links.isNullObject) { linkCache = { at: Date.now(), rows: null }; return null; }
+  const used = links.getUsedRangeOrNullObject(true); used.load('values'); await ctx.sync();
+  linkCache = { at: Date.now(), rows: used.isNullObject ? null : used.values.slice(4) };
+  return linkCache.rows;
+}
+export function forgetSmartLinks() { linkCache = null; }
 export async function onExcelSelect(ev) {
   if (!S.data || Date.now() - S.quiet < 800) return;
   try {
@@ -417,9 +429,8 @@ export async function onExcelSelect(ev) {
       sh.load('name'); const rng = sh.getRange(ev.address); rng.load('rowIndex,rowCount'); await ctx.sync();
       const first = rng.rowIndex + 1, last = Math.min(rng.rowIndex + rng.rowCount, first + 5000);
       if (sh.name !== SHEET) {
-        const links = ctx.workbook.worksheets.getItemOrNullObject('Smart Links'); await ctx.sync(); if (links.isNullObject) return;
-        const used = links.getUsedRangeOrNullObject(true); used.load('values'); await ctx.sync(); if (used.isNullObject) return;
-        const ids = new Set(used.values.slice(4).filter(row => row[4] === sh.name && row[5] >= first && row[5] <= last && String(row[3]) === String(S.versionId || '') && row[1] === elementKey(S.byId.get(row[2]) || {}, { projectId: App.currentProjectId?.() || '', modelId: S.versionId || S.label || 'quick-open' })).map(row => row[2]).filter(id => S.byId.has(id)));
+        const rows = await smartLinkRows(ctx); if (!rows) return;
+        const ids = new Set(rows.filter(row => row[4] === sh.name && row[5] >= first && row[5] <= last && String(row[3]) === String(S.versionId || '') && row[1] === elementKey(S.byId.get(row[2]) || {}, { projectId: App.currentProjectId?.() || '', modelId: S.versionId || S.label || 'quick-open' })).map(row => row[2]).filter(id => S.byId.has(id)));
         if (ids.size) { S.ticked = ids; update(); App.viewer?.()?.fit([...ids].filter(id => App.viewer().hasGeometry(id))); status(`${ids.size} elements highlighted from the linked schedule/BOQ.`); }
         return;
       }

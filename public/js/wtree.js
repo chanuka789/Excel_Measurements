@@ -97,7 +97,8 @@ function renderTop() {
   const drawingNode = (d) => ({ key: 'd' + d.id, label: d.name, icon: canView(d.name) ? 'drawing' : 'file', cols: [(d.name.split('.').pop() || '').toUpperCase()],
     drag: { type: 'drawing', id: d.id }, muted: !canView(d.name),
     onClick: () => canView(d.name) && C.openDrawing(d), onOpen: () => (canView(d.name) ? C.openDrawing(d) : status('This file type opens outside the add-in. Download it from the task pane.')),
-    onMenu: (x, y) => menu([{ label: 'Open', disabled: !canView(d.name), run: () => C.openDrawing(d) }, '-',
+    onMenu: (x, y) => menu([{ label: 'Open and Measure', disabled: !canView(d.name), run: () => C.openDrawing(d) },
+      { label: 'Open Side by Side', disabled: !canView(d.name), run: () => C.openDrawingSide?.(d) }, '-',
       { label: 'Change Folder...', disabled: !canEdit(), run: () => moveTo('drawing', d.id, d.folder_id) }, '-', { label: 'Close Menu' }], x, y) });
   const folderNode = (f) => {
     const key = 'f' + f.id;
@@ -235,7 +236,7 @@ export function selectGroup(id, { current = true } = {}) {
   if (g && g.items.length) C.setGroupColors(g); else C.setGroupColors(null);
   render();
 }
-function render() { renderTop(); renderBottom(); renderStatusBar(); }
+function render() { renderTop(); renderBottom(); renderStatusBar(); C.onTreeChange?.(); }
 export function refresh() { render(); }
 
 // ================================================================== dimensions tab
@@ -245,7 +246,7 @@ function renderDims() {
   const dims = dimensions(g, C.W.byId), u = displayUnit(g);
   const q = T.filter.toLowerCase();
   const rows = dims.map((d, i) => ({ d, i, key: d.kind === 'bim' ? 'b' + d.item.element_id : 'm' + d.item.id,
-    label: d.kind === 'bim' ? (d.e ? `${d.e.type} [${d.e.id}]` : `[${d.item.element_id}]`) : d.item.label, level: d.e?.level || (d.kind === 'measured' ? d.item.kind : '') }))
+    label: d.kind === 'bim' ? (d.e ? `${d.e.type} [${d.e.id}]` : `[${d.item.element_id}]`) : d.item.label, level: d.e?.level || (d.kind === 'measured' ? (d.item.src?.name || d.item.kind) : '') }))
     .filter(r => !q || r.label.toLowerCase().includes(q));
   host.innerHTML = `<div class="dims-bar"><strong>${esc(g.name)}</strong> <span class="hint">${dims.length} dimension(s)</span>
       <button class="btn small" id="dimAddM" ${canEdit() ? '' : 'disabled'} title="Add the last distance or face area measured in 3D, or type a value">Add measured…</button></div>
@@ -262,6 +263,7 @@ function renderDims() {
       T.dimSel.has(r.key) && (e.ctrlKey || e.metaKey) ? T.dimSel.delete(r.key) : T.dimSel.add(r.key);
       const sel = [...T.dimSel].filter(k => k.startsWith('b')).map(k => Number(k.slice(1))).filter(id => C.W.byId.has(id));
       if (sel.length) C.setIds(sel, true);
+      if (r.d.kind === 'measured' && r.d.item.src && !(e.ctrlKey || e.metaKey)) C.focusMeasured?.(r.d.item);   // show it on its drawing or in 3D
       renderDims();
     };
     tr.oncontextmenu = (e) => { e.preventDefault(); if (!T.dimSel.has(r.key)) { T.dimSel.clear(); T.dimSel.add(r.key); renderDims(); } dimMenu(g, e.clientX, e.clientY); };
@@ -623,6 +625,11 @@ export function objectActions(list, label) {
     { label: 'Create Dimension Group...', disabled: !canEdit(), run: () => createGroupFor(list) }, '-', { label: 'Close Menu' }];
 }
 export const currentGroup = () => G(T.cur);
+/** The tree's dimension groups as the source of the on-screen take-off store (one copy of the data). */
+export const tkSource = {
+  groups: () => T.groups, current: () => T.cur, setCurrent: (id) => selectGroup(id),
+  replace: (g) => { replaceGroup(g); subCache.clear(); render(); }, reload: () => loadTree(),
+};
 
 // ================================================================== Excel schedules
 export async function scheduleDialog(groupIds) {

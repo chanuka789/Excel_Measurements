@@ -121,6 +121,10 @@ const MIGRATIONS = [
      UNIQUE (group_id, element_id));`,
   // 5: models processed on the user's computer: last sign of life from that computer
   `ALTER TABLE model_versions ADD COLUMN IF NOT EXISTS local_seen TIMESTAMPTZ;`,
+  // 6: on-screen take-off: per drawing scale (per page), drawing multiplier and markups
+  `CREATE TABLE IF NOT EXISTS drawing_settings (
+     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE, dkey TEXT NOT NULL, props JSONB NOT NULL DEFAULT '{}',
+     updated_by INT REFERENCES users(id), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (project_id, dkey));`,
 ];
 
 /** Apply new migrations once, even when the API and the worker start at the same time (advisory lock). */

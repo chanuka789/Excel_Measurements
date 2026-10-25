@@ -30,10 +30,29 @@ export function cleanProps(p = {}, old = {}) {
     custom: list(src.custom, 50).map(c => ({ label: clean(c?.label, 120), unit: clean(c?.unit, 20), expr: clean(c?.expr, 1500), rule: cleanRule(c?.rule) })).filter(c => c.label && c.expr),
     rule: cleanRule(src.rule),
     variables: list(src.variables, 50).map(v => ({ name: clean(v?.name, 60), value: num(v?.value), unit: clean(v?.unit, 20) })).filter(v => v.name),
-    measured: list(src.measured, 2000).map(m => ({ id: clean(m?.id, 40) || Math.random().toString(36).slice(2, 10), label: clean(m?.label, 200) || 'Measured dimension',
+    measured: list(src.measured, 5000).map(m => ({ id: clean(m?.id, 40) || Math.random().toString(36).slice(2, 10), label: clean(m?.label, 200) || 'Measured dimension',
       value: num(m?.value), unit: clean(m?.unit, 20), kind: clean(m?.kind, 20) || 'manual', sign: num(m?.sign, 1) < 0 ? -1 : 1, multiplier: num(m?.multiplier, 1),
-      at: clean(m?.at, 40) || new Date().toISOString() })),
+      at: clean(m?.at, 40) || new Date().toISOString(), ...cleanGeometry(m) })),
   };
+}
+export const SHAPES = ['area', 'length', 'count', 'distance', 'face'];
+/** Where an on-screen dimension was taken and its points (bounded): src {t, key, page, name}, shape, pts, len, dmult. */
+export function cleanGeometry(m) {
+  const o = {};
+  if (!m || typeof m !== 'object') return o;
+  if (SHAPES.includes(m.shape)) o.shape = m.shape;
+  const s = m.src;
+  if (s && typeof s === 'object' && ['d', 's', '3d'].includes(s.t)) {
+    o.src = { t: s.t, key: clean(s.key, 120), page: Math.max(1, Math.min(10000, Math.round(num(s.page, 1)))), name: clean(s.name, 200) || undefined };
+    if (!o.src.key) delete o.src;
+  }
+  if (Array.isArray(m.pts)) {
+    const pts = m.pts.slice(0, 3000).map(Number);
+    if (pts.length && pts.every(Number.isFinite)) o.pts = pts.map(v => Math.round(v * 1e5) / 1e5);
+  }
+  if (m.len != null && Number.isFinite(Number(m.len))) o.len = num(m.len);
+  if (m.dmult != null && Number.isFinite(Number(m.dmult)) && Number(m.dmult) !== 1) o.dmult = num(m.dmult, 1);
+  return o;
 }
 const outGroup = (g, items = []) => ({ id: g.id, project_id: g.project_id, folder_id: g.folder_id, name: g.name, mtype: g.mtype, props: g.props || {},
   standard: g.standard, created_at: g.created_at, updated_at: g.updated_at,
@@ -148,7 +167,7 @@ export function registerDims(api) {
     const mtype = b.mtype !== undefined ? (MTYPES.includes(b.mtype) ? b.mtype : fail(400, 'Unknown measurement type.')) : g.mtype;
     const folder = b.folderId !== undefined && !g.standard ? await folderOk(g.project_id, b.folderId, 'dim') : g.folder_id;
     const props = b.props !== undefined ? cleanProps(b.props, g.props) : g.props;
-    if (JSON.stringify(props).length > 600_000) fail(413, 'This dimension group is too large.');
+    if (JSON.stringify(props).length > 3_000_000) fail(413, 'This dimension group is too large.');
     const u = await one(`UPDATE dim_groups SET name=$2, mtype=$3, folder_id=$4, props=$5, updated_at=now() WHERE id=$1 RETURNING *`, [g.id, name, mtype, folder, props]);
     res.json({ group: outGroup(u) });
   }));
@@ -234,4 +253,46 @@ export function registerDims(api) {
     await audit(req.user.id, g.project_id, 'dimgroup.standard', { name, replaced: Boolean(old) });
     res.status(old ? 200 : 201).json({ group: outGroup(s), replaced: Boolean(old) });
   }));
+
+  // ---------------------------------------------------------------- drawing settings (scale, multiplier, markups)
+  api.get('/projects/:pid/drawing-settings', wrap(async (req, res) => {
+    await need(req, req.params.pid, 'viewer');
+    const rows = await q(`SELECT dkey, props, updated_at FROM drawing_settings WHERE project_id=$1`, [req.params.pid]);
+    res.json({ settings: Object.fromEntries(rows.map(r => [r.dkey, { ...r.props, updated_at: r.updated_at }])) });
+  }));
+  api.put('/projects/:pid/drawing-settings/:dkey', json, wrap(async (req, res) => {
+    const pid = req.params.pid, dkey = req.params.dkey;
+    await need(req, pid, 'editor');
+    await drawingInProject(pid, dkey);
+    const props = cleanDrawingSettings(req.body?.props);
+    await q(`INSERT INTO drawing_settings (project_id, dkey, props, updated_by) VALUES ($1,$2,$3,$4)
+             ON CONFLICT (project_id, dkey) DO UPDATE SET props=EXCLUDED.props, updated_by=EXCLUDED.updated_by, updated_at=now()`, [pid, dkey, props, req.user.id]);
+    await audit(req.user.id, pid, 'drawing.settings', { dkey });
+    res.json({ props });
+  }));
+}
+
+/** d:<drawing id> for an uploaded drawing, s:<version id>:<sheet number> for a 2D sheet inside a DWFx. */
+export const DKEY_RE = /^(d:[0-9a-f-]{36}|s:[0-9a-f-]{36}:\d{1,4})$/i;
+async function drawingInProject(pid, dkey) {
+  if (!DKEY_RE.test(dkey)) fail(400, 'Unknown drawing.');
+  const [t, id] = dkey.split(':');
+  const row = t === 'd' ? await one(`SELECT project_id FROM drawings WHERE id=$1`, [id]) : await versionProject(id);
+  if (!row || row.project_id !== pid) fail(404, 'Drawing not found in this project.');
+}
+/** Per drawing: multiplier (typical floors), pages {n: {scale m per drawing unit, ratio, calibrated}}, markups. */
+export function cleanDrawingSettings(p = {}) {
+  const src = p && typeof p === 'object' ? p : {};
+  const pages = {};
+  for (const [k, v] of Object.entries(src.pages && typeof src.pages === 'object' ? src.pages : {}).slice(0, 2000)) {
+    const n = Math.round(Number(k)); const scale = num(v?.scale, 0);
+    if (!(n >= 1 && n <= 10000) || !(scale > 0 && scale < 1e6)) continue;
+    pages[n] = { scale, ratio: num(v?.ratio, 0) > 0 ? num(v.ratio) : undefined, calibrated: Boolean(v?.calibrated) || undefined };
+  }
+  const markups = (Array.isArray(src.markups) ? src.markups.slice(0, 1000) : []).map(m => ({
+    id: clean(m?.id, 40) || Math.random().toString(36).slice(2, 10), page: Math.max(1, Math.round(num(m?.page, 1))),
+    x: num(m?.x), y: num(m?.y), tx: num(m?.tx, num(m?.x)), ty: num(m?.ty, num(m?.y)), text: clean(m?.text, 500), size: Math.max(6, Math.min(96, num(m?.size, 12))),
+    color: color(m?.color, '#c50f1f') })).filter(m => m.text);
+  const mult = num(src.multiplier, 1);
+  return { multiplier: mult > 0 && mult <= 100000 ? mult : 1, pages, markups };
 }

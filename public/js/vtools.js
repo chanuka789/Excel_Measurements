@@ -62,7 +62,7 @@ export class Toolbar {
   sync() {
     const p = (k, on) => this.bar.querySelector(`[data-t=${k}]`)?.setAttribute('aria-pressed', String(Boolean(on)));
     p('isolate', this.host.isIsolated()); p('section', this.v.sectionOn); p('plan', this.inPlan); p('box', this.v.mode === 'box');
-    p('measure', this.v.mode === 'measure' || this.v.mode === 'area'); p('color', this.host.colorMode() !== 'category'); p('xray', this.v.state.xray);
+    p('measure', this.v.mode === 'measure' || this.v.mode === 'area' || this.v.mode === 'points'); p('color', this.host.colorMode() !== 'category'); p('xray', this.v.state.xray);
     p('edges', this.v.edgesWanted);
     const hasSel = this.host.selectedIds().length > 0;
     const hb = this.bar.querySelector('[data-t=hide]'); if (hb) hb.disabled = !hasSel;
@@ -153,17 +153,30 @@ export class Toolbar {
   }
   exitPlan() { this.inPlan = null; this.v.setSection(false); this.v.setOrtho(false); this.v.setView('iso'); this.sync(); }
   pop_measure(p) {
-    const v = this.v;
+    const v = this.v, tk = this.host.takeoff?.();
+    const st = tk?.store, groups = st ? st.groups() : [], cur = st?.current();
     p.innerHTML = this.head('Measure') + `<div class="list">
       <button class="item" data-m="measure">Distance between two points <span class="muted">${v.mode === 'measure' ? 'on' : ''}</span></button>
       <button class="item" data-m="area">Area of a face <span class="muted">${v.mode === 'area' ? 'on' : ''}</span></button>
       <button class="item" data-m="orbit">Stop measuring</button></div>
-      <p class="hint">Points snap to element corners near the cursor. Press Esc to stop.</p>`;
+      ${tk ? `<h4 style="margin-top:10px">Take-off into a dimension group</h4>
+      <label class="field">Current group<select class="input" id="tkG"><option value="">(none)</option>${groups.map(g => `<option value="${esc(g.id)}" ${g.id === cur?.id ? 'selected' : ''}>${esc(g.name)} (${esc(g.mtype)})</option>`).join('')}</select></label>
+      <div class="row"><button id="tkNew" ${st.canEdit() ? '' : 'disabled'}>+ Group</button>
+        <label><input type="checkbox" id="tkNeg" ${tk.pt.sign < 0 ? 'checked' : ''}> Negative</label></div>
+      <div class="list">
+        <button class="item" data-p="points" ${st.canEdit() ? '' : 'disabled'}>Measure by points (Area, Length or Count group) <span class="muted">${v.mode === 'points' ? 'on' : ''}</span></button>
+        <button class="item" data-p="face" ${st.canEdit() ? '' : 'disabled'}>Face area: one click per face (Area group)</button></div>` : ''}
+      <p class="hint">Points snap to element corners near the cursor. Enter, double-click or right-click finishes an area or length; Backspace removes the last point; Esc stops.</p>`;
     this.wireClose(p);
     p.querySelectorAll('[data-m]').forEach(x => x.onclick = () => {
       v.setMode(x.dataset.m); this.closePop(); this.sync();
       this.host.status(x.dataset.m === 'measure' ? 'Click the first point, then the second point.' : x.dataset.m === 'area' ? 'Click a flat face of an element.' : '');
     });
+    if (!tk) return;
+    p.querySelector('#tkG').onchange = (e) => { st.setCurrent(e.target.value || null); };
+    p.querySelector('#tkNeg').onchange = (e) => { tk.pt.sign = e.target.checked ? -1 : 1; };
+    p.querySelector('#tkNew').onclick = async () => { this.closePop(); await tk.newGroup(); };
+    p.querySelectorAll('[data-p]').forEach(x => x.onclick = () => { this.closePop(); tk.pt.start({ face: x.dataset.p === 'face' }); this.sync(); });
   }
   pop_color(p) {
     const draw = () => {

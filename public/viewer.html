@@ -22,6 +22,13 @@
   .wmain.left.split { grid-template-columns: minmax(240px, var(--left, 340px)) 6px minmax(0, 1fr) 6px minmax(260px, var(--side, 32%)); }
   .w3d { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--viewer); }
   .w3d .vstage { flex: 1; }
+  .ctabs { display: flex; gap: 2px; padding: 2px 6px 0; background: var(--bg2); border-bottom: 1px solid var(--stroke2); flex: none; overflow-x: auto; }
+  .ctabs .ct { display: inline-flex; align-items: center; gap: 4px; max-width: 240px; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; padding: 4px 8px; background: none; color: var(--fg2); cursor: pointer; font-size: 12px; white-space: nowrap; }
+  .ctabs .ct[aria-selected="true"] { background: var(--bg); color: var(--fg); border-color: var(--stroke2); font-weight: 600; margin-bottom: -1px; }
+  .ctabs .ct .nm { overflow: hidden; text-overflow: ellipsis; }
+  .ctabs .ct .x { border: 0; background: none; color: var(--fg3); cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; }
+  .w2d { flex: 1; min-height: 0; position: relative; }
+  .w2d > div { position: absolute; inset: 0; }
   .wgrip, .lgrip { background: var(--bg2); cursor: ew-resize; border-left: 1px solid var(--stroke2); border-right: 1px solid var(--stroke2); }
   .wside { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
   .wside .tabs { flex: none; }
@@ -78,40 +85,6 @@
   table.dims th:nth-child(1) { width: 30px; } table.dims th:nth-child(3) { width: 22%; } table.dims th:nth-child(4), table.dims th:nth-child(5) { width: 64px; }
   .tr-cat, .tr-fam, .tr-type { border-radius: 50%; } table.dims tr.sel td { background: var(--brand-bg); } table.dims tr.neg td { color: var(--bad); } table.dims tr { cursor: default; }
   .wstat { flex: none; padding: 3px 12px; border-top: 1px solid var(--stroke2); font-size: 12px; color: var(--fg2); white-space: pre; overflow: hidden; text-overflow: ellipsis; min-height: 22px; }
-  /* context menus */
-  .cmenu { position: fixed; z-index: 60; }
-  .cm-list { position: absolute; min-width: 210px; background: var(--bg); color: var(--fg); border: 1px solid var(--stroke); border-radius: 6px; box-shadow: var(--shadow-l); padding: 4px 0; font-size: 13px; }
-  .cmenu > .cm-list { position: static; }
-  .cm-item { position: relative; display: flex; align-items: center; gap: 12px; padding: 5px 14px 5px 26px; cursor: default; white-space: nowrap; outline: none; }
-  .cm-item:hover, .cm-item:focus { background: var(--bg-hover); }
-  .cm-item[aria-disabled="true"] { color: var(--fg-disabled); }
-  .cm-item[aria-checked="true"]::before { content: "✓"; position: absolute; left: 9px; }
-  .cm-label { flex: 1; } .cm-key { color: var(--fg3); } .cm-arrow { color: var(--fg2); }
-  .cm-sep { height: 1px; background: var(--stroke2); margin: 4px 0; }
-  /* dialogs */
-  .dlg.wide { max-width: 760px; }
-  .dlg-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .dlg-x { border: 0; background: none; font-size: 20px; color: var(--fg3); cursor: pointer; padding: 0 4px; }
-  .dlg.side-actions .dlg-main { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 12px; }
-  .dlg.side-actions .dlg-actions { flex-direction: column; justify-content: flex-start; margin-top: 0; }
-  .dlg-body { max-height: 70vh; overflow: auto; }
-  .dlg-err { color: var(--bad); min-height: 18px; margin-top: 6px; }
-  .dg-tabs { padding: 0; margin-bottom: 10px; }
-  .dg-pane { min-height: 360px; }
-  .dg-form { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 7px 10px; align-items: center; }
-  .dg-form label { color: var(--fg2); text-align: right; }
-  .dg-form span input { width: 140px; }
-  .dg-form input[type=color] { width: 60px; height: 26px; padding: 0; border: 1px solid var(--stroke); }
-  table.edit input { width: 100%; }
-  .dg-list { max-height: 300px; overflow: auto; }
-  .dg-prev { margin: 8px 0; }
-  tr.strike td { text-decoration: line-through; }
-  .chips code { display: inline-block; margin: 2px; }
-  .sch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .sch-grid fieldset { border: 1px solid var(--stroke2); border-radius: var(--r); padding: 8px 10px; }
-  .sch-grid details { margin-top: 6px; max-height: 180px; overflow: auto; }
-  .sch-groups { margin-top: 10px; max-height: 120px; overflow: auto; }
-  label.check { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
   @media (max-width: 760px) { .wmain.left, .wmain.left.split { grid-template-columns: 1fr; } .wleft, .lgrip { display: none; } .sch-grid { grid-template-columns: 1fr; } .dlg.side-actions .dlg-main { grid-template-columns: 1fr; } }
   .wwin { display: inline-flex; gap: 6px; }
   .wside .tabs button { padding: 10px 7px 9px; }
@@ -142,8 +115,9 @@
       </section>
     </aside>
     <div class="lgrip" id="lgrip" role="separator" aria-orientation="vertical" aria-label="Resize project tree"></div>
-    <div class="w3d"><div class="vbar" id="vbar" role="toolbar" aria-label="3D view tools"></div>
-      <div class="vstage" id="vstage"><div class="vinfo"><span id="pickInfo" hidden></span><span id="mInfo" hidden></span></div><div class="vload" id="vload">Waiting for the task pane…</div></div></div>
+    <div class="w3d"><nav class="ctabs" id="ctabs" role="tablist" aria-label="Open views"></nav><div class="vbar" id="vbar" role="toolbar" aria-label="3D view tools"></div>
+      <div class="vstage" id="vstage"><div class="vinfo"><span id="pickInfo" hidden></span><span id="mInfo" hidden></span></div><div class="vload" id="vload">Waiting for the task pane…</div></div>
+      <div class="w2d" id="w2d" hidden></div></div>
     <div class="wgrip" id="wgrip" hidden role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize side panel"></div>
     <aside class="wside" id="wside" hidden>
       <nav class="tabs" role="tablist"><button role="tab" aria-selected="true" data-st="drawings">Drawings</button><button role="tab" aria-selected="false" data-st="props">Properties</button><button role="tab" aria-selected="false" data-st="measure">Measure</button><button role="tab" aria-selected="false" data-st="ai">AI</button><button role="tab" aria-selected="false" data-st="zones">Zones</button><button role="tab" aria-selected="false" data-st="checks">Checks</button><button role="tab" aria-selected="false" data-st="output">Output</button></nav>

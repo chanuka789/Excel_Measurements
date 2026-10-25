@@ -47,6 +47,14 @@ export function upload(url, form, onProgress) {
 
 /** Save a file from an authenticated URL. In Excel desktop, browser downloads are unreliable, so we fall back to a link. */
 export async function downloadFile(url, fileName) {
+  const O = typeof Office !== 'undefined' ? Office : null;
+  const desktop = O?.context?.platform && O.context.platform !== O.PlatformType?.OfficeOnline && O.context.ui?.openBrowserWindow;
+  if (desktop) {
+    // Excel desktop's web view does not save downloads: open a one-time link in the user's browser instead
+    const r = await api('POST', '/download-ticket', { path: url });
+    O.context.ui.openBrowserWindow(new URL(r.url, location.href).href);
+    return;
+  }
   const res = await api('GET', url, null, { raw: true });
   const blob = await res.blob();
   const a = document.createElement('a');
@@ -58,10 +66,14 @@ export const fmtBytes = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024)
 export const fmtDate = (d) => d ? new Date(d).toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 export const fmtDay = (d) => d ? new Date(d).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
-/** Toast-style status line at the bottom of the pane. */
+/** Toast-style status line at the bottom of the pane. kind: '' | 'ok' | 'warn' | 'bad'.
+ * Plain and success messages clear themselves after a while; warnings and errors stay until replaced. */
+let statusTimer = 0;
 export function status(msg, kind = '') {
   const el = $('status'); if (!el) return;
   el.textContent = msg; el.className = kind;
+  clearTimeout(statusTimer);
+  if (msg && kind !== 'bad' && kind !== 'warn') statusTimer = setTimeout(() => { if (el.textContent === msg) { el.textContent = ''; el.className = ''; } }, 10000);
 }
 
 /** In-pane confirmation (Office add-ins cannot use window.confirm). Resolves true/false. */
@@ -73,11 +85,20 @@ export function confirmBox({ title, body, confirmLabel = 'Confirm', danger = fal
       ${typeToConfirm ? `<label class="field">Type <strong>${esc(typeToConfirm)}</strong> to confirm<input id="dlgType" type="text" autocomplete="off"></label>` : ''}
       <div class="dlg-actions"><button id="dlgNo" class="btn">Cancel</button><button id="dlgYes" class="btn ${danger ? 'danger' : 'primary'}" ${typeToConfirm ? 'disabled' : ''}>${esc(confirmLabel)}</button></div></div>`;
     d.hidden = false;
-    const done = (v) => { d.hidden = true; d.innerHTML = ''; resolve(v); };
+    const back = document.activeElement;
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); done(false); return; }
+      if (e.key !== 'Tab') return;
+      const f = [...d.querySelectorAll('button:not(:disabled), input, select, textarea, a[href]')];       // keep Tab inside the dialog
+      if (!f.length) return;
+      if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+    };
+    const done = (v) => { document.removeEventListener('keydown', onKey, true); d.hidden = true; d.innerHTML = ''; try { back?.focus?.(); } catch { /* gone */ } resolve(v); };
     $('dlgNo').onclick = () => done(false);
     $('dlgYes').onclick = () => done(typeToConfirm ? $('dlgType').value : true);
     if (typeToConfirm) $('dlgType').oninput = (e) => { $('dlgYes').disabled = e.target.value !== typeToConfirm; };
-    d.onkeydown = (e) => { if (e.key === 'Escape') done(false); };
+    document.addEventListener('keydown', onKey, true);
     ($('dlgType') || $('dlgNo')).focus();
   });
 }

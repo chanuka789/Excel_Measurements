@@ -64,7 +64,7 @@ export function securityHeaders(publicDir) {
     "img-src 'self' data: blob: https:",
     `connect-src 'self' ${ms}`,
     "worker-src 'self' blob:",
-    `frame-src 'self' ${ms}`,
+    `frame-src 'self' ${ms} https://*.oaspapps.com`,                  // Office telemetry frame
     "font-src 'self' data: https:",
     "object-src 'none'",
     "base-uri 'self'",
