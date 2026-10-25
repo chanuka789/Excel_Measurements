@@ -117,7 +117,7 @@ export function installExtras(C) {
       await this.store.updateDims((m, g) => {
         if (used.has(m.id)) return null;                     // the negative dimension becomes the hole
         const ps = pieces.get(m.id); if (!ps) return undefined;
-        const mk = (p, i) => { const holes = p.holes.filter(h => h.length >= 6); const q = G2.measure2d('area', p.pts, this.scale, { holes });
+        const mk = (p, i) => { const holes = p.holes.filter(h => h.length >= 6); const q = G2.measure2d('area', p.pts, this.scaleFor(m), { holes });
           const d = { ...m, pts: p.pts, value: q?.value ?? m.value, len: q?.len ?? m.len }; if (holes.length) d.holes = holes; else delete d.holes;
           if (i) { d.id = Math.random().toString(36).slice(2, 10); d.label = `${m.label} (${i + 1})`; } return d; };
         if (ps.length > 1) extras.set(g.id, [...(extras.get(g.id) || []), ...ps.slice(1).map((p, i) => mk(p, i + 1))]);
@@ -130,7 +130,7 @@ export function installExtras(C) {
     async removeCutout(x, i) {
       await this.store.updateDims((m) => {
         if (m.id !== x.m.id) return undefined;
-        const holes = (m.holes || []).filter((_, k) => k !== i), q = G2.measure2d('area', m.pts, this.scale, { holes });
+        const holes = (m.holes || []).filter((_, k) => k !== i), q = G2.measure2d('area', m.pts, this.scaleFor(m), { holes });
         const d = { ...m, value: q?.value ?? m.value, len: q?.len ?? m.len }; if (holes.length) d.holes = holes; else delete d.holes; return d;
       }).catch(err => this.say(err.message, 'bad'));
       this.say('Cutout removed (the negative dimension is not restored).', 'ok'); this.drawDims();
