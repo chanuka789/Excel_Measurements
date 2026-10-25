@@ -3,7 +3,7 @@
 import { parentPort, workerData } from 'worker_threads';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { normalise, toSvg } from './cad2svg.js';
+import { normalise, toSvg } from '../public/js/cad2svg.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 try {

@@ -1,10 +1,12 @@
 // Projects tab: list, create, details (models + versions, drawings, team, saved take-offs, activity, export, delete).
-import { $, esc, App, api, upload, downloadFile, fmtBytes, fmtDate, fmtDay, status, confirmBox, session } from './core.js';
+import { $, esc, App, api, downloadFile, fmtBytes, fmtDate, fmtDay, status, confirmBox, session } from './core.js';
 import { openDrawing, canView } from './drawings.js';
 import { DrawingTakeoff, canMeasure, measurableDrawings } from './takeoff2d.js';
 import { TakeoffStore } from './tkstore.js';
 import { S } from './state.js';
 import { canProcessLocally, processLocally, LOCAL } from './localproc.js';
+import { library, sha256 } from './localstore.js';
+import { addModel, addDrawings, processHere, fileFor, versionMeta, keepVersionHere, keepDrawingHere, isLocal } from './localfiles.js';
 
 const P = { list: [], detail: null, filter: '', poll: null, users: null, open: new Set(['models']) };
 const DISCIPLINES = ['Architecture', 'Structure', 'Interiors', 'Mechanical', 'Electrical', 'Plumbing', 'Fire', 'Landscape', 'Other'];
@@ -52,7 +54,7 @@ function renderList() {
         <span class="pmeta">${p.client ? esc(p.client) + ' · ' : ''}${p.models} model${p.models === 1 ? '' : 's'}, ${p.drawings} drawing${p.drawings === 1 ? '' : 's'}, ${p.takeoffs} take-off group${p.takeoffs === 1 ? '' : 's'}</span>
         <span class="pmeta">Updated ${fmtDay(p.updated_at)} · <span class="badge">${ROLE_LABEL[p.my_role] || ''}</span></span>
       </button></li>`).join('')}</ul>`
-      : `<div class="empty-state"><p><strong>${P.list.length ? 'No projects match your search.' : 'No projects yet.'}</strong></p><p>${P.list.length ? 'Clear the search to see all projects.' : 'Create a project, then upload DWFx models and drawings to it. Everything is saved to your account.'}</p></div>`}
+      : `<div class="empty-state"><p><strong>${P.list.length ? 'No projects match your search.' : 'No projects yet.'}</strong></p><p>${P.list.length ? 'Clear the search to see all projects.' : 'Create a project, then add DWFx models and drawings to it. The files stay on your computer; the project and your measurements are saved to your account.'}</p></div>`}
     <details class="quick"><summary>Open a DWFx without saving it</summary>
       <p class="muted">For a quick look only. The file is read and deleted straight away; nothing is stored.</p>
       <input type="file" id="quickFile" accept=".dwfx"></details>`;
@@ -113,32 +115,34 @@ function renderDetail() {
       ${can('owner') ? '<button class="btn subtle" id="pEdit">Edit details</button>' : ''}
     </div>
     <div id="pEditForm"></div>
-    ${section('models', 'Models', versionsTotal, modelsHtml(), can('editor') ? '<button class="btn small" id="upToggle">Upload DWFx</button>' : '')}
-    ${section('drawings', 'Drawings and documents', d.drawings.length, drawingsHtml(), can('editor') ? '<button class="btn small" id="drToggle">Upload</button>' : '')}
+    ${section('models', 'Models', versionsTotal, modelsHtml(), can('editor') ? '<button class="btn small" id="upToggle">Add DWFx</button>' : '')}
+    ${section('drawings', 'Drawings and documents', d.drawings.length, drawingsHtml(), can('editor') ? '<button class="btn small" id="drToggle">Add</button>' : '')}
+    ${section('library', 'On this computer', null, '<div id="libBody" class="loading">Looking at this computer…</div>')}
     ${section('takeoffs', 'Saved take-off groups', d.takeoffs.length, takeoffsHtml())}
     ${section('team', 'Team', d.members.length, teamHtml())}
     ${section('settings', 'Project settings and QS rules', null, settingsHtml())}
     ${section('activity', 'Activity', null, '<div id="actList" class="loading">Loading…</div>')}
     ${section('manage', 'Export and delete', null, manageHtml())}`;
   wireDetail();
+  markHere();
+  if (P.open.has('library')) renderLibrary();
 }
 
 function modelsHtml() {
   const d = P.detail;
   const up = `<form class="card form" id="upForm" ${P.showUpload ? '' : 'hidden'}>
-      <h3>Upload a DWFx model</h3>
+      <h3>Add a DWFx model</h3>
       <label class="field">DWFx file<input type="file" id="upFile" accept=".dwfx" required></label>
       <div class="two"><label class="field">Model name<input class="input" id="upName" list="modelNames" maxlength="80" placeholder="e.g. Architecture" required>
         <datalist id="modelNames">${d.models.map(m => `<option value="${esc(m.name)}">`).join('')}</datalist></label>
       <label class="field">Discipline<select class="input" id="upDisc"><option value="">Choose…</option>${DISCIPLINES.map(x => `<option>${x}</option>`).join('')}</select></label></div>
       <label class="field">Revision note (optional)<input class="input" id="upNote" maxlength="300" placeholder="e.g. IFC rev C, 12 Oct"></label>
       <p class="muted">Using an existing model name adds a new version of that model. A new name creates a new model.</p>
-      ${LOCAL_OK ? `<label class="row"><input type="checkbox" id="upLocal" checked> Process on this computer (usually faster; keep this window open until it is ready)</label>
-      <p class="muted small">If this computer cannot finish, the server takes over automatically.</p>` : ''}
+      <p class="muted small">${LOCAL_OK ? 'The file stays on this computer and is processed here, with this computer\'s power. Only its name, size and fingerprint go to the project, and your measurements are saved to the project as usual. Teammates open it by choosing the same file on their computer.' : 'This browser cannot process models. Use Excel on Windows or Mac, or a current browser.'}</p>
       <div class="progress" id="upProg" hidden><div></div></div>
-      <div class="actions"><button type="button" class="btn" id="upCancel">Cancel</button><button class="btn primary" id="upGo">Upload and process</button></div>
+      <div class="actions"><button type="button" class="btn" id="upCancel">Cancel</button><button class="btn primary" id="upGo" ${LOCAL_OK ? '' : 'disabled'}>Add and process</button></div>
       <div id="upErr" class="msg bad" hidden></div></form>`;
-  if (!d.models.length) return up + `<div class="empty-state"><p><strong>No models yet.</strong></p><p>${can('editor') ? 'Upload a DWFx exported from Revit. It is saved in this project and processed for 3D and measurement.' : 'An editor or owner can upload models to this project.'}</p></div>`;
+  if (!d.models.length) return up + `<div class="empty-state"><p><strong>No models yet.</strong></p><p>${can('editor') ? 'Add a DWFx exported from Revit. It stays on this computer and is processed here for 3D and measurement.' : 'An editor or owner can add models to this project.'}</p></div>`;
   return up + d.models.map(m => `<div class="model">
     <div class="model-h"><strong>${esc(m.name)}</strong>${m.discipline ? ` <span class="badge">${esc(m.discipline)}</span>` : ''}</div>
     <ul class="vlist" role="list">${m.versions.map(v => {
@@ -146,7 +150,7 @@ function modelsHtml() {
       const isOpen = App.currentVersionId?.() === v.id;
       return `<li class="vrow ${isOpen ? 'current' : ''}">
         <div class="vmain"><span class="vnum">v${v.version}</span> <span class="vfile" title="${esc(v.file_name)}">${esc(v.file_name)}</span>
-          <span class="pill ${tone}">${label}</span>${isOpen ? ' <span class="pill brand">Open</span>' : ''}</div>
+          <span class="pill ${tone}">${label}</span>${isOpen ? ' <span class="pill brand">Open</span>' : ''} ${whereHtml(v)}</div>
         <div class="muted small">${fmtDate(v.created_at)} · ${esc(v.uploaded_by || '')} · ${fmtBytes(Number(v.size))}${v.stats ? ` · ${v.stats.elements} elements, ${v.stats.withGeometry} in 3D` : ''}${v.note ? ' · ' + esc(v.note) : ''}</div>
         ${v.status === 'processing' || v.status === 'queued' ? `<div class="muted small">${esc(v.progress || '')}</div><div class="progress indet"><div></div></div>` : ''}
         ${v.status === 'local' ? localHtml(v) : ''}
@@ -154,10 +158,12 @@ function modelsHtml() {
         <div class="vact">
           ${v.status === 'ready' ? `<button class="btn small primary" data-open="${v.id}">${isOpen ? 'Reload' : 'Open'}</button>` : ''}
           ${v.stats?.sheets?.length ? `<button class="btn small" data-sheets="${v.id}">2D sheets (${v.stats.sheets.length})</button>` : ''}
-          <button class="btn small" data-src="${v.id}" data-name="${esc(v.file_name)}">Download</button>
-          ${v.status === 'failed' && can('editor') ? `<button class="btn small" data-re="${v.id}">Try again on the server</button>` : ''}
+          ${isLocal(v) ? '' : `<button class="btn small" data-src="${v.id}" data-name="${esc(v.file_name)}">Download</button>`}
+          ${v.status === 'failed' && can('editor') && !isLocal(v) ? `<button class="btn small" data-re="${v.id}">Try again on the server</button>` : ''}
           ${v.status === 'failed' && can('editor') && LOCAL_OK ? `<button class="btn small" data-here="${v.id}" data-name="${esc(v.file_name)}">Process on this computer</button>` : ''}
-          ${v.status === 'local' && can('editor') ? `<button class="btn small" data-server="${v.id}">Process on the server instead</button>` : ''}
+          ${v.status === 'local' && can('editor') && isLocal(v) && LOCAL_OK && !LOCAL.has(v.id) ? `<button class="btn small" data-here="${v.id}" data-name="${esc(v.file_name)}">Process here</button>` : ''}
+          ${v.status === 'local' && can('editor') && !isLocal(v) ? `<button class="btn small" data-server="${v.id}">Process on the server instead</button>` : ''}
+          ${v.status === 'ready' && can('owner') && !isLocal(v) ? `<button class="btn small" data-keep="${v.id}" data-label="${esc(m.name)} v${v.version}" title="Save the file here and delete the server copy">Keep on computers only</button>` : ''}
           ${can('owner') ? `<button class="btn small subtle danger-text" data-delv="${v.id}" data-label="${esc(m.name)} v${v.version}">Delete</button>` : ''}
         </div></li>`; }).join('')}</ul></div>`).join('');
 }
@@ -166,7 +172,33 @@ function localHtml(v) {
   const me = LOCAL.get(v.id);
   if (me) return `<div class="muted small">${esc(me.step)} · ${Math.round((Date.now() - me.started) / 1000)} s</div><div class="progress"><div style="width:${me.pct}%"></div></div>`;
   return `<div class="muted small">${esc(v.progress || 'Processing on the uploader\'s computer')}</div><div class="progress indet"><div></div></div>
-    <div class="muted small">If that computer is closed, the server takes over after ${10} minutes.</div>`;
+    <div class="muted small">${isLocal(v) ? 'The file is kept on the computers, so a computer that has it finishes it. If that computer was closed, press "Process here" and choose the file.' : 'If that computer is closed, the server takes over after 10 minutes.'}</div>`;
+}
+/** Where the file is kept: on the computers (with "here" / "not here" filled in after the page shows) or on the server. */
+function whereHtml(x) {
+  if (!isLocal(x)) return '<span class="pill neutral" title="Added before files were kept on the computers. The owner can move it.">On the server</span>';
+  return `<span class="pill neutral" data-here-sha="${esc(x.sha256 || '')}" title="Kept on the computers of the project team">On computers</span>`;
+}
+/** After rendering: mark the files this computer has. */
+async function markHere() {
+  const els = [...box().querySelectorAll('[data-here-sha]')];
+  for (const el of els) {
+    const has = el.dataset.hereSha && await library.hasFile(el.dataset.hereSha).catch(() => false);
+    el.textContent = has ? 'On this computer' : 'Not on this computer yet';
+    el.className = 'pill ' + (has ? 'ok' : 'warn');
+  }
+}
+/** Process a version kept on the computers here (asks for the file if this computer does not have it). */
+async function hereLocal(pid, vid, name) {
+  let last = 0;
+  try {
+    const meta = await versionMeta(vid, { fresh: true });
+    const blob = await fileFor(meta);
+    status(`Processing ${name} on this computer…`, 'info'); openProject(pid, true);
+    const r = processHere(meta, blob, { onUpdate: () => { if (Date.now() - last > 1000 && P.detail?.project.id === pid) { last = Date.now(); renderDetail(); } } });
+    await r; status(`${name} is ready (processed on this computer).`, 'ok');
+  } catch (err) { status(err.message, 'bad'); }
+  finally { if (P.detail?.project.id === pid) openProject(pid, true); }
 }
 
 /** Run processLocally for a version and keep the page up to date; the server takes over if it fails. */
@@ -181,15 +213,16 @@ function runHere(pid, file, versionId) {
 function drawingsHtml() {
   const d = P.detail;
   const up = `<form class="card form" id="drForm" ${P.showDrUpload ? '' : 'hidden'}>
-    <h3>Upload drawings and documents</h3>
-    <label class="field">Files (PDF, DWFx, DWF, DWG, DXF, images, XLSX, DOCX; up to 20 at once)<input type="file" id="drFiles" multiple required></label>
+    <h3>Add drawings and documents</h3>
+    <label class="field">Files (PDF, DWFx, DWF, DWG, DXF, images, XLSX, DOCX; up to 50 at once)<input type="file" id="drFiles" multiple required></label>
+    <p class="muted small">The files stay on this computer. Only their names, sizes and fingerprints go to the project; your measurements on them are saved to the project.</p>
     <div class="progress" id="drProg" hidden><div></div></div>
-    <div class="actions"><button type="button" class="btn" id="drCancel">Cancel</button><button class="btn primary">Upload</button></div>
+    <div class="actions"><button type="button" class="btn" id="drCancel">Cancel</button><button class="btn primary">Add</button></div>
     <div id="drErr" class="msg bad" hidden></div></form>`;
-  if (!d.drawings.length) return up + '<div class="empty-state"><p>No drawings yet. Upload the drawing set so the team keeps everything for this project in one place.</p></div>';
-  return up + `<table class="tbl"><thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody>${d.drawings.map(x => `
-    <tr><td class="wrap">${esc(x.name)}</td><td class="num">${fmtBytes(Number(x.size))}</td><td class="small">${fmtDay(x.created_at)}<br><span class="muted">${esc(x.uploaded_by || '')}</span></td>
-    <td class="right">${canView(x.name) || canMeasure(x.name) ? `<button class="btn small" data-view="${x.id}" title="${canMeasure(x.name) ? 'Open the drawing to view and measure it' : 'Open the drawing'}">${canMeasure(x.name) ? 'Open &amp; measure' : 'View'}</button> ` : ''}<button class="btn small" data-dl="${x.id}" data-name="${esc(x.name)}">Download</button>${can('editor') ? ` <button class="btn small subtle danger-text" data-deld="${x.id}" data-name="${esc(x.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+  if (!d.drawings.length) return up + '<div class="empty-state"><p>No drawings yet. Add the drawing set to measure on it. The files stay on this computer.</p></div>';
+  return up + `<table class="tbl"><thead><tr><th>Name</th><th>Size</th><th>Added</th><th></th></tr></thead><tbody>${d.drawings.map(x => `
+    <tr><td class="wrap">${esc(x.name)}<br>${whereHtml(x)}</td><td class="num">${fmtBytes(Number(x.size))}</td><td class="small">${fmtDay(x.created_at)}<br><span class="muted">${esc(x.uploaded_by || '')}</span></td>
+    <td class="right">${canView(x.name) || canMeasure(x.name) ? `<button class="btn small" data-view="${x.id}" title="${canMeasure(x.name) ? 'Open the drawing to view and measure it' : 'Open the drawing'}">${canMeasure(x.name) ? 'Open &amp; measure' : 'View'}</button> ` : ''}${isLocal(x) ? '' : `<button class="btn small" data-dl="${x.id}" data-name="${esc(x.name)}">Download</button>`}${can('owner') && !isLocal(x) ? ` <button class="btn small" data-keepd="${x.id}" title="Save the file here and delete the server copy">Keep on computers only</button>` : ''}${can('editor') ? ` <button class="btn small subtle danger-text" data-deld="${x.id}" data-name="${esc(x.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 function takeoffsHtml() {
   const d = P.detail;
@@ -213,7 +246,7 @@ function teamHtml() {
       <datalist id="dirUsers"></datalist>
       <select class="input" id="amRole" aria-label="Access"><option value="editor">Editor</option><option value="viewer">Viewer</option><option value="owner">Owner</option></select>
       <button class="btn">Add</button></form>
-      <p class="muted small">Editors can upload and measure. Viewers can open and download. Owners also manage the team and can delete the project. Only people in your user list can be added.</p>` : ''}`;
+      <p class="muted small">Editors can add files and measure. Viewers can open. Owners also manage the team and can delete the project. Only people in your user list can be added.</p>` : ''}`;
 }
 function settingsHtml() {
   const p = P.detail.project, st = p.settings || {};
@@ -240,6 +273,44 @@ async function loadKB() {
       `<p class="muted small">${rules.length - mine.length} company rule(s) also apply${App.isAdmin?.() ? ' (edit them in Admin)' : ''}.</p>`;
     el.querySelectorAll('[data-kbd]').forEach(b => b.onclick = async () => { try { await api('DELETE', `/kb/${b.dataset.kbd}`); loadKB(); } catch (err) { status(err.message, 'bad'); } });
   } catch (err) { el.textContent = err.message; }
+}
+
+/** "On this computer": the files and models kept here, which project items they belong to, and room left. */
+async function renderLibrary() {
+  const el = $('libBody'); if (!el) return;
+  const d = P.detail;
+  const items = [...d.models.flatMap(m => m.versions.map(v => ({ sha: v.sha256, label: `${m.name} v${v.version} · ${v.file_name}` }))), ...d.drawings.map(x => ({ sha: x.sha256, label: x.name }))].filter(x => x.sha);
+  // copies of files still on the server, kept here after they were opened
+  const copies = new Map([...d.models.flatMap(m => m.versions.map(v => [`cloud:v:${v.id}`, `${m.name} v${v.version} · ${v.file_name}`])), ...d.drawings.map(x => [`cloud:d:${x.id}`, x.name])]);
+  let list, use;
+  try { [list, use] = await Promise.all([library.list(), library.usage()]); } catch (err) { el.className = 'msg bad'; el.textContent = err.message; return; }
+  const mine = list.filter(f => items.some(i => i.sha === f.key) || copies.has(f.key));
+  const missing = items.filter(i => !list.some(f => f.key === i.sha));
+  const total = (f) => (f.size || 0) + (f.model || 0) + (f.cad || 0);
+  el.className = '';
+  el.innerHTML = `<p class="muted small">Drawings and models are kept on this computer and processed here; the project on the server keeps only their names and fingerprints, and your measurements. ${use.quota ? `This computer's library uses ${fmtBytes(use.used)} of the ${fmtBytes(use.quota)} the browser allows.` : ''}</p>
+    ${missing.length ? `<div class="msg warn small">This computer does not have ${missing.length} of this project's file${missing.length > 1 ? 's' : ''} yet: ${missing.slice(0, 6).map(i => esc(i.label)).join(', ')}${missing.length > 6 ? '…' : ''}. Add the files you received below, or open one and choose its file.</div>` : ''}
+    <label class="field">Add files you received (they are matched to the project by their content)<input type="file" id="libAdd" multiple></label>
+    ${mine.length ? `<table class="tbl"><thead><tr><th>File</th><th>On this computer</th><th></th></tr></thead><tbody>${mine.map(f => {
+      const it = items.find(i => i.sha === f.key) || (copies.has(f.key) ? { label: copies.get(f.key) } : null);
+      return `<tr><td class="wrap">${esc(it?.label || f.name)}${f.key.startsWith('cloud:') ? ' <span class="muted small">(copy of a file on the server)</span>' : ''}</td>
+        <td class="small">${fmtBytes(total(f))}${f.model ? '<br><span class="muted">processed model kept</span>' : ''}</td>
+        <td class="right">${f.model || f.cad ? `<button class="btn small subtle" data-libre="${esc(f.key)}" title="Remove the processed model or converted drawing; it is made again when needed">Clear processed</button> ` : ''}<button class="btn small subtle danger-text" data-librm="${esc(f.key)}" data-name="${esc(it?.label || f.name)}">Remove</button></td></tr>`; }).join('')}</tbody></table>` : '<p class="muted small">Nothing from this project is kept on this computer yet.</p>'}`;
+  $('libAdd').onchange = async (e) => {
+    const files = [...e.target.files]; let matched = 0, other = 0;
+    status('Checking the files…');
+    for (const f of files) {
+      const sha = await sha256(f);
+      if (items.some(i => i.sha === sha)) { await library.putFile(f, { name: f.name, key: sha }); matched++; } else other++;
+    }
+    status(`${matched} file${matched === 1 ? '' : 's'} matched this project and ${matched === 1 ? 'is' : 'are'} kept on this computer.${other ? ` ${other} did not match any file in this project (add new files under Models or Drawings).` : ''}`, matched ? 'ok' : 'warn');
+    renderDetail();
+  };
+  el.querySelectorAll('[data-libre]').forEach(b => b.onclick = async () => { await library.removeDerived(b.dataset.libre); renderLibrary(); });
+  el.querySelectorAll('[data-librm]').forEach(b => b.onclick = async () => {
+    if (!await confirmBox({ title: `Remove ${b.dataset.name} from this computer?`, body: '<p>The file and what was made from it are removed from this computer only. The project and its measurements are not changed. To open it here again, choose the file.</p>', confirmLabel: 'Remove', danger: true })) return;
+    await library.remove(b.dataset.librm); renderDetail();
+  });
 }
 
 function manageHtml() {
@@ -286,16 +357,16 @@ function wireDetail() {
     $('upForm').onsubmit = async (e) => {
       e.preventDefault();
       const f = $('upFile').files[0]; if (!f) return;
-      const here = !!$('upLocal')?.checked;
-      const fd = new FormData(); fd.append('modelName', $('upName').value); fd.append('discipline', $('upDisc').value); fd.append('note', $('upNote').value);
-      if (here) fd.append('local', '1');
-      fd.append('model', f, f.name);
-      $('upGo').disabled = true; $('upErr').hidden = true; const bar = $('upProg'); bar.hidden = false;
+      $('upGo').disabled = true; $('upErr').hidden = true; const bar = $('upProg'); bar.hidden = false; bar.classList.add('indet');
+      let last = 0;
       try {
-        const { version } = await upload(`/projects/${pid}/models`, fd, (x) => { bar.firstElementChild.style.width = Math.round(x * 100) + '%'; });
+        await addModel(pid, f, { modelName: $('upName').value, discipline: $('upDisc').value, note: $('upNote').value,
+          onUpdate: (st) => {
+            if (st.step === 'Done') { status(`${f.name} is ready (processed on this computer).`, 'ok'); if (P.detail?.project.id === pid) openProject(pid, true); return; }
+            if (Date.now() - last > 1000 && P.detail?.project.id === pid && !P.showUpload) { last = Date.now(); renderDetail(); }
+          } });
         P.showUpload = false;
-        if (here && version?.status === 'local') { status(`${f.name} uploaded. Processing on this computer…`, 'info'); runHere(pid, f, version.id); }
-        else status(`${f.name} uploaded. Processing has started on the server.`, 'ok');
+        status(`${f.name} added. Processing on this computer…`, 'info');
         await openProject(pid, true);
       } catch (err) { $('upErr').hidden = false; $('upErr').textContent = err.message; $('upGo').disabled = false; bar.hidden = true; }
     };
@@ -312,6 +383,8 @@ function wireDetail() {
   });
   box().querySelectorAll('[data-here]').forEach(b => b.onclick = async () => {
     b.disabled = true;
+    const v = d.models.flatMap(m => m.versions).find(x => x.id === b.dataset.here);
+    if (isLocal(v)) { await hereLocal(pid, v.id, v.file_name); return; }
     try {
       await api('POST', `/versions/${b.dataset.here}/local-start`);
       status(`Downloading ${b.dataset.name} to process it here…`);
@@ -320,8 +393,14 @@ function wireDetail() {
       runHere(pid, file, b.dataset.here); openProject(pid, true);
     } catch (err) { status(err.message, 'bad'); b.disabled = false; }
   });
+  box().querySelectorAll('[data-keep]').forEach(b => b.onclick = async () => {
+    if (!await confirmBox({ title: `Keep ${b.dataset.label} on the computers only?`, body: '<p>The file and its processed model are saved on this computer, then the copy on the server is deleted. Your measurements stay in the project.</p><p>Teammates then open it by choosing the same file on their computer, so send them the file first.</p>', confirmLabel: 'Move it here' })) return;
+    b.disabled = true; status('Saving the file and its model on this computer…');
+    await act(() => keepVersionHere(b.dataset.keep), `${b.dataset.label} is now kept on the computers only.`);
+  });
   box().querySelectorAll('[data-delv]').forEach(b => b.onclick = async () => {
-    if (!await confirmBox({ title: `Delete ${b.dataset.label}?`, body: '<p>The DWFx file and its processed data are deleted from the server. Saved take-off groups stay but lose the link to this version.</p>', confirmLabel: 'Delete version', danger: true })) return;
+    const v = d.models.flatMap(m => m.versions).find(x => x.id === b.dataset.delv);
+    if (!await confirmBox({ title: `Delete ${b.dataset.label}?`, body: isLocal(v) ? '<p>The version is removed from the project. Saved take-off groups stay but lose the link to this version. The file stays on the computers that have it (remove it under "On this computer").</p>' : '<p>The DWFx file and its processed data are deleted from the server. Saved take-off groups stay but lose the link to this version.</p>', confirmLabel: 'Delete version', danger: true })) return;
     await act(() => api('DELETE', `/versions/${b.dataset.delv}`), `${b.dataset.label} deleted.`);
   });
   // drawings
@@ -331,17 +410,23 @@ function wireDetail() {
     $('drForm').onsubmit = async (e) => {
       e.preventDefault();
       const files = [...$('drFiles').files]; if (!files.length) return;
-      const fd = new FormData(); files.forEach(f => fd.append('files', f, f.name));
-      const bar = $('drProg'); bar.hidden = false; $('drErr').hidden = true;
+      const bar = $('drProg'); bar.hidden = false; bar.classList.add('indet'); $('drErr').hidden = true;
       try {
-        await upload(`/projects/${pid}/drawings`, fd, (x) => { bar.firstElementChild.style.width = Math.round(x * 100) + '%'; });
-        P.showDrUpload = false; status(`${files.length} file${files.length > 1 ? 's' : ''} uploaded.`, 'ok'); openProject(pid, true);
+        await addDrawings(pid, files);
+        P.showDrUpload = false; status(`${files.length} file${files.length > 1 ? 's' : ''} added. ${files.length > 1 ? 'They stay' : 'It stays'} on this computer.`, 'ok'); openProject(pid, true);
       } catch (err) { $('drErr').hidden = false; $('drErr').textContent = err.message; bar.hidden = true; }
     };
   }
   box().querySelectorAll('[data-dl]').forEach(b => b.onclick = () => dl(`/drawings/${b.dataset.dl}/file`, b.dataset.name));
+  box().querySelectorAll('[data-keepd]').forEach(b => b.onclick = async () => {
+    const x = d.drawings.find(y => y.id === b.dataset.keepd);
+    if (!await confirmBox({ title: `Keep ${x.name} on the computers only?`, body: '<p>The file is saved on this computer, then the copy on the server is deleted. Measurements on it stay in the project. Teammates then open it by choosing the same file.</p>', confirmLabel: 'Move it here' })) return;
+    b.disabled = true;
+    await act(() => keepDrawingHere(x), `${x.name} is now kept on the computers only.`);
+  });
   box().querySelectorAll('[data-deld]').forEach(b => b.onclick = async () => {
-    if (!await confirmBox({ title: `Delete ${b.dataset.name}?`, body: '<p>The file is deleted from the server.</p>', confirmLabel: 'Delete', danger: true })) return;
+    const x = d.drawings.find(y => y.id === b.dataset.deld);
+    if (!await confirmBox({ title: `Delete ${b.dataset.name}?`, body: isLocal(x) ? '<p>The drawing is removed from the project. The file stays on the computers that have it.</p>' : '<p>The file is deleted from the server.</p>', confirmLabel: 'Delete', danger: true })) return;
     await act(() => api('DELETE', `/drawings/${b.dataset.deld}`), 'Drawing deleted.');
   });
   // take-offs
@@ -404,6 +489,9 @@ const describe = (a) => {
     'project.create': `created the project`, 'project.update': 'edited the project details', 'project.export': 'exported the project',
     'model.upload': `uploaded ${d.model} v${d.version} (${d.file})`, 'model.delete_version': `deleted ${d.model} v${d.version}`,
     'drawing.upload': `uploaded ${(d.files || []).length} drawing(s)`, 'drawing.delete': `deleted ${d.name}`,
+    'model.add_local': `added ${d.model} v${d.version} (${d.file}, kept on the computers)`, 'drawing.add_local': `added ${(d.files || []).length} drawing(s) (kept on the computers)`,
+    'model.processed_locally': `processed v${d.version} on a computer${d.ms ? ` in ${Math.round(d.ms / 1000)} s` : ''}`,
+    'model.keep_local': `moved ${d.model} v${d.version} from the server to the computers`, 'drawing.keep_local': `moved ${d.name} from the server to the computers`,
     'takeoff.save': `saved take-off "${d.name}" (${d.elements} elements)`, 'takeoff.delete': `deleted take-off "${d.name}"`,
     'member.set': `gave ${d.email} ${d.role} access`, 'member.remove': 'removed a team member', 'ai.request': `asked the AI: "${d.request}"`,
   })[a.action] || a.action;

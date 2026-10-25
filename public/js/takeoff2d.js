@@ -6,13 +6,14 @@
 // calibration per page, a drawing multiplier for typical floors, markups, labels, legend, monochrome, rotate,
 // select / move / rotate / mirror / copy / paste / delete dimensions. Every dimension is stored in its dimension
 // group with its points, so it shows on the drawing again and is recalculated when the scale changes.
-import { esc, api } from './core.js';
+import { esc } from './core.js';
 import { menu, dialog, ask, confirmIt } from './wui.js';
 import * as G2 from './geom2d.js';
 import { drawingKey, makeDim, measurable, newId, randomColor } from './tkstore.js';
 import { UNIT, dimQuantity, displayUnit } from './dims.js';
 import { fmt, uLabel } from './engine.js';
 import { installExtras } from './tkextras.js';
+import { drawingResponse } from './localfiles.js';
 
 let pdfjs = null;
 async function loadPdfJs() {
@@ -57,7 +58,7 @@ export class DrawingTakeoff {
     try {
       await this.store.load().catch(() => {});
       if (d.kind !== 'sheet' && /\.(dwg|dxf)$/i.test(d.name || '')) this.el.load.textContent = 'Reading the CAD drawing… (the first time can take a minute)';
-      const res = await api('GET', d.kind === 'sheet' ? `/versions/${d.versionId}/sheets/${d.index}` : /\.(dwg|dxf)$/i.test(d.name || '') ? `/drawings/${d.id}/cad` : `/drawings/${d.id}/file?inline=1`, null, { raw: true });
+      const res = await drawingResponse(d);
       const type = res.headers.get('content-type') || d.content_type || '', name = (d.name || '').toLowerCase();
       if (/pdf/.test(type) || name.endsWith('.pdf')) { this.kind = 'pdf'; const lib = await loadPdfJs(); this.doc = await lib.getDocument({ data: new Uint8Array(await res.arrayBuffer()), standardFontDataUrl: '/vendor/pdfjs-fonts/', cMapUrl: '/vendor/pdfjs-cmaps/', cMapPacked: true }).promise; this.pages = this.doc.numPages; this.ocg = await this.doc.getOptionalContentConfig().catch(() => null); }
       else if (/svg/.test(type) || d.kind === 'sheet' || name.endsWith('.svg')) { this.kind = d.kind === 'sheet' ? 'sheet' : /\.(dwg|dxf)$/.test(name) ? 'cad' : 'svg'; this.svgText = await res.text(); }

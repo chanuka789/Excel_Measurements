@@ -2,6 +2,7 @@
 import { $, esc, App, api, status } from './core.js';
 import { dimsOf } from './engine.js';
 import { S } from './state.js';
+import { aiModel } from './localfiles.js';
 import { renderPlan as renderPlanInto, stepLabel } from './actions.js';
 
 /** Small client-side summary, only used for quick-open models that are not on the server. */
@@ -34,7 +35,7 @@ async function ask() {
   $('aiGo').disabled = true;
   try {
     let workbook = null; try { workbook = await App.workbookState?.(); } catch { /* Excel busy */ }
-    const body = S.versionId ? { request, versionId: S.versionId, ticked: [...S.ticked], workbook } : { request, summary: modelSummary() };
+    const body = S.versionId ? { request, versionId: S.versionId, ticked: [...S.ticked], workbook, ...(await aiModel(S.versionId, S.data)) } : { request, summary: modelSummary() };
     const data = await api('POST', '/ai', body);
     renderPlan(data);
   } catch (err) { out.innerHTML = `<div class="msg bad">${esc(err.message)}</div>`; }

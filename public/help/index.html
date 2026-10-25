@@ -81,10 +81,10 @@
   <figure><video controls preload="none" poster="media/01-projects.jpg?v=3" src="media/01-projects.webm?v=3"></video><figcaption>Video, 1.3 minutes, recorded inside Excel: create a project, upload a DWFx and open it.</figcaption></figure>
   <ol>
     <li><strong>New project</strong>: give it a name, and a code and client if you like.</li>
-    <li><strong>Upload DWFx</strong>: choose the file exported from Revit and a model name such as <em>Structure</em> or <em>Architecture</em>. Uploading again with the same model name creates version 2, 3 and so on.</li>
-    <li>Wait until the version shows <strong>Ready</strong> (large models take a minute; you can keep working), then press <strong>Open</strong>.</li>
-    <li><strong>Drawings and documents</strong>: upload PDFs and images; press <strong>View</strong> to open them. 2D sheets inside a DWFx appear as <strong>2D sheets</strong> on the version.</li>
-    <li><strong>Team</strong>: add colleagues as <em>Viewer</em> (open and download), <em>Editor</em> (also upload and measure) or <em>Owner</em> (also manage the team, settings and delete).</li>
+    <li><strong>Add DWFx</strong>: choose the file exported from Revit and a model name such as <em>Structure</em> or <em>Architecture</em>. Adding again with the same model name creates version 2, 3 and so on.</li>
+    <li>The model is processed <strong>on this computer</strong>. Wait until the version shows <strong>Ready</strong> (large models take a minute; keep the add-in open), then press <strong>Open</strong>.</li>
+    <li><strong>Drawings and documents</strong>: add PDFs, images, DWG and DXF; press <strong>Open &amp; measure</strong>. 2D sheets inside a DWFx appear as <strong>2D sheets</strong> on the version.</li>
+    <li><strong>Team</strong>: add colleagues as <em>Viewer</em> (open), <em>Editor</em> (also add files and measure) or <em>Owner</em> (also manage the team, settings and delete).</li>
     <li><strong>Project settings</strong> (owners): switch the AI off for confidential work, set the opening size that is not deducted (default 0.5 m²), and describe your BOQ house style.</li>
   </ol>
 
@@ -139,7 +139,7 @@
   <p>Press <strong>3D window</strong> (ribbon or 3D toolbar). The window is a full measuring workspace: the <strong>project tree</strong> on the left, the model in the middle, drawings and properties on the right (<strong>Drawings and properties</strong> button). Drag the grey bars to resize.</p>
   <h3>Drawings, Model and Views tabs (top left)</h3>
   <ul>
-    <li><strong>Drawings</strong>: your folders, 3D models (with their versions and DWFx sheets) and drawings. Right-click for <em>New Folder</em>, <em>Rename Folder</em>, <em>Delete Folder</em> (the contents move up, nothing is lost) and <em>Upload Drawings Here</em>. Move a model or drawing with <em>Change Folder…</em> or drag it onto a folder. Double-click a version to open it (the task pane follows); double-click a drawing to see it on the right.</li>
+    <li><strong>Drawings</strong>: your folders, 3D models (with their versions and DWFx sheets) and drawings. Right-click for <em>New Folder</em>, <em>Rename Folder</em>, <em>Delete Folder</em> (the contents move up, nothing is lost) and <em>Add Drawings Here</em>. Move a model or drawing with <em>Change Folder…</em> or drag it onto a folder. Double-click a version to open it (the task pane follows); double-click a drawing to see it on the right.</li>
     <li><strong>Model</strong>: Category › Family › Type with the number of objects. Click to select; right-click for Show Only, Hide, Import and Create Dimension Group.</li>
     <li><strong>Views</strong>: the team's saved views.</li>
   </ul>
@@ -180,9 +180,17 @@
 
   <h2 id="onscreen">8. On-screen take-off on drawings and in 3D</h2>
   <p>Measure by clicking on a drawing or on the 3D model, the same way as in CostX. Every measurement goes into a <strong>dimension group</strong>, keeps its points (so you can see it again on the drawing), and goes to Excel with the group's schedule.</p>
+  <h3>Your files stay on your computer</h3>
+  <p>Drawings and models are kept on this computer (in the add-in's own storage) and processed here, with this computer's power. The project on the server keeps only each file's name, size and fingerprint, and your measurements. Each file shows <strong>On this computer</strong> or <strong>Not on this computer yet</strong>.</p>
+  <ul>
+    <li><strong>Teammates</strong>: send them the file (email, shared drive). When they open it, the add-in asks them to choose it and checks that it is the same file. Or they add it under <strong>On this computer › Add files you received</strong>.</li>
+    <li><strong>On this computer</strong> (project page) lists what is kept here and the space used. <em>Clear processed</em> frees space (the model is made again when you open it); <em>Remove</em> takes the file off this computer only.</li>
+    <li>Files added before are still on the server and open as before. An owner can press <strong>Keep on computers only</strong> to move one here and delete the server copy (send the file to the team first).</li>
+  </ul>
+
   <h3>Open a drawing to measure</h3>
   <ol>
-    <li>Upload PDFs or images in <strong>Project &amp; Models &gt; Drawings and documents</strong>. 2D sheets inside a DWFx can be measured too.</li>
+    <li>Add PDFs or images in <strong>Project &amp; Models &gt; Drawings and documents</strong>. 2D sheets inside a DWFx can be measured too.</li>
     <li>Press <strong>Open &amp; measure</strong> (task pane), or double-click the drawing in the 3D window's Drawings tree. In the 3D window the drawing opens in a tab next to <strong>3D model</strong>.</li>
     <li>Set the <strong>Scale</strong> of the page: choose 1:50, 1:100 … (PDFs and DWFx sheets), or choose <strong>Calibrate…</strong>, click the two ends of a length you know and type it in metres. Images always need calibration. Changing the scale recalculates every dimension already on the page.</li>
   </ol>
@@ -245,7 +253,7 @@
   <h3>Working area</h3>
   <p><strong>View &gt; Set Working Area</strong>, then drag a box: only that part of the drawing is shown, snapped to and searched by Auto Count, and Extents zooms to it. Use it for one unit on a typical floor plan, or a detail at another scale. <strong>Reset Working Area</strong> shows the whole page.</p>
   <h3>DWG and DXF drawings</h3>
-  <p>Upload DWG or DXF files like any drawing and press <strong>Open &amp; measure</strong>. The first time, the server reads the file (this can take a minute). CAD drawings are measured 1:1 in the file's own units, so no scale or calibration is needed; check one known length with Distance. <strong>View &gt; Layers</strong> shows or hides CAD layers, and the cursor snaps only to visible layers. If a DWG cannot be read (some older versions), save it as DWG 2013-2018, DXF or PDF and upload it again.</p>
+  <p>Add DWG or DXF files like any drawing and press <strong>Open &amp; measure</strong>. DXF files are read on this computer. DWG files are read by the server for that moment only and nothing is kept there (this can take a minute the first time; the result is then kept on this computer). CAD drawings are measured 1:1 in the file's own units, so no scale or calibration is needed; check one known length with Distance. <strong>View &gt; Layers</strong> shows or hides CAD layers, and the cursor snaps only to visible layers. If a DWG cannot be read (some older versions), save it as DWG 2013-2018, DXF or PDF and add it again.</p>
 
   <h2 id="ai">9. AI assistant</h2>
   <figure><video controls preload="none" poster="media/04-ai.jpg?v=3" src="media/04-ai.webm?v=3"></video><figcaption>Video, 41 seconds, recorded inside Excel: ask the AI, see its working, add the result and check the take-off.</figcaption></figure>
@@ -267,7 +275,7 @@
   <h2 id="revisions">11. Revisions</h2>
   <figure><video controls preload="none" poster="media/05-revisions-output.jpg?v=3" src="media/05-revisions-output.webm?v=3"></video><figcaption>Video, 1.3 minutes, recorded inside Excel: restore saved groups, upload a revision, compare, update, BOQ and audit PDF.</figcaption></figure>
   <ol>
-    <li>Upload the new DWFx with the <em>same model name</em>, so it becomes the next version, and open it.</li>
+    <li>Add the new DWFx with the <em>same model name</em>, so it becomes the next version, and open it.</li>
     <li><strong>Review › Revisions › Compare</strong>: added, removed and changed elements, and the quantity differences. <strong>Colour the model by changes</strong> shows them in 3D.</li>
     <li><strong>Update selected groups</strong> re-measures your take-off on the new version by Revit ID. Formulas and your assumption values stay; groups made from a template or the AI also pick up new elements. A <em>Change log</em> sheet records the before and after totals.</li>
   </ol>
@@ -283,7 +291,7 @@
   <ol>
     <li>Ribbon <strong>DWFx Measure › Projects</strong>, sign in.</li>
     <li><strong>New project</strong> › name › <strong>Create project</strong>.</li>
-    <li><strong>Upload DWFx</strong> › choose the file › model name <em>Structure</em> › <strong>Upload and process</strong>. Wait for <strong>Ready</strong>, press <strong>Open</strong>.</li>
+    <li><strong>Add DWFx</strong> › choose the file › model name <em>Structure</em> › <strong>Add and process</strong>. Wait for <strong>Ready</strong>, press <strong>Open</strong>.</li>
     <li><strong>Measure</strong> tab › <strong>Templates and discipline packs</strong> › <em>Concrete to beams</em> › <strong>Apply</strong> › <strong>Add to Excel</strong>.</li>
     <li>Check the new <em>Take-off</em> sheet: group G1 with one row per beam and the totals.</li>
     <li><strong>Review › Output › Build BOQ sheet</strong>. Type a rate in a yellow cell to see the amount.</li>

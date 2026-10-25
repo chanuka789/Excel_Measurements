@@ -9,7 +9,7 @@ import zlib from 'zlib';
 
 const PAGES = { taskpane: { html: 'taskpane.html', entry: 'taskpane.js', tag: '<script type="module" src="taskpane.js"></script>' },
   window: { html: 'viewer.html', entry: 'js/window.js', tag: '<script type="module" src="js/window.js"></script>' } };
-const WORKERS = ['js/procworker.js', 'js/acworker.js'];
+const WORKERS = ['js/procworker.js', 'js/acworker.js', 'js/cadlocal.js'];
 
 /** Build the bundles. Returns { files: Map(url → { body, type, immutable }), pages: Map(html name → rewritten html) } or null. */
 export async function buildBundles(publicDir, { log = console.log } = {}) {

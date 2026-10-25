@@ -1,6 +1,7 @@
 // Drawing viewer: PDFs (pdf.js), images and DWFx 2D sheets (converted to SVG on the server).
 // Opens over the task pane, or side by side with the 3D model in the large 3D window.
-import { $, esc, api } from './core.js';
+import { $, esc } from './core.js';
+import { drawingResponse } from './localfiles.js';
 
 let pdfjs = null;
 async function loadPdfJs() {
@@ -35,7 +36,7 @@ export async function openDrawing(d, host = null) {
   body.addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(zoom * (e.deltaY < 0 ? 1.1 : 0.9)); } }, { passive: false });
   let fitWidth = () => {};
   try {
-    const res = await api('GET', d.kind === 'sheet' ? `/versions/${d.versionId}/sheets/${d.index}` : `/drawings/${d.id}/file`, null, { raw: true });
+    const res = await drawingResponse(d, { cad: false });
     const type = res.headers.get('content-type') || d.content_type || '';
     const name = d.name.toLowerCase();
     if (/pdf/.test(type) || name.endsWith('.pdf')) {

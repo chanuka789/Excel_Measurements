@@ -165,11 +165,13 @@ header .ctx span { display: block; font-size: 12px; line-height: 16px; color: va
 .pill { display: inline-block; font-size: 11px; line-height: 18px; padding: 0 8px; border-radius: 10px; font-weight: 600; vertical-align: 1px; }
 .pill.ok { background: var(--ok-bg); color: var(--ok); } .pill.bad { background: var(--bad-bg); color: var(--bad); }
 .pill.info { background: var(--info-bg); color: var(--brand-text); } .pill.neutral { background: var(--bg3); color: var(--fg2); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
 .pill.brand { background: var(--brand); color: var(--brand-fg); }
 .empty-state { padding: 16px; border: 1px dashed var(--stroke); border-radius: var(--r-l); color: var(--fg2); background: var(--bg2); margin-bottom: 12px; }
 .empty-state p:last-child { margin: 0; }
 .loading { color: var(--fg3); padding: 12px 0; }
 .msg { padding: 8px 10px; border-radius: var(--r); margin: 8px 0; }
+.msg.warn { background: var(--warn-bg); color: var(--warn); }
 .msg.bad { background: var(--bad-bg); color: var(--bad); } .msg.ok { background: var(--ok-bg); color: var(--ok); }
 .sec { border-top: 1px solid var(--stroke2); }
 .sec-h { display: flex; align-items: center; gap: 8px; }

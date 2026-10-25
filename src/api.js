@@ -74,7 +74,7 @@ api.get('/projects/:pid', wrap(async (req, res) => {
     one(`SELECT * FROM projects WHERE id=$1`, [pid]),
     q(`SELECT u.id, u.name, u.email, m.role FROM project_members m JOIN users u ON u.id=m.user_id WHERE m.project_id=$1 ORDER BY m.role, u.name`, [pid]),
     q(`SELECT * FROM models WHERE project_id=$1 ORDER BY name`, [pid]),
-    q(`SELECT v.id, v.model_id, v.version, v.file_name, v.size, v.status, v.progress, v.error, v.stats, v.note, v.created_at, v.sha256, v.location, v.uploaded_by AS uploaded_by_id, u.name AS uploaded_by
+    q(`SELECT v.id, v.model_id, v.version, v.file_name, v.size, v.status, v.progress, v.error, v.stats, v.note, v.created_at, v.sha256, v.location, u.name AS uploaded_by
        FROM model_versions v JOIN models m ON m.id=v.model_id LEFT JOIN users u ON u.id=v.uploaded_by WHERE m.project_id=$1 ORDER BY v.version DESC`, [pid]),
     q(`SELECT d.id, d.name, d.size, d.content_type, d.folder_id, d.created_at, d.sha256, d.location, u.name AS uploaded_by FROM drawings d LEFT JOIN users u ON u.id=d.uploaded_by WHERE d.project_id=$1 ORDER BY d.created_at DESC`, [pid]),
     q(`SELECT t.id, t.name, t.version_id, t.created_at, u.name AS created_by, jsonb_array_length(t.spec->'ids') AS elements
@@ -152,7 +152,7 @@ api.post('/projects/:pid/models', upload.single('model'), wrap(async (req, res) 
 api.get('/versions/:vid', wrap(async (req, res) => {
   const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
   await need(req, v.project_id, 'viewer');
-  res.json({ version: { id: v.id, version: v.version, status: v.status, progress: v.progress, error: v.error, stats: v.stats, model_name: v.model_name, file_name: v.file_name, size: Number(v.size), sha256: v.sha256, location: v.location, model_id: v.model_id, project_id: v.project_id } });
+  res.json({ version: { id: v.id, version: v.version, status: v.status, progress: v.progress, error: v.error, stats: v.stats, model_name: v.model_name, file_name: v.file_name, size: Number(v.size), sha256: v.sha256, location: v.location, model_id: v.model_id, project_id: v.project_id, processed_at: v.processed_at } });
 }));
 api.get('/versions/:vid/model', wrap(async (req, res) => {
   const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
