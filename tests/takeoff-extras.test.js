@@ -86,3 +86,28 @@ test('server keeps cutout holes, rebar settings and working areas, bounded', () 
   assert.deepEqual(s.pages[1].area, { x0: 1, y0: 2, x1: 30, y1: 40 });
   assert.equal(s.pages[2], undefined);                                               // no scale and a wrong area
 });
+
+test('a negative area that covers a whole positive area removes it instead of failing', () => {
+  const r = cutout(pc, [dim('a', 'g1', rect(1, 1, 2, 2))], [dim('n', 'g1', rect(0, 0, 5, 5), -1)]);
+  assert.deepEqual(r.pieces.get('a'), []); assert.ok(r.used.has('n'));
+});
+
+test('quick additions to one group are saved one after another, so none is lost', async () => {
+  globalThis.window ||= { addEventListener() {} };                // core.js listens for page errors
+  const { TakeoffStore } = await import('../public/js/tkstore.js');
+  const server = { measured: [] }; let inFlight = 0, most = 0;
+  const api = async (method, url, body) => {
+    inFlight++; most = Math.max(most, inFlight);
+    await new Promise(r => setTimeout(r, 20));                      // a slow network
+    inFlight--;
+    if (method === 'PATCH') { server.measured = body.props.measured; return { group: { id: 'g1', mtype: 'Count', props: { measured: server.measured } } }; }
+    return {};
+  };
+  const st = new TakeoffStore({ projectId: () => 'p', canEdit: () => true, api });
+  st.own.groups = [{ id: 'g1', mtype: 'Count', props: { measured: [] }, items: [] }];
+  await Promise.all([1, 2, 3, 4, 5].map(i => st.addMeasured('g1', [{ id: 'c' + i, value: 1 }])));   // five clicks before any save returns
+  assert.deepEqual(server.measured.map(m => m.id).sort(), ['c1', 'c2', 'c3', 'c4', 'c5']);
+  assert.equal(most, 1);
+  await Promise.all([st.updateDims(m => (m.id === 'c1' ? null : undefined)), st.addMeasured('g1', [{ id: 'c6', value: 1 }])]);
+  assert.deepEqual(server.measured.map(m => m.id).sort(), ['c2', 'c3', 'c4', 'c5', 'c6']);
+});

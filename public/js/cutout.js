@@ -33,7 +33,8 @@ export function cutout(pc, positives, negatives, targets = []) {
   }
   for (const [id, mp] of cur) {
     if (!cut.has(id)) continue;
-    pieces.set(id, (Array.isArray(mp[0]?.[0]?.[0]) ? mp : [mp]).map(poly => ({ pts: flatRing(poly[0]), holes: poly.slice(1).map(flatRing) })));
+    const polys = !mp.length ? [] : Array.isArray(mp[0]?.[0]?.[0]) ? mp : [mp];     // fully covered: no piece left
+    pieces.set(id, polys.filter(poly => poly[0]?.length).map(poly => ({ pts: flatRing(poly[0]), holes: poly.slice(1).map(flatRing) })));
   }
   return { pieces, used };
 }
