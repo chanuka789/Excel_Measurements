@@ -4,18 +4,30 @@ import crypto from 'crypto';
 import { q, one, audit } from './db.js';
 import * as store from './storage.js';
 import express from 'express';
-import { json, wrap, clean, safeName, uuidOk, fail, need, versionProject, roleIn, HttpError } from './http.js';
+import { cloudOnly, LOCAL_MSG, json, wrap, clean, safeName, uuidOk, fail, need, versionProject, roleIn, HttpError } from './http.js';
 import { requireAdmin } from './auth.js';
 import { PACKS } from './packs.js';
 import { loadModelData, overview } from './modeldata.js';
 import { dataKey } from './processing.js';
-import { compareModels } from './compare.js';
+import { compareModels } from '../public/js/compare.js';
 import { auditPdf } from './report.js';
 import { aiConfig, runAgent, runSummaryPlan, runCheck, runDescribe, aiUsage, logAI, seedRules } from './ai.js';
 import { enqueue } from './jobs.js';
+import { checkPayload } from './localproc.js';
 import { qsSetup } from '../public/js/rules.js';
 
 const bigJson = express.json({ limit: '40mb' });
+const modelJson = express.json({ limit: '200mb' });       // AI requests on a model kept on the computer carry its elements
+
+/** Element data for the AI: the server copy, or for a model kept on the computers the elements the add-in sends
+ * with this request (used for the answer only, never stored). */
+async function modelFor(v, body) {
+  if (v.location !== 'local') return loadModelData(v);
+  const m = body?.model;
+  if (!m || !Array.isArray(m.elements)) fail(409, LOCAL_MSG);
+  checkPayload(m);
+  return { fileName: v.file_name, up: m.up, categories: m.categories || {}, elements: m.elements, byId: new Map(m.elements.map(e => [e.id, e])) };
+}
 
 /** Insert or refresh the built-in discipline templates and default QS rules. */
 export async function seedFeatures() {
@@ -78,7 +90,7 @@ export function registerFeatures(api) {
   // ---------------------------------------------------------------- 2D sheets from the DWFx
   api.get('/versions/:vid/sheets/:n', wrap(async (req, res) => {
     const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
-    await need(req, v.project_id, 'viewer');
+    await need(req, v.project_id, 'viewer'); cloudOnly(v);
     const n = Number(req.params.n); if (!Number.isInteger(n) || n < 1) fail(404, 'Sheet not found.');
     const key = dataKey(v.storage_key, `sheets/sheet-${n}.svg.gz`);
     if (!(await store.exists(key))) fail(404, 'Sheet not found.');
@@ -197,6 +209,7 @@ export function registerFeatures(api) {
     if (a.project_id !== b.project_id) fail(400, 'Both versions must be in the same project.');
     await need(req, a.project_id, 'viewer');
     if (a.status !== 'ready' || b.status !== 'ready') fail(409, 'Both versions must be processed (Ready) first.');
+    cloudOnly(a); cloudOnly(b);         // models kept on the computers are compared in the add-in (public/js/compare.js)
     const [da, db] = await Promise.all([loadModelData(a), loadModelData(b)]);
     const result = compareModels(da, db);
     await audit(req.user.id, a.project_id, 'model.compare', { from: `${a.model_name} v${a.version}`, to: `${b.model_name} v${b.version}`, ...result.summary });
@@ -285,14 +298,14 @@ export function registerFeatures(api) {
     res.json({ enabled: c.enabled && Boolean(c.provider), provider: c.provider ? { id: c.provider.id, label: c.provider.label, model: c.provider.model } : null,
       dailyLimit: c.dailyLimit, usage: await aiUsage(req.user.id) });
   }));
-  api.post('/ai', bigJson, wrap(async (req, res) => {
+  api.post('/ai', modelJson, wrap(async (req, res) => {
     const { request, versionId, ticked, summary } = req.body || {};
     if (!request) fail(400, 'Type what you want to measure.');
     try {
       if (uuidOk(versionId)) {
         const v = await versionProject(versionId); if (!v) fail(404, 'Model version not found.');
         await need(req, v.project_id, 'viewer');
-        const data = await loadModelData(v);
+        const data = await modelFor(v, req.body);
         const templates = await templatesFor(req.user, v.project_id);
         await logAI(req.user, v.project_id, request);
         const state = await projectState(v.project_id, req.body?.workbook);
@@ -303,14 +316,14 @@ export function registerFeatures(api) {
       }
     } catch (err) { if (err instanceof HttpError) throw err; aiErr(res, err); }
   }));
-  api.post('/ai/check', bigJson, wrap(async (req, res) => {
+  api.post('/ai/check', modelJson, wrap(async (req, res) => {
     const { versionId, groups } = req.body || {};
     if (!Array.isArray(groups) || !groups.length) fail(400, 'There is nothing to check yet. Add take-off groups first.');
     let projectId = null, ov = null;
     if (uuidOk(versionId)) {
       const v = await versionProject(versionId); if (!v) fail(404, 'Model version not found.');
       await need(req, v.project_id, 'viewer'); projectId = v.project_id;
-      ov = overview(await loadModelData(v), { maxTypes: 150 });
+      ov = overview(await modelFor(v, req.body), { maxTypes: 150 });
     }
     try { res.json(await runCheck({ user: req.user, projectId, groups: groups.slice(0, 200), overviewData: ov })); } catch (err) { aiErr(res, err); }
   }));
@@ -346,6 +359,7 @@ export function registerFeatures(api) {
   api.post('/admin/ai/eval', requireAdmin, json, wrap(async (req, res) => {
     const v = await versionProject(req.body?.versionId);
     if (!v || v.status !== 'ready') fail(400, 'Choose a processed model version to test the AI on.');
+    if (v.location === 'local') fail(400, 'The test set runs on the server, so it needs a model stored on the server. This model is kept on the computers.');
     await q(`INSERT INTO settings (key, value) VALUES ('ai_eval',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value`,
       [{ status: 'queued', versionId: v.id, model: `${v.model_name} v${v.version}`, startedAt: new Date().toISOString() }]);
     await enqueue('ai_eval', { versionId: v.id, userId: req.user.id });

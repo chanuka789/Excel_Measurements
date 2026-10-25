@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compareModels } from '../src/compare.js';
+import { compareModels } from '../public/js/compare.js';
 import { scoreCase } from '../src/aieval.js';
 
 const el = (id, over = {}) => ({ id, cat: 'Structural Framing', fam: 'Beam', type: 'B-200X600', level: 'L1', q: { Volume: [1, 'm3'], 'Cut Length': [4, 'm'] }, bb: [0, 0, 0, 1, 1, 1], ...over });

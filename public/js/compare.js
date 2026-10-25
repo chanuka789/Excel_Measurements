@@ -1,4 +1,5 @@
-// Compare two processed model versions element by element (matched by Revit element ID).
+// Compare two processed model versions element by element (matched by Revit element ID). Runs in the add-in (models
+// kept on the computer) and on the server (models stored there, src/features.js).
 const FIELDS = ['cat', 'fam', 'type', 'level', 'mark', 'material'];
 const IGNORE_Q = /^Geo (surface area|top area|plan area)$/;   // derived duplicates of other values; kept out of the noise
 
