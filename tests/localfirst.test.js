@@ -64,6 +64,11 @@ test('a model kept on the computer: registered without a file, finished with sum
   assert.equal(files().length, 0, 'nothing stored on the server');
   // the AI needs the elements: without them it is refused, the server keeps none of them
   assert.equal((await call('POST', '/api/ai/check', { token: T.user, body: { versionId: v.id, groups: [{ name: 'x' }] } })).status, 409);
+  const model = { elements: [{ id: 1, cat: 'Walls', fam: 'Basic Wall', type: 'W1', q: { Volume: [1, 'm³'] } }] };
+  for (const [url, body] of [['/api/ai', { request: 'walls', versionId: v.id, model }], ['/api/ai/check', { versionId: v.id, groups: [{ name: 'x' }], model }]]) {
+    const r = await call('POST', url, { token: T.user, body });
+    assert.notEqual(r.status, 409, `${url} accepts the elements sent with the request`);         // (no AI key here, so it stops later)
+  }
   // deleting works with no files to remove
   assert.equal((await call('DELETE', `/api/versions/${v.id}`, { token: T.user })).status, 200);
 });

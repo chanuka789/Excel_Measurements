@@ -3,6 +3,7 @@
 import { esc, api, status } from './core.js';
 import { mountQs } from './qsui.js';
 import { renderPlan, checksText, stepLabel, createStructureGroups } from './actions.js';
+import { aiModel } from './localfiles.js';
 
 let C = null;            // { W, V, askPane, send, setIds, isolate, hideIds, showAll, paint, loadTree }
 let qs = null, aiBox = null, aiForm = null;
@@ -83,7 +84,7 @@ function aiPanel() {
     aiBox.innerHTML = '<div class="card"><div class="loading">The AI is planning: reading the rules, finding the elements and testing the quantities…</div><div class="progress indet"><div></div></div></div>';
     try {
       let workbook = null; try { workbook = await C.askPane('workbook', {}, 8000); } catch { /* pane closed */ }
-      const data = await api('POST', '/ai', { request, versionId: C.W.versionId, ticked: [...C.W.ticked], workbook });
+      const data = await api('POST', '/ai', { request, versionId: C.W.versionId, ticked: [...C.W.ticked], workbook, ...(await aiModel(C.W.versionId, C.W.data)) });
       renderPlan(aiBox, data, windowHost, { stepLabel, onAnswer: (a) => { t.value = `${request}\nAnswer to your question: ${a}`; ask(); } });
     } catch (err) { aiBox.innerHTML = `<div class="msg bad">${esc(err.message)}</div>`; }
     finally { go.disabled = false; }

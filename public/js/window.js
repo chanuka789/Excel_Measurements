@@ -100,7 +100,7 @@ async function init(m) {
     let g = null;
     if (data.geometryFormat === 'bin2' && r.geometry) g = parseBin(r.geometry);
     else if (data.geometry?.meshes) g = fromLegacy(data.geometry);
-    W.E = data.elements; W.byId = new Map(W.E.map(e => [e.id, e]));
+    W.data = data; W.E = data.elements; W.byId = new Map(W.E.map(e => [e.id, e]));
     const cats = new Map(); W.E.forEach(e => cats.set(e.cat, (cats.get(e.cat) || 0) + 1));
     W.catColor.clear(); [...cats].sort((a, b) => b[1] - a[1]).forEach(([c], i) => W.catColor.set(c, PALETTE[i % PALETTE.length]));
     if (g) V.load(g); else V.clear();
