@@ -49,11 +49,16 @@ export function chooseFile({ name, size, sha256: want, why = '' }) {
     $('cfFile').focus();
   });
 }
-/** The file of a version or drawing kept on the computers (asks for it if this computer does not have it). */
+let choosing = Promise.resolve();
+/** The file of a version or drawing kept on the computers (asks for it if this computer does not have it).
+ * One question at a time (they share the dialog); a file chosen meanwhile for another item is used without asking. */
 export async function fileFor(item) {
   const rec = await library.getFile(item.sha256);
   if (rec) return rec.blob;
-  return chooseFile({ name: item.file_name || item.name, size: item.size, sha256: item.sha256 });
+  const turn = choosing.catch(() => {}).then(async () => (await library.getFile(item.sha256))?.blob
+    || chooseFile({ name: item.file_name || item.name, size: item.size, sha256: item.sha256 }));
+  choosing = turn;
+  return turn;
 }
 
 /** Process a model on this computer and keep the result in the library. Tells the project when the version is ready. */
@@ -96,8 +101,8 @@ export async function loadVersion(vid, { onUpdate } = {}) {
     const r = await processHere(meta, blob, { onUpdate });
     return { data: r.payload, geometry: r.geometry, meta };
   }
-  // stored on the server: download once, then keep it here
-  if (meta.status !== 'ready') meta = await versionMeta(vid, { fresh: true });
+  // stored on the server: download once, then keep it here (fresh record: it may have been processed again)
+  meta = await versionMeta(vid, { fresh: true });
   const key = `cloud:v:${vid}`, stamp = String(meta.processed_at || '');
   const hit = await library.getModel(key).catch(() => null);
   if (hit && hit.payload._stamp === stamp) return { data: hit.payload, geometry: hit.geometry, meta };
@@ -110,7 +115,7 @@ export async function loadVersion(vid, { onUpdate } = {}) {
 
 /** Compare two versions on this computer (models kept on the computers never go to the server). */
 export async function compareVersions(fromId, toId) {
-  const [a, b] = await Promise.all([loadVersion(fromId), loadVersion(toId)]);
+  const a = await loadVersion(fromId), b = await loadVersion(toId);     // one after the other: each may ask for its file
   const label = (m) => `${m.model_name} v${m.version}`;
   return { from: { id: fromId, label: label(a.meta) }, to: { id: toId, label: label(b.meta) }, ...compareModels(a.data, b.data) };
 }
