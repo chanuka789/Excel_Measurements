@@ -40,7 +40,7 @@ export async function openDrawing(d, host = null) {
     const name = d.name.toLowerCase();
     if (/pdf/.test(type) || name.endsWith('.pdf')) {
       const lib = await loadPdfJs();
-      const doc = await lib.getDocument({ data: new Uint8Array(await res.arrayBuffer()) }).promise;
+      const doc = await lib.getDocument({ data: new Uint8Array(await res.arrayBuffer()), standardFontDataUrl: '/vendor/pdfjs-fonts/', cMapUrl: '/vendor/pdfjs-cmaps/', cMapPacked: true }).promise;
       box.querySelector('#dvPages').textContent = `${doc.numPages} page${doc.numPages > 1 ? 's' : ''}`;
       const first = await doc.getPage(1); const base = first.getViewport({ scale: 1 });
       fitWidth = () => setZoom((body.clientWidth - 32) / base.width);

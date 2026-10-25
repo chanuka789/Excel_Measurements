@@ -4,11 +4,13 @@ import { $, esc, App, api, session, status } from './core.js';
 import { LinkChannel } from './link.js';
 import { Viewer, parseBin, fromLegacy } from './viewer.js';
 import { Toolbar } from './vtools.js';
-import { dimsOf, fmt } from './engine.js';
+import { dimsOf, fmt, uLabel } from './engine.js';
 import { groupToSpec, groupTotal } from './dims.js';
+import { PointTakeoff } from './takeoff3d.js';
+import { newGroupDialog } from './takeoff2d.js';
 import { S, PALETTE, STATUS_COLORS, REV_COLORS, idsOf, count, isVisible, snapshot, undo, redo } from './state.js';
 
-let V = null, TB = null, win = null;
+let V = null, TB = null, win = null, PT = null;
 
 // ================================================================== setup
 export function initModel() {
@@ -30,6 +32,7 @@ export function initModel() {
   });
   TB = new Toolbar($('vbar'), $('vstage'), V, HOST);
   window.__viewer = V;
+  if (App.tkStore) PT = new PointTakeoff(V, App.tkStore, { versionId: () => S.versionId, label: () => S.label, status });
 
   $('search').oninput = (e) => { S.search = e.target.value.trim().toLowerCase(); renderTree(); };
   $('level').onchange = (e) => { S.level = e.target.value; update(); };
@@ -63,6 +66,8 @@ export const toolbar = () => TB;
 
 // ================================================================== host interface for the toolbar
 const HOST = {
+  /** 3D point take-off into the project's dimension groups (only for a model opened from a project). */
+  takeoff: () => (PT && S.versionId && App.tkStore?.projectId ? { store: App.tkStore, pt: PT, newGroup: () => newGroupDialog(App.tkStore, status) } : null),
   selectedIds: () => [...S.ticked],
   isIsolated: () => S.isolated,
   toggleIsolate() {
@@ -145,7 +150,8 @@ export async function loadModelData(data, { versionId = null, label = '', geomet
   legendFor();
   update();
   const shown = S.E.filter(e => V.hasGeometry(e.id)).length;
-  status(`${S.E.length} elements in ${S.tree.size} categories, ${shown} shown in 3D.` + (data.geoNote ? ' ' + data.geoNote : ''), 'ok');
+  status(`${S.E.length} elements in ${S.tree.size} categories, ${shown} shown in 3D.` + (data.geoNote ? ' ' + data.geoNote : ''), data.geoNote ? 'warn' : 'ok');
+  if (App.tkStore?.projectId) App.tkStore.load().then(() => PT?.refresh()).catch(() => {});
   App.renderQs?.();
   sendToWindow({ type: 'model', versionId: S.versionId, label: S.label });
 }
@@ -392,7 +398,7 @@ export function showProps(id) {
   const e = S.byId.get(id); if (!e) return;
   const p = $('props'); p.hidden = false;
   const qs = Object.entries(e.q || {}).sort((a, b) => a[0].localeCompare(b[0]));
-  const qRows = (list) => list.map(([k, [v, u]]) => `<tr><td>${esc(k)}</td><td class="v">${fmt(v, u)} ${esc(u)}</td></tr>`).join('');
+  const qRows = (list) => list.map(([k, [v, u]]) => `<tr><td>${esc(k)}</td><td class="v">${fmt(v, u)} ${esc(uLabel(u))}</td></tr>`).join('');
   const all = Object.entries(e.props || {}).sort((a, b) => a[0].localeCompare(b[0]));
   const measured = S.measured?.get(id);
   p.innerHTML = `<div class="ph"><div style="min-width:0"><strong>${esc(e.type)}</strong><div class="hint">${esc(e.cat)} › ${esc(e.fam)}</div></div>

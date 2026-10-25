@@ -52,3 +52,5 @@ export function evaluate(spec, byId) {
 export const unitFmt = (u) => u === 'nr' ? '#,##0' : u === 'm' || u === 't' ? '#,##0.000' : '#,##0.00';
 export const fmt = (v, u) => (u === 'm' ? v.toFixed(3) : u === '' ? (Number.isInteger(v) ? String(v) : v.toFixed(2)) : v.toFixed(2))
   .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+/** Unit as shown on screen (m² and m³); Excel and saved data keep the plain m2 / m3. */
+export const uLabel = (u) => (u === 'm2' ? 'm²' : u === 'm3' ? 'm³' : u ?? '');

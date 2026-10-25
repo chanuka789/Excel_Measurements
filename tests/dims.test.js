@@ -181,3 +181,68 @@ test('window link: one-time claim gives the app window its own session; messages
   ctrl.abort();
   assert.equal((await call('POST', `/api/link/${id}/send`, { token: winToken, body: { side: 'win', msg: { type: 'x' } } })).status, 404);
 });
+
+test('on-screen take-off: drawing scale, multiplier and markups; measured dimensions keep their points', async () => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const form = new FormData(); form.append('files', new Blob([png], { type: 'image/png' }), 'plan.png');
+  const up = await call('POST', `/api/projects/${P.id}/drawings`, { token: T.user, form });
+  assert.equal(up.status, 201);
+  const d = up.data.drawings[0];
+  const key = encodeURIComponent('d:' + d.id);
+  const put = (props, token = T.user, pid = P.id, k = key) => call('PUT', `/api/projects/${pid}/drawing-settings/${k}`, { token, body: { props } });
+  let r = await put({ multiplier: 10, pages: { 1: { scale: 0.05, ratio: 100 }, 2: { scale: -1 }, x: { scale: 1 } }, markups: [{ page: 1, x: 5, y: 6, text: 'Special tiles here', size: 500 }, { text: '' }] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(Object.keys(r.data.props.pages), ['1']);                 // bad pages are dropped
+  assert.equal(r.data.props.multiplier, 10);
+  assert.equal(r.data.props.markups.length, 1); assert.equal(r.data.props.markups[0].size, 96);
+  assert.equal((await put({}, T.other)).status, 403);                         // viewer
+  assert.equal((await put({}, T.user, P2.id)).status, 404);                   // drawing of another project
+  assert.equal((await put({}, T.user, P.id, 'nonsense')).status, 400);
+  assert.equal((await put({}, T.user, P.id, encodeURIComponent(`s:${V1.id}:1`))).status, 200);   // a 2D sheet of a model in the project
+  r = await call('GET', `/api/projects/${P.id}/drawing-settings`, { token: T.other });
+  assert.equal(r.data.settings['d:' + d.id].pages[1].scale, 0.05);
+
+  const g = (await call('POST', `/api/projects/${P.id}/dimgroups`, { token: T.user, body: { name: 'Floor tiles', mtype: 'Area' } })).data.group;
+  const dim = { label: 'Area 0001', value: 12, unit: 'm2', kind: '2d', shape: 'area', pts: [0, 0, 10, 0, 10, 10, 'x'], len: 14, dmult: 10, src: { t: 'd', key: 'd:' + d.id, page: 1, name: 'plan.png' } };
+  r = await call('PATCH', `/api/dimgroups/${g.id}`, { token: T.user, body: { props: { measured: [dim, { ...dim, pts: [0, 0, 1, 1], shape: 'blob', src: { t: 'zz', key: 'k' } }] } } });
+  const [a, b] = r.data.group.props.measured;
+  assert.equal(a.shape, 'area'); assert.equal(a.len, 14); assert.equal(a.dmult, 10); assert.equal(a.src.key, 'd:' + d.id);
+  assert.equal(a.pts, undefined);                                             // a non-number point drops the points
+  assert.deepEqual(b.pts, [0, 0, 1, 1]); assert.equal(b.shape, undefined); assert.equal(b.src, undefined);
+});
+
+test('one-time download links work once, for one path, for the user who asked', async () => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const form = new FormData(); form.append('files', new Blob([png], { type: 'image/png' }), 'logo.png');
+  const d = (await call('POST', `/api/projects/${P.id}/drawings`, { token: T.user, form })).data.drawings[0];
+  const r = await call('POST', '/api/download-ticket', { token: T.user, body: { path: `/drawings/${d.id}/file` } });
+  assert.equal(r.status, 200);
+  const url = base + '/' + r.data.url;
+  const first = await fetch(url); assert.equal(first.status, 200); assert.deepEqual(Buffer.from(await first.arrayBuffer()), png);
+  assert.equal((await fetch(url)).status, 401);                               // used once
+  const t2 = (await call('POST', '/api/download-ticket', { token: T.user, body: { path: `/drawings/${d.id}/file` } })).data.url;
+  assert.equal((await fetch(base + '/' + t2.replace(`/drawings/${d.id}/file`, `/projects/${P.id}`))).status, 401);   // other path
+  assert.equal((await call('POST', '/api/download-ticket', { token: T.user, body: { path: '../etc' } })).status, 400);
+  assert.equal((await call('POST', '/api/download-ticket', { body: { path: '/x' } })).status, 401);
+});
+
+test('DWG / DXF drawings are converted on the server to a measurable SVG; unreadable files get a clear message', async () => {
+  const dxf = ['0', 'SECTION', '2', 'HEADER', '9', '$INSUNITS', '70', '4', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES',
+    '0', 'LINE', '8', 'Walls', '10', '0', '20', '0', '30', '0', '11', '5000', '21', '0', '31', '0',
+    '0', 'CIRCLE', '8', 'Columns', '10', '2500', '20', '1000', '30', '0', '40', '200', '0', 'ENDSEC', '0', 'EOF'].join('\n');
+  const form = new FormData();
+  form.append('files', new Blob([dxf], { type: 'application/dxf' }), 'plan.dxf');
+  form.append('files', new Blob([Buffer.from('AC1032 this is not really a drawing')], { type: 'application/acad' }), 'broken.dwg');
+  const up = await call('POST', `/api/projects/${P.id}/drawings`, { token: T.user, form });
+  assert.equal(up.status, 201);
+  const [a, bad] = up.data.drawings;
+  const r = await fetch(`${base}/api/drawings/${a.id}/cad`, { headers: { Authorization: 'Bearer ' + T.other } });   // viewers can read it
+  assert.equal(r.status, 200);
+  const svg = await r.text();
+  assert.match(svg, /data-unit-m="0.001"/); assert.match(svg, /data-layer="Walls"/); assert.match(svg, /data-layer="Columns"/);
+  assert.equal((await fetch(`${base}/api/drawings/${a.id}/cad`, { headers: { Authorization: 'Bearer ' + T.user } })).status, 200);   // second time from the cache
+  const b = await call('GET', `/api/drawings/${bad.id}/cad`, { token: T.user });
+  assert.equal(b.status, 422); assert.ok(b.data.error.length > 10);
+  const png = (await call('GET', `/api/projects/${P.id}`, { token: T.user })).data.drawings.find(x => x.name === 'plan.png');
+  if (png) assert.equal((await call('GET', `/api/drawings/${png.id}/cad`, { token: T.user })).status, 400);
+});

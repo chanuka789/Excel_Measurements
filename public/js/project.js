@@ -1,6 +1,8 @@
 // Projects tab: list, create, details (models + versions, drawings, team, saved take-offs, activity, export, delete).
 import { $, esc, App, api, upload, downloadFile, fmtBytes, fmtDate, fmtDay, status, confirmBox, session } from './core.js';
 import { openDrawing, canView } from './drawings.js';
+import { DrawingTakeoff, canMeasure, measurableDrawings } from './takeoff2d.js';
+import { TakeoffStore } from './tkstore.js';
 import { S } from './state.js';
 import { canProcessLocally, processLocally, LOCAL } from './localproc.js';
 
@@ -8,6 +10,20 @@ const P = { list: [], detail: null, filter: '', poll: null, users: null, open: n
 const DISCIPLINES = ['Architecture', 'Structure', 'Interiors', 'Mechanical', 'Electrical', 'Plumbing', 'Fire', 'Landscape', 'Other'];
 const ROLE_LABEL = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
 const can = (min) => ({ viewer: 1, editor: 2, owner: 3 }[P.detail?.my_role] || 0) >= ({ viewer: 1, editor: 2, owner: 3 }[min]);
+/** Dimension groups and drawing settings of the open project, for on-screen take-off (drawings and 3D points). */
+export const tkStore = new TakeoffStore({ projectId: () => P.detail?.project.id || null, canEdit: () => can('editor') });
+App.tkStore = tkStore;                 // the 3D view uses it too (point measurement)
+let tk2d = null;
+/** Open a drawing to measure on it (CostX style); other file types open in the plain viewer. */
+function openMeasure(d) {
+  if (!d) return;
+  if (d.kind !== 'sheet' && !canMeasure(d.name)) return openDrawing(d);
+  const box = $('drawingViewer'); box.hidden = false;
+  tk2d?.destroy();
+  tk2d = new DrawingTakeoff(box, tkStore, { close: true, onClose: () => { box.hidden = true; tk2d = null; }, drawings: () => measurableDrawings(P.detail) });
+  tk2d.open(d);
+}
+window.__tk2d = () => tk2d;                // used by the automated browser tests
 const STATUS = { queued: ['Waiting', 'neutral'], processing: ['Processing', 'info'], local: ['On a computer', 'info'], ready: ['Ready', 'ok'], failed: ['Failed', 'bad'] };
 const LOCAL_OK = canProcessLocally();
 const box = () => $('projectBody');
@@ -158,7 +174,7 @@ function runHere(pid, file, versionId) {
   let last = 0;
   processLocally(file, versionId, { onUpdate: () => { if (Date.now() - last > 1000 && P.detail?.project.id === pid) { last = Date.now(); renderDetail(); } } })
     .then(({ ms }) => { status(`${file.name} is ready (processed on this computer in ${Math.round(ms / 1000)} s).`, 'ok'); })
-    .catch((err) => { status(`This computer could not process ${file.name} (${err.message}). The server is processing it instead.`, 'bad'); })
+    .catch((err) => { console.warn('Local processing failed:', err); status(`Processing ${file.name} on the server instead (this computer could not do it). It will be ready in a moment.`, 'warn'); })
     .finally(() => { if (P.detail?.project.id === pid) openProject(pid, true); });
 }
 
@@ -173,7 +189,7 @@ function drawingsHtml() {
   if (!d.drawings.length) return up + '<div class="empty-state"><p>No drawings yet. Upload the drawing set so the team keeps everything for this project in one place.</p></div>';
   return up + `<table class="tbl"><thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody>${d.drawings.map(x => `
     <tr><td class="wrap">${esc(x.name)}</td><td class="num">${fmtBytes(Number(x.size))}</td><td class="small">${fmtDay(x.created_at)}<br><span class="muted">${esc(x.uploaded_by || '')}</span></td>
-    <td class="right">${canView(x.name) ? `<button class="btn small" data-view="${x.id}">View</button> ` : ''}<button class="btn small" data-dl="${x.id}" data-name="${esc(x.name)}">Download</button>${can('editor') ? ` <button class="btn small subtle danger-text" data-deld="${x.id}" data-name="${esc(x.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+    <td class="right">${canView(x.name) || canMeasure(x.name) ? `<button class="btn small" data-view="${x.id}" title="${canMeasure(x.name) ? 'Open the drawing to view and measure it' : 'Open the drawing'}">${canMeasure(x.name) ? 'Open &amp; measure' : 'View'}</button> ` : ''}<button class="btn small" data-dl="${x.id}" data-name="${esc(x.name)}">Download</button>${can('editor') ? ` <button class="btn small subtle danger-text" data-deld="${x.id}" data-name="${esc(x.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 function takeoffsHtml() {
   const d = P.detail;
@@ -253,13 +269,13 @@ function wireDetail() {
       catch (err) { status(err.message, 'bad'); }
     });
   }
-  box().querySelectorAll('[data-view]').forEach(b => b.onclick = () => openDrawing(d.drawings.find(x => x.id === b.dataset.view)));
+  box().querySelectorAll('[data-view]').forEach(b => b.onclick = () => openMeasure(d.drawings.find(x => x.id === b.dataset.view)));
   box().querySelectorAll('[data-sheets]').forEach(b => b.onclick = () => {
     const v = d.models.flatMap(m => m.versions).find(x => x.id === b.dataset.sheets);
     const list = v.stats.sheets;
-    if (list.length === 1) return openDrawing({ kind: 'sheet', versionId: v.id, index: list[0].index, name: list[0].name });
+    if (list.length === 1) return openMeasure({ kind: 'sheet', versionId: v.id, index: list[0].index, name: list[0].name });
     confirmBox({ title: '2D sheets', body: `<ul class="check-list">${list.map(sh => `<li><span class="grow">${esc(sh.name)}</span><button class="btn small" data-sh="${sh.index}">View</button></li>`).join('')}</ul>`, confirmLabel: 'Close' });
-    document.querySelectorAll('#dialog [data-sh]').forEach(x => x.onclick = () => { $('dlgNo').click(); const sh = list.find(y => y.index === +x.dataset.sh); openDrawing({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }); });
+    document.querySelectorAll('#dialog [data-sh]').forEach(x => x.onclick = () => { $('dlgNo').click(); const sh = list.find(y => y.index === +x.dataset.sh); openMeasure({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }); });
   });
   $('pEdit') && ($('pEdit').onclick = editForm);
   // models

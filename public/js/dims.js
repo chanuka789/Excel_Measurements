@@ -3,7 +3,10 @@
 //
 // A dimension group: { id, name, mtype: Count|Length|Area|Volume, props, items: [{ element_id, sign, multiplier }] }
 // props: { display, quantity, multiplier, width, height, offset, custom:[{label,unit,expr}], variables:[{name,value,unit}],
-//          measured:[{id,label,value,unit,sign,multiplier}], posColor, negColor, zone, ... }
+//          measured:[{id,label,value,unit,sign,multiplier,dmult,shape,src,pts,len}], posColor, negColor, zone, ... }
+// A measured dimension taken on screen also keeps where it was taken: src {t:'d'|'s'|'3d', key, page, name}, the shape
+// (area, length, count, distance, face), its points (2D drawing units or 3D metres) and, for areas, the perimeter (len).
+// dmult is the drawing multiplier (typical floors): the effective multiplier is multiplier x dmult.
 import { keyOf } from './engine.js';
 import { enrichElementQs } from './rules.js';
 
@@ -46,11 +49,13 @@ export function conversion(g) {
 }
 export const displayUnit = (g) => UNIT[conversion(g).display];
 
-/** Quantity of one dimension: (base + offset) x group multiplier x dimension multiplier x sign, then the display conversion. */
+/** Sign x dimension multiplier x drawing multiplier of one dimension (1 for a plain positive dimension). */
+export const itemFactor = (item = {}) => (item.sign < 0 ? -1 : 1) * factor(item.multiplier) * factor(item.dmult);
+/** Quantity of one dimension: (base + offset) x group multiplier x dimension multiplier x drawing multiplier x sign, then the display conversion. */
 export function dimQuantity(g, base, item = {}) {
   if (base == null) return null;
   const p = P(g), conv = conversion(g);
-  let v = (base + (g.mtype === 'Length' ? factor(p.offset, 0) : 0)) * factor(p.multiplier) * factor(item.multiplier) * (item.sign < 0 ? -1 : 1);
+  let v = (base + (g.mtype === 'Length' ? factor(p.offset, 0) : 0)) * factor(p.multiplier) * itemFactor(item);
   for (const t of conv.terms) v *= t === 'Width' ? factor(p.width, 0) : factor(p.height, 0);
   return v;
 }
@@ -95,7 +100,7 @@ export function groupToSpec(g, byId, opts = {}) {
   // per-dimension sign x multiplier, only when some dimension differs from +1
   const odd = present.filter(i => i.sign < 0 || factor(i.multiplier) !== 1);
   const measured = opts.measured === false ? [] : (p.measured || []);
-  const hasFactor = odd.length > 0 || measured.some(m => m.sign < 0 || factor(m.multiplier) !== 1);
+  const hasFactor = odd.length > 0 || measured.some(m => itemFactor(m) !== 1);
   if (hasFactor) inputs.push({ key: 'Factor', label: 'Sign × multiplier', unit: '×', source: 'map', default: 1,
     map: Object.fromEntries(odd.map(i => [i.element_id, (i.sign < 0 ? -1 : 1) * factor(i.multiplier)])), sum: false });
   for (const n of opts.extra || []) {
@@ -141,7 +146,7 @@ export function groupToSpec(g, byId, opts = {}) {
     formulas.push({ key, label: c.label, unit: c.unit || '', expr, ...(c.rule ? { rule: c.rule } : {}) }); known.add(key);
   }
   if (p.rule) { const q = formulas.find(f => f.key === 'Qty') || inputs.find(i => i.key === baseKey); if (q) q.rule = p.rule; }
-  const manual = measured.map(m => ({ label: m.label, v: { [baseKey]: m.value, ...(hasFactor ? { Factor: (m.sign < 0 ? -1 : 1) * factor(m.multiplier) } : {}) } }));
+  const manual = measured.map(m => ({ label: m.src?.name ? `${m.label} · ${m.src.name}` : m.label, v: { [baseKey]: m.value, ...(hasFactor ? { Factor: itemFactor(m) } : {}) } }));
   return { name: g.name, ids, by: opts.by ?? 'type', note: p.description || `Dimension group (${g.mtype}${conv.display !== g.mtype ? ' shown as ' + conv.display : ''})`,
     details: opts.details || DEFAULT_DETAILS, inputs, constants, formulas, manual, dimGroupId: g.id, parts: [g.name] };
 }

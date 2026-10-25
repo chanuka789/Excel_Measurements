@@ -44,6 +44,7 @@
     <li><a href="#select">Selecting elements and zones</a></li>
     <li><a href="#measure">Measuring</a></li>
     <li><a href="#dimgroups">3D window: project tree and dimension groups</a></li>
+    <li><a href="#onscreen">On-screen take-off on drawings and in 3D</a></li>
     <li><a href="#ai">AI assistant</a></li>
     <li><a href="#review">Checks</a></li>
     <li><a href="#revisions">Revisions</a></li>
@@ -177,7 +178,76 @@
     <li>Press <strong>Isolate</strong> in the 3D toolbar to show only the selection. <strong>Show all</strong> brings the rest back.</li>
   </ol>
 
-  <h2 id="ai">8. AI assistant</h2>
+  <h2 id="onscreen">8. On-screen take-off on drawings and in 3D</h2>
+  <p>Measure by clicking on a drawing or on the 3D model, the same way as in CostX. Every measurement goes into a <strong>dimension group</strong>, keeps its points (so you can see it again on the drawing), and goes to Excel with the group's schedule.</p>
+  <h3>Open a drawing to measure</h3>
+  <ol>
+    <li>Upload PDFs or images in <strong>Project &amp; Models &gt; Drawings and documents</strong>. 2D sheets inside a DWFx can be measured too.</li>
+    <li>Press <strong>Open &amp; measure</strong> (task pane), or double-click the drawing in the 3D window's Drawings tree. In the 3D window the drawing opens in a tab next to <strong>3D model</strong>.</li>
+    <li>Set the <strong>Scale</strong> of the page: choose 1:50, 1:100 … (PDFs and DWFx sheets), or choose <strong>Calibrate…</strong>, click the two ends of a length you know and type it in metres. Images always need calibration. Changing the scale recalculates every dimension already on the page.</li>
+  </ol>
+  <h3>Measure</h3>
+  <ol>
+    <li>Choose the <strong>current dimension group</strong> in the list at the top left, or press <strong>+ Group</strong> (name, Area / Length / Count, optional height, colour).</li>
+    <li>Press <strong>Measure</strong>. The group's type decides what you measure:
+      <ul>
+        <li><strong>Area</strong>: click each corner; finish with Enter, a double-click or a right-click. <strong>Shift</strong> + two clicks measures a rectangle. The perimeter is kept too.</li>
+        <li><strong>Length</strong>: click along the line, finish the same way.</li>
+        <li><strong>Count</strong>: click each item.</li>
+      </ul></li>
+    <li><strong>Positive / Negative</strong>: negative dimensions are deductions (openings, voids). They are hatched and subtract from the group total.</li>
+    <li>The cursor snaps to drawing line ends (yellow square) and onto lines (yellow cross) and to the corners of other dimensions. Hold <strong>B</strong> to stop snapping. <strong>A</strong> turns angle snap (15° steps) on or off. <strong>Backspace</strong> removes the last point, <strong>Esc</strong> cancels, <strong>M</strong> measures a distance without saving it.</li>
+    <li>Navigate: mouse wheel zooms at the cursor, drag (or middle button, or Space + drag) pans, <strong>Extents</strong> fits the page, <strong>View &gt; Rotate</strong> turns the view.</li>
+  </ol>
+  <h3>Change dimensions</h3>
+  <ul>
+    <li>Click a dimension to select it (Ctrl+click adds, Shift+drag selects an area, Ctrl+A selects all). Hover to see its name, group and quantities.</li>
+    <li>Drag a selected dimension to move it, or drag one of its corner handles. Right-click for: Edit Dimension Properties, Move to Another Dimension Group, Change Multiplier, Make Negative / Positive, Rotate 90°, Mirror, Copy, Delete.</li>
+    <li><strong>Copy and paste</strong> (Ctrl+C, Ctrl+V) puts dimensions in the same place on another page or drawing, for example from Level 1 to Level 2.</li>
+    <li><strong>View &gt; Drawing Properties</strong>: the drawing multiplier repeats every dimension on the drawing (for example 10 for a typical floor used ten times). Effective multiplier = dimension multiplier × drawing multiplier.</li>
+    <li><strong>View</strong> also has Labels, Legend, Markups, Monochrome, Layers (PDFs with layers), Show every group or only the current one, and Picture.</li>
+    <li>Markups: right-click the drawing &gt; Create Markup. Drag the text or its pointer to move them; right-click to edit or delete.</li>
+  </ul>
+  <h3>Measure in 3D (point mode)</h3>
+  <ol>
+    <li>In the 3D toolbar press <strong>Measure</strong>. Under <em>Take-off into a dimension group</em>, choose the current group (or <strong>+ Group</strong>) and tick Negative if needed.</li>
+    <li><strong>Measure by points</strong>: click corners on the model for an area, points along it for a length, or items for a count. Enter, double-click or right-click finishes. Shift-click a face to take its whole area.</li>
+    <li><strong>Face area</strong>: one click takes the whole flat face of an element (for example a slab soffit or a wall face).</li>
+    <li>The dimensions are drawn on the model in the group's colour. In the 3D window, click a dimension in the <strong>Dimensions</strong> tab to show it on its drawing or in 3D.</li>
+  </ol>
+  <h3>Auto Count</h3>
+  <ol>
+    <li>Make a <strong>Count</strong> group current, then press <strong>Auto Count</strong>.</li>
+    <li>Press <strong>Capture</strong> and drag a box tightly around one symbol (a door, a light fitting). Set a working area or hide layers first to search only part of the drawing.</li>
+    <li>Press <strong>Search</strong>. Copies are found even when they are rotated or mirrored. <strong>Show matches above</strong> hides weak matches; <strong>Auto accept above</strong> accepts the close ones.</li>
+    <li>Yellow = to check, green = accepted, red = rejected. Click yellow once to accept or twice to reject; click green to reject; click red to accept. Shift-click a symbol it missed to add it.</li>
+    <li>Press <strong>Save accepted</strong>: each one becomes a count dimension. The captured symbol stays, so you can search other drawings with it.</li>
+  </ol>
+  <h3>Cutouts</h3>
+  <ol>
+    <li>Measure the large area as a positive dimension and the void or opening as a <strong>negative</strong> dimension.</li>
+    <li>Select the negative dimension (and the positive one too if several are stacked), right-click &gt; <strong>Convert to Cutout</strong>.</li>
+    <li>The negative dimension becomes a hole in the positive one (or a notch, or the positive one is split into two dimensions). Area and perimeter are recalculated.</li>
+    <li>To take a hole away, right-click inside it &gt; <strong>Remove Cutout</strong> (the negative dimension is not restored).</li>
+  </ol>
+  <h3>Rebar mode</h3>
+  <ol>
+    <li>Make a <strong>Length</strong> group current and press <strong>Rebar</strong>.</li>
+    <li>Click the two ends of the <strong>spacing line</strong> (the distance the bars cover), then the two ends of <strong>one bar</strong>.</li>
+    <li>Enter the <strong>spacing</strong> and any <strong>extra length per bar</strong> (laps, hooks). Bars = distance ÷ spacing + 1; total = bars × (bar length + extra). The covered bars are drawn faintly.</li>
+  </ol>
+  <h3>Compare two drawings</h3>
+  <ol>
+    <li><strong>View &gt; Compare with Another Drawing</strong>, choose the drawing and page.</li>
+    <li>This drawing shows in <span style="color:#10962a">green</span>, the other in <span style="color:#d62828">red</span>; lines in both look dark, so changes stand out. Use the sliders to fade either one.</li>
+    <li>Press <strong>Align</strong> and drag to line them up. You can measure while comparing: dimensions are saved on this drawing.</li>
+  </ol>
+  <h3>Working area</h3>
+  <p><strong>View &gt; Set Working Area</strong>, then drag a box: only that part of the drawing is shown, snapped to and searched by Auto Count, and Extents zooms to it. Use it for one unit on a typical floor plan, or a detail at another scale. <strong>Reset Working Area</strong> shows the whole page.</p>
+  <h3>DWG and DXF drawings</h3>
+  <p>Upload DWG or DXF files like any drawing and press <strong>Open &amp; measure</strong>. The first time, the server reads the file (this can take a minute). CAD drawings are measured 1:1 in the file's own units, so no scale or calibration is needed; check one known length with Distance. <strong>View &gt; Layers</strong> shows or hides CAD layers, and the cursor snaps only to visible layers. If a DWG cannot be read (some older versions), save it as DWG 2013-2018, DXF or PDF and upload it again.</p>
+
+  <h2 id="ai">9. AI assistant</h2>
   <figure><video controls preload="none" poster="media/04-ai.jpg?v=3" src="media/04-ai.webm?v=3"></video><figcaption>Video, 41 seconds, recorded inside Excel: ask the AI, see its working, add the result and check the take-off.</figcaption></figure>
   <ol>
     <li>Open the <strong>AI</strong> tab and describe what to measure, for example <em>"Formwork to beams on Level 1, soffit and sides less a 200 mm slab"</em>, or pick a common request.</li>
@@ -186,7 +256,7 @@
   </ol>
   <p>The AI chooses the method; the add-in calculates every number from the model. The AI receives element names, counts, levels and quantity names, never the file or the 3D geometry. It can be switched off per project.</p>
 
-  <h2 id="review">9. Checks (Review tab)</h2>
+  <h2 id="review">10. Checks (Review tab)</h2>
   <ul>
     <li><strong>Missing data</strong>: elements without 3D, without a level, concrete without a volume, beams without a size in the type name.</li>
     <li><strong>Measured status</strong>: green measured once, purple measured twice or more (possible double count), red not measured.</li>
@@ -194,7 +264,7 @@
     <li><strong>AI take-off check</strong>: a review for missing items, odd values, unit mistakes and double counting.</li>
   </ul>
 
-  <h2 id="revisions">10. Revisions</h2>
+  <h2 id="revisions">11. Revisions</h2>
   <figure><video controls preload="none" poster="media/05-revisions-output.jpg?v=3" src="media/05-revisions-output.webm?v=3"></video><figcaption>Video, 1.3 minutes, recorded inside Excel: restore saved groups, upload a revision, compare, update, BOQ and audit PDF.</figcaption></figure>
   <ol>
     <li>Upload the new DWFx with the <em>same model name</em>, so it becomes the next version, and open it.</li>
@@ -202,14 +272,14 @@
     <li><strong>Update selected groups</strong> re-measures your take-off on the new version by Revit ID. Formulas and your assumption values stay; groups made from a template or the AI also pick up new elements. A <em>Change log</em> sheet records the before and after totals.</li>
   </ol>
 
-  <h2 id="output">11. BOQ and audit PDF</h2>
+  <h2 id="output">12. BOQ and audit PDF</h2>
   <ul>
     <li><strong>Build BOQ sheet</strong>: choose the totals that become BOQ items (final results are ticked by default to avoid double counting). Quantities link to the take-off totals, so the BOQ updates with them. Rates you type are kept when you rebuild. Tick the AI option for item descriptions in your house style.</li>
     <li><strong>Create audit PDF</strong>: method, assumptions, element counts, totals and a 3D picture for every group, saved to the project.</li>
     <li><strong>Project › Saved take-off groups › Restore</strong> rebuilds the Take-off sheet in any workbook.</li>
   </ul>
 
-  <h2 id="first">12. Your first take-off, step by step</h2>
+  <h2 id="first">13. Your first take-off, step by step</h2>
   <ol>
     <li>Ribbon <strong>DWFx Measure › Projects</strong>, sign in.</li>
     <li><strong>New project</strong> › name › <strong>Create project</strong>.</li>
@@ -219,7 +289,7 @@
     <li><strong>Review › Output › Build BOQ sheet</strong>. Type a rate in a yellow cell to see the amount.</li>
   </ol>
 
-  <h2 id="admin">13. For administrators</h2>
+  <h2 id="admin">14. For administrators</h2>
   <ul>
     <li><strong>Users</strong> are lines in the Railway variable <code>APP_USERS</code>: <code>email | full name | role | password hash</code> (role is <em>admin</em> or <em>user</em>). Make the hash in <strong>Admin › Create a password hash</strong>. Changing a password or removing a line signs that user out everywhere.</li>
     <li><strong>AI assistant</strong>: choose the provider and model, the daily limit per user, and run the 50-request QS test set after any change (target 45 of 50).</li>
@@ -228,7 +298,7 @@
     <li><strong>Backups</strong>: the database is backed up every day (last 30 kept); <em>Back up database now</em> makes one immediately. <em>Export ZIP</em> on a project downloads all its files.</li>
   </ul>
 
-  <h2 id="trouble">14. Problems and answers</h2>
+  <h2 id="trouble">15. Problems and answers</h2>
   <table class="ref">
     <tr><th>Problem</th><th>What to do</th></tr>
     <tr><td>The ribbon tab is missing or shows old buttons</td><td>Clear the web add-ins cache (see <a href="#install">Install</a>), restart Excel, add the add-in again. The ribbon needs Microsoft 365 Excel.</td></tr>

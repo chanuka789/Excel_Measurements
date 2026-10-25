@@ -9,10 +9,11 @@ import { q, one, tx, audit } from './db.js';
 import * as store from './storage.js';
 import { enqueue } from './jobs.js';
 import { backupDatabase, dataKey } from './processing.js';
-import { login, logout, requireUser, requireAdmin, hashPassword, syncUsers, publicUser } from './auth.js';
+import { login, logout, requireUser, requireAdmin, hashPassword, syncUsers, publicUser, downloadTicket } from './auth.js';
 import { json, wrap, clean, safeName, uuidOk, HttpError, fail, need, versionProject, RANK } from './http.js';
 import { registerFeatures } from './features.js';
 import { registerDims } from './dims.js';
+import { registerCad } from './cad.js';
 import { registerLink } from './link.js';
 import { registerLocal } from './localproc.js';
 import { loginGuard, loginFailed, loginSucceeded, apiLimit } from './security.js';
@@ -31,6 +32,12 @@ api.use(wrap(requireUser));
 api.use(apiLimit());
 api.post('/auth/logout', wrap(async (req, res) => { await logout(req.token); res.json({ ok: true }); }));
 api.get('/auth/me', (req, res) => res.json({ user: req.user }));
+/** A one-time link to a file the signed-in user can already download (used by Excel desktop). */
+api.post('/download-ticket', json, (req, res) => {
+  const path = String(req.body?.path || '');
+  if (!/^\/[A-Za-z0-9/_.-]{1,300}$/.test(path) || path.includes('..')) return res.status(400).json({ error: 'Not a file link.' });
+  res.json({ url: 'api' + path + '?dt=' + downloadTicket(req.user.id, path) });
+});
 api.get('/users/directory', wrap(async (req, res) => {
   res.json({ users: await q(`SELECT id, name, email FROM users WHERE active ORDER BY name`) });
 }));
@@ -307,6 +314,7 @@ api.post('/admin/backup', requireAdmin, wrap(async (req, res) => { res.json({ ke
 
 registerFeatures(api);
 registerDims(api);
+registerCad(api);
 registerLink(api);
 registerLocal(api);
 

@@ -70,7 +70,7 @@ export class Viewer {
     this.root = new THREE.Group(); this.scene.add(this.root);
     this.controls = this.makeControls();
     this.clip = []; this.sectionOn = false;
-    this.mode = 'orbit';                // orbit | box | measure | area
+    this.mode = 'orbit';                // orbit | box | measure | area | points (3D point-mode take-off)
     this.dirty = true; this.edgesWanted = true; this.xray = false;
     this.state = { selected: new Set(), isVisible: () => true, colorOf: () => '#8a9aa6' };
     this.lastColor = null; this.hoverK = -1;
@@ -167,7 +167,7 @@ export class Viewer {
     this.setView('iso', false);
   }
   clear() {
-    this.root.clear(); this.n = 0; this.kOf = new Map(); this.measureClear();
+    this.root.clear(); this.n = 0; this.kOf = new Map(); this.measureClear(); this.pointsClear(); this.setDims3d([]);
     for (const gg of [this.geoSolid, this.geoGhost, this.geoEdge, this.geoPick]) gg?.dispose();
     this.dirty = true;
   }
@@ -398,6 +398,7 @@ export class Viewer {
     this.controls.enabled = mode !== 'box';
     this.renderer.domElement.style.cursor = mode === 'orbit' ? '' : 'crosshair';
     if (mode !== 'measure' && mode !== 'area') this.measureClear();
+    if (mode !== 'points') this.pointsClear();
     this.cb.onChange?.();
   }
   bindEvents() {
@@ -421,6 +422,7 @@ export class Viewer {
         return;
       }
       if (e.buttons) return;
+      if (this.mode === 'points') this.P && (this.P.hoverEvt = e);
       this.queueHover(e);
     });
     el.addEventListener('pointerleave', () => { this.setHover(-1); this.tip.hidden = true; });
@@ -437,13 +439,15 @@ export class Viewer {
       const h = this.hit(e);
       if (this.mode === 'measure') return this.measureClick(h, e);
       if (this.mode === 'area') return this.areaClick(h);
+      if (this.mode === 'points') return this.pointsClick(h, e);
       this.cb.onPick?.(h ? h.id : null, add);
     });
-    el.addEventListener('dblclick', (e) => { const h = this.hit(e); if (h) this.fit([h.id]); });
+    el.addEventListener('dblclick', (e) => { if (this.mode === 'points') { this.pointsFinish(); return; } const h = this.hit(e); if (h) this.fit([h.id]); });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       if (rdown && Math.hypot(e.clientX - rdown.x, e.clientY - rdown.y) > 5) { rdown = null; return; }   // right-drag pans
       rdown = null;
+      if (this.mode === 'points' && this.P?.pts.length) { this.pointsFinish(); return; }   // right-click finishes, like CostX
       const h = this.hit(e); this.cb.onContext?.(h ? h.id : null, e.clientX, e.clientY);      // empty space too (view menu)
     });
     el.tabIndex = 0;
@@ -452,7 +456,9 @@ export class Viewer {
       const views = { 1: 'top', 2: 'front', 3: 'right', 4: 'back', 5: 'left', 6: 'bottom', 7: 'iso' };
       if (views[e.key]) { this.setView(views[e.key]); e.preventDefault(); }
       else if (e.key === 'f' || e.key === 'F') { this.fit(); e.preventDefault(); }
-      else if (e.key === 'Escape') { if (this.areaCb) this.cancelArea(); else this.setMode('orbit'); }
+      else if (e.key === 'Escape') { if (this.areaCb) this.cancelArea(); else if (this.mode === 'points' && this.P?.pts.length) { this.P.pts = []; this.drawPoints(); } else this.setMode('orbit'); }
+      else if (e.key === 'Enter' && this.mode === 'points') { this.pointsFinish(); e.preventDefault(); }
+      else if (e.key === 'Backspace' && this.mode === 'points') { this.P?.pts.pop(); this.drawPoints(); e.preventDefault(); }
       else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '-', '='].includes(e.key)) {
         const off = this.camera.position.clone().sub(this.controls.target);
         const s = new THREE.Spherical().setFromVector3(this.up === 1 ? off : new THREE.Vector3(off.x, off.z, -off.y));
@@ -477,6 +483,7 @@ export class Viewer {
       if (this.cubeHit(ev)) { this.setHover(-1); this.tip.hidden = true; this.renderer.domElement.style.cursor = 'pointer'; return; }
       this.renderer.domElement.style.cursor = this.mode === 'orbit' ? '' : 'crosshair';
       const h = this.hit(ev);
+      if (this.mode === 'points' && this.P) { this.P.cursor = h ? this.snap(h, ev) : null; this.drawPoints(); }
       this.setHover(h ? h.k : -1);
       const label = h ? this.cb.labelOf?.(h.id) : null;
       if (label) {
@@ -565,9 +572,8 @@ export class Viewer {
     this.cb.onMeasure?.(this.mText, pts.length === 2 ? { distance: pts[0].distanceTo(pts[1]) } : null);
     this.dirty = true;
   }
-  areaClick(h) {
-    if (!h) return;
-    // area of the flat face clicked: every triangle of the element on the same plane
+  /** Every triangle of the hit element on the same plane as the clicked one: { area, tris: [Vector3...] } (local coordinates). */
+  faceAt(h) {
     const k = h.k, p = this.pos, T = this.tri;
     const tri = (t) => { const a = T[t * 3] * 3, b = T[t * 3 + 1] * 3, c = T[t * 3 + 2] * 3;
       const A = new THREE.Vector3(p[a], p[a + 1], p[a + 2]), B = new THREE.Vector3(p[b], p[b + 1], p[b + 2]), C = new THREE.Vector3(p[c], p[c + 1], p[c + 2]);
@@ -581,6 +587,11 @@ export class Viewer {
       const nn = g.n.clone().divideScalar(len);
       if (Math.abs(nn.dot(n0)) > 0.9998 && Math.abs(n0.dot(g.A) - d0) < 0.002) { area += len / 2; keep.push(g.A, g.B, g.C); }
     }
+    return { area, tris: keep };
+  }
+  areaClick(h) {
+    if (!h) return;
+    const { area, tris: keep } = this.faceAt(h);
     this.measureClear();
     const geo = new THREE.BufferGeometry().setFromPoints(keep);
     this.mLine = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#c50f1f', transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthTest: false }));
@@ -589,6 +600,96 @@ export class Viewer {
     this.mAt = h.point.clone();
     this.cb.onMeasure?.(this.mText, { id: h.id, area });
     this.dirty = true;
+  }
+  // ------------------------------------------------------------------ 3D point mode (take-off into dimension groups)
+  /**
+   * shape: 'area' (click corners; Enter, double-click or right-click finishes; Shift-click takes the whole flat face),
+   * 'length' (click points along it), 'count' (one click per item) or 'face' (one click = the whole flat face).
+   * onDone({ shape, pts (world, flat), value, len, id }) is called for each finished dimension. color: preview colour.
+   */
+  startPoints(shape, { onDone, color = '#107c10', onHint } = {}) {
+    this.setMode('points');
+    this.P = { shape, onDone, color, onHint, pts: [], cursor: null };
+    this.renderer.domElement.focus();
+    this.drawPoints();
+  }
+  stopPoints() { if (this.mode === 'points') this.setMode('orbit'); }
+  world(v) { return [v.x + this.origin[0], v.y + this.origin[1], v.z + this.origin[2]]; }
+  local(a, i = 0) { return new THREE.Vector3(a[i] - this.origin[0], a[i + 1] - this.origin[1], a[i + 2] - this.origin[2]); }
+  pointsClick(h, e) {
+    const P = this.P; if (!P || !h) return;
+    if (P.shape === 'face' || (P.shape === 'area' && e.shiftKey && !P.pts.length)) {
+      const f = this.faceAt(h);
+      const tris = f.tris.length * 3 <= 3000 ? f.tris.flatMap(v => this.world(v)) : [];          // keep the outline only when it is small enough to store
+      P.onDone?.({ shape: 'face', pts: tris, value: f.area, id: h.id });
+      return;
+    }
+    const p = this.snap(h, e);
+    if (P.shape === 'count') { P.onDone?.({ shape: 'count', pts: this.world(p), value: 1, id: h.id }); return; }
+    P.pts.push(p); this.drawPoints();
+  }
+  pointsFinish() {
+    const P = this.P; if (!P || !P.pts.length) return;
+    const pts = P.pts.filter((p, i) => !i || p.distanceTo(P.pts[i - 1]) > 1e-9).flatMap(v => this.world(v));
+    const n = pts.length / 3;
+    if ((P.shape === 'area' && n < 3) || (P.shape === 'length' && n < 2)) { P.onHint?.(P.shape === 'area' ? 'An area needs at least 3 points.' : 'A length needs at least 2 points.'); return; }
+    let value = 0, len = 0;
+    const V = (i) => new THREE.Vector3(pts[3 * i], pts[3 * i + 1], pts[3 * i + 2]);
+    for (let i = 1; i < n; i++) len += V(i).distanceTo(V(i - 1));
+    if (P.shape === 'area') {
+      len += V(n - 1).distanceTo(V(0));
+      const nn = new THREE.Vector3();
+      for (let i = 0; i < n; i++) { const a = V(i), b = V((i + 1) % n); nn.x += (a.y - b.y) * (a.z + b.z); nn.y += (a.z - b.z) * (a.x + b.x); nn.z += (a.x - b.x) * (a.y + b.y); }
+      value = nn.length() / 2;
+    } else value = len;
+    P.pts = []; this.drawPoints();
+    P.onDone?.({ shape: P.shape, pts, value, ...(P.shape === 'area' ? { len } : {}) });
+  }
+  pointsClear() { if (this.pLine) { this.scene.remove(this.pLine); this.pLine = null; } this.P = null; this.dirty = true; }
+  drawPoints() {
+    if (this.pLine) { this.scene.remove(this.pLine); this.pLine = null; }
+    const P = this.P; if (!P) return;
+    const pts = [...P.pts, ...(P.cursor && P.shape !== 'count' && P.shape !== 'face' ? [P.cursor] : [])];
+    const grp = new THREE.Group(); grp.renderOrder = 11;
+    const mat = new THREE.LineBasicMaterial({ color: P.color, depthTest: false });
+    if (pts.length >= 2) grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(P.shape === 'area' ? [...pts, pts[0]] : pts), mat));
+    const dots = [...pts]; if (P.cursor && !dots.includes(P.cursor)) dots.push(P.cursor);
+    if (dots.length) grp.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(dots), new THREE.PointsMaterial({ color: P.color, size: 8, sizeAttenuation: false, depthTest: false })));
+    grp.children.forEach(c => { c.renderOrder = 11; });
+    this.pLine = grp; this.scene.add(grp);
+    if (P.pts.length && pts.length >= 2) {
+      let l = 0; for (let i = 1; i < pts.length; i++) l += pts[i].distanceTo(pts[i - 1]);
+      this.mText = `${P.shape === 'area' ? 'Perimeter so far' : 'Length'} ${l.toFixed(3)} m · ${P.pts.length} point(s)`; this.mAt = pts[pts.length - 1].clone();
+    } else { this.mText = null; if (this.mlabel) this.mlabel.hidden = true; }
+    this.dirty = true;
+  }
+  /** Show measured 3D dimensions: list of { id, shape, pts (world, flat), color, neg, sel }. */
+  setDims3d(list = []) {
+    if (this.dimsGroup) { this.scene.remove(this.dimsGroup); this.dimsGroup.traverse(o => { o.geometry?.dispose?.(); o.material?.dispose?.(); }); this.dimsGroup = null; }
+    if (!this.n || !list.length) { this.dirty = true; return; }
+    const G = new THREE.Group();
+    for (const d of list) {
+      const pts = []; for (let i = 0; i + 2 < (d.pts || []).length; i += 3) pts.push(this.local(d.pts, i));
+      if (!pts.length) continue;
+      const color = d.sel ? '#0078d4' : d.color || '#107c10';
+      const add = (o) => { o.renderOrder = 9; G.add(o); };
+      if (d.shape === 'count') add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(pts), new THREE.PointsMaterial({ color, size: d.sel ? 14 : 11, sizeAttenuation: false, depthTest: false })));
+      else if (d.shape === 'length') add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, depthTest: false })));
+      else {
+        let tris = [];
+        if (d.shape === 'face') tris = pts;
+        else if (pts.length >= 3) {
+          // triangulate the polygon in its own plane
+          const n = new THREE.Vector3(); for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; n.x += (a.y - b.y) * (a.z + b.z); n.y += (a.z - b.z) * (a.x + b.x); n.z += (a.x - b.x) * (a.y + b.y); }
+          n.normalize(); const u = Math.abs(n.x) < 0.9 ? new THREE.Vector3(1, 0, 0).cross(n).normalize() : new THREE.Vector3(0, 1, 0).cross(n).normalize(), w = n.clone().cross(u);
+          const flat = pts.map(p => new THREE.Vector2(p.dot(u), p.dot(w)));
+          for (const t of THREE.ShapeUtils.triangulateShape(flat, [])) tris.push(pts[t[0]], pts[t[1]], pts[t[2]]);
+          add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, depthTest: false })));
+        }
+        if (tris.length) add(new THREE.Mesh(new THREE.BufferGeometry().setFromPoints(tris), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: d.neg ? 0.25 : d.sel ? 0.55 : 0.4, side: THREE.DoubleSide, depthTest: false, depthWrite: false })));
+      }
+    }
+    this.dimsGroup = G; this.scene.add(G); this.dirty = true;
   }
   measureClear() {
     if (this.mLine) { this.scene.remove(this.mLine); this.mLine.geometry.dispose(); this.mLine = null; }

@@ -83,11 +83,35 @@ export async function logout(token) { if (token) await q(`DELETE FROM sessions W
 
 const bearer = (req) => (req.get('authorization') || '').replace(/^Bearer\s+/i, '') || null;
 
+/** One-time download links (2 minutes) for Excel desktop, whose web view cannot save a file from the page:
+ * the file opens in the user's browser instead. A ticket works once, for one GET path, for the user who asked. */
+const tickets = new Map();
+export function downloadTicket(userId, path) {
+  const now = Date.now();
+  for (const [k, t] of tickets) if (t.exp < now) tickets.delete(k);
+  if (tickets.size > 5000) tickets.clear();
+  const id = crypto.randomBytes(24).toString('base64url');
+  tickets.set(id, { userId, path, exp: now + 120000 });
+  return id;
+}
+function useTicket(req) {
+  const id = req.method === 'GET' && typeof req.query?.dt === 'string' ? req.query.dt : null;
+  const t = id && tickets.get(id);
+  if (!t) return null;
+  tickets.delete(id);
+  return t.exp > Date.now() && t.path === req.path ? t.userId : null;
+}
+
 /** Express middleware: requires a valid session; sets req.user. */
 export async function requireUser(req, res, next) {
   try {
     const t = bearer(req);
-    if (!t) return res.status(401).json({ error: 'Please sign in.' });
+    if (!t) {
+      const uid = useTicket(req);
+      const u = uid && await one(`SELECT * FROM users WHERE id=$1 AND active`, [uid]);
+      if (u) { req.user = publicUser(u); return next(); }
+      return res.status(401).json({ error: 'Please sign in.' });
+    }
     const u = await one(`SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id
                          WHERE s.token_hash=$1 AND s.expires_at > now() AND u.active`, [sha(t)]);
     if (!u) return res.status(401).json({ error: 'Your session has ended. Please sign in again.' });

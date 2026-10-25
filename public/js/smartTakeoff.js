@@ -4,7 +4,7 @@ import { selectIds } from './model.js';
 import { CATALOGUES, DEFAULT_PROFILE, PRESETS, classify, elementKey, lookup, validateProfile, referenceLabel } from './standards.js';
 import { parameterColumns, buildSchedule, csvText } from './scheduleExporter.js';
 import { buildLedger, groupLedger, boqLayout, basisLayout, elementalLayout, takeoffLayout } from './standardsBOQ.js';
-import { writeLayout, safeText } from './excel.js';
+import { writeLayout, safeText, forgetSmartLinks } from './excel.js';
 
 let step = 1, profile = { ...DEFAULT_PROFILE }, selectedColumns = new Set(['type', 'mark', 'count']), mode = 'grouped', allocations = {}, templateList = [], busy = false;
 let filter = { discipline: '', category: '', level: '', zone: '' }, loadedContext = '';
@@ -35,7 +35,7 @@ function ledger() { return buildLedger(selected(), profile, { context: context()
 
 export function renderSmart() {
   const host = $('smartBody'); if (!host) return; loadState();
-  if (!S.data) { host.innerHTML = '<div class="empty">Open a model in Project & Models to start Smart Takeoff.</div>'; return; }
+  if (!S.data) { host.innerHTML = '<div class="empty">Open a model in Project &amp; Models to start Smart Takeoff.</div>'; return; }
   const els = selected();
   host.innerHTML = `<div class="smart-header"><h2>Smart Takeoff</h2><p class="muted">Select, auto-classify and export with a clear measurement basis.</p></div>
     <nav class="smart-steps" aria-label="Takeoff steps">${['Filter & Select', 'Classify & Review', 'Export / Link'].map((t, i) => `<button data-step="${i + 1}" ${step === i + 1 ? 'aria-current="step"' : ''}>${i + 1}. ${t}</button>`).join('')}</nav>
@@ -139,6 +139,7 @@ async function writeLinks(groups, scope) {
   const rows = [...previous, ...groups.flatMap(g => g.links.map((link, i) => [g.key, link, g.ids?.[i] ?? g.members?.[i] ?? '', context().versionId, g.sheet || '', g.row || '', scope]))];
   await writeLayout(textLayout('Smart Links', 'MODEL LINK REGISTRY', ['Row key', 'Element key', 'Element ID', 'Revision', 'Worksheet', 'Excel row', 'Scope'], rows), { activate: false });
   await Excel.run(async ctx => { ctx.workbook.worksheets.getItem('Smart Links').visibility = Excel.SheetVisibility.hidden; await ctx.sync(); });
+  forgetSmartLinks();
 }
 async function exportWorkbook() {
   const { records, review } = ledger(), groups = groupLedger(records, profile), keep = new Map(), quantities = new Map();

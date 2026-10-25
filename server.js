@@ -28,6 +28,9 @@ app.use(requestId);
 app.use(securityHeaders(path.join(here, 'public')));
 app.use('/vendor/three', express.static(path.join(here, 'node_modules/three')));
 app.use('/vendor/bvh', express.static(path.join(here, 'node_modules/three-mesh-bvh/src')));
+app.use('/vendor/polyclip', express.static(path.join(here, 'node_modules/polygon-clipping/dist')));          // cutouts (MIT)
+app.use('/vendor/pdfjs-fonts', express.static(path.join(here, 'node_modules/pdfjs-dist/standard_fonts')));   // Helvetica, Times... for PDFs that do not embed them
+app.use('/vendor/pdfjs-cmaps', express.static(path.join(here, 'node_modules/pdfjs-dist/cmaps')));
 app.use('/vendor/pdfjs', express.static(path.join(here, 'node_modules/pdfjs-dist/build')));
 // processing on the user's computer: the mesh decoder, Pyodide (Python + numpy + shapely in the browser) and the scripts
 app.use('/vendor/dwf-viewer', express.static(path.join(here, 'node_modules/dwf-viewer/dist')));

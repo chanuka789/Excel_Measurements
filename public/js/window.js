@@ -5,16 +5,21 @@ import { $, esc, api, session, status } from './core.js';
 import { LinkChannel } from './link.js';
 import { Viewer, parseBin, fromLegacy } from './viewer.js';
 import { Toolbar } from './vtools.js';
-import { fmt, dimsOf } from './engine.js';
+import { fmt, dimsOf, uLabel } from './engine.js';
 import { openDrawing, canView } from './drawings.js';
 import { menu, closeMenu, dialog } from './wui.js';
-import { initTree, onProjectLoaded, refresh as refreshTree, loadTree, importObjects, createGroupFor, currentGroup, onScheduleDone } from './wtree.js';
+import { initTree, onProjectLoaded, refresh as refreshTree, loadTree, importObjects, createGroupFor, currentGroup, onScheduleDone, tkSource } from './wtree.js';
+import { TakeoffStore, drawingKey } from './tkstore.js';
+import { DrawingTakeoff, newGroupDialog, measurableDrawings } from './takeoff2d.js';
+import { PointTakeoff } from './takeoff3d.js';
 import { initPanel, renderPanel, loadZones } from './wpanel.js';
 
 const W = { zones: [], zoneOf: new Map(), inExcel: true, ticked: new Set(), hidden: new Set(), isolated: false, level: '', byId: new Map(), E: [], colorMap: null, catColor: new Map(),
   projectId: null, versionId: null, levels: [], side: 'drawings', project: null, mode: 'pane', groupColor: null, drawing: null, measure: null, label: '' };
 const PALETTE = ['#8a9aa6', '#c98a2b', '#2f6fa3', '#b5473a', '#6b5b8c', '#7a8a5a', '#3f8f8a', '#a8794f', '#5d6f8f', '#9a5d7a', '#6f8f3f', '#4f7fa8', '#b0905a', '#7d7d7d'];
-let office = false, V, TB, started = false;
+let office = false, V, TB, PT, started = false;
+/** Dimension groups (from the project tree) and drawing settings for on-screen take-off. */
+const STORE = new TakeoffStore({ projectId: () => W.projectId, canEdit: () => ['owner', 'editor'].includes(W.project?.my_role), source: tkSource });
 
 // ------------------------------------------------------------------ messaging with the task pane
 // dialog: Office dialog (messageParent); pop-up: window.opener; app: server link (a normal window with minimise/maximise)
@@ -106,6 +111,8 @@ async function init(m) {
     await loadZones();
     renderSide();
     await onProjectLoaded();
+    await STORE.load().catch(() => {});
+    PT?.refresh();
   } catch (err) { $('vload').textContent = 'Could not load the model: ' + err.message; }
 }
 function levels(g) {
@@ -157,6 +164,56 @@ async function openVersion(vid, label) {
 function openDrawingSide(d) {
   W.drawing = d; W.side = 'drawings';
   showSidePanel(true); renderSide();
+}
+
+// ------------------------------------------------------------------ centre tabs: the 3D model and drawings opened to measure (CostX)
+const TABS = []; let curTab = '3d';
+function renderCTabs() {
+  const bar = $('ctabs');
+  bar.innerHTML = `<button class="ct" role="tab" data-ct="3d" aria-selected="${curTab === '3d'}"><span class="nm">3D model</span></button>` +
+    TABS.map(t => `<span class="ct" role="tab" data-ct="${esc(t.key)}" aria-selected="${curTab === t.key}" tabindex="0" title="${esc(t.d.name)}"><span class="nm">${esc(t.d.kind === 'sheet' ? 'Sheet: ' + t.d.name : t.d.name)}</span><button class="x" data-cx="${esc(t.key)}" aria-label="Close ${esc(t.d.name)}">×</button></span>`).join('');
+  bar.querySelectorAll('[data-ct]').forEach(b => { b.onclick = (e) => { if (!e.target.closest('[data-cx]')) showCTab(b.dataset.ct); }; b.onkeydown = (e) => { if (e.key === 'Enter') showCTab(b.dataset.ct); }; });
+  bar.querySelectorAll('[data-cx]').forEach(b => b.onclick = () => closeCTab(b.dataset.cx));
+}
+function showCTab(key) {
+  curTab = TABS.some(t => t.key === key) ? key : '3d';
+  const in3d = curTab === '3d';
+  $('vbar').hidden = !in3d; $('vstage').hidden = !in3d; $('w2d').hidden = in3d;
+  TABS.forEach(t => { t.host.hidden = t.key !== curTab; });
+  if (in3d) V.resize(); else { PT?.stop(); TABS.find(t => t.key === curTab)?.tk.fit(); }
+  renderCTabs();
+}
+function closeCTab(key) {
+  const i = TABS.findIndex(t => t.key === key); if (i < 0) return;
+  TABS[i].tk.destroy(); TABS[i].host.remove(); TABS.splice(i, 1);
+  if (curTab === key) curTab = TABS[i - 1]?.key || TABS[i]?.key || '3d';
+  showCTab(curTab);
+}
+/** Open a drawing in the centre to measure on it (or switch to it when it is already open). */
+async function openDrawingCentre(d) {
+  if (!W.projectId) return openDrawingSide(d);
+  const key = drawingKey(d);
+  let t = TABS.find(x => x.key === key);
+  if (!t) {
+    const host = document.createElement('div'); $('w2d').append(host);
+    const tk = new DrawingTakeoff(host, STORE, { onDimSelect: () => {}, drawings: () => measurableDrawings(W.project) });
+    t = { key, d, host, tk, ready: null }; TABS.push(t);
+    showCTab(key);
+    t.ready = tk.open(d);
+  } else showCTab(key);
+  await t.ready;
+  return t;
+}
+/** A measured dimension chosen in the Dimensions list: show it on its drawing, or highlight it in 3D. */
+async function focusMeasured(m) {
+  const s = m.src; if (!s) return;
+  if (s.t === '3d') { showCTab('3d'); if (PT) { PT.sel = new Set([m.id]); PT.refresh(); } return; }
+  let d = null;
+  if (s.t === 'd') { const id = s.key.slice(2); d = (W.project?.drawings || []).find(x => x.id === id); }
+  else { const [, vid, idx] = s.key.split(':'); const sh = (W.project?.models || []).flatMap(x => x.versions).find(v => v.id === vid)?.stats?.sheets?.find(x => String(x.index) === idx); d = { kind: 'sheet', versionId: vid, index: Number(idx), name: sh?.name || s.name || 'Sheet' }; }
+  if (!d) return status('The drawing of this dimension is no longer in the project.', 'warn');
+  const t = await openDrawingCentre(d);
+  if (t && !(await t.tk.focusDim(m.id))) status('Could not find this dimension on its drawing.', 'warn');
 }
 
 // ------------------------------------------------------------------ the right-click menu on an object
@@ -267,6 +324,7 @@ const HOST = {
   async deleteView(v) { await api('DELETE', `/views/${v.id}`); },
   status,
   openWindow: null,
+  takeoff: () => (W.projectId && PT ? { store: STORE, pt: PT, newGroup: () => newGroupDialog(STORE, status) } : null),
 };
 function syncPane() { send({ type: 'windowState', ticked: [...W.ticked], hidden: [...W.hidden], isolated: W.isolated, level: W.level }); }
 
@@ -286,7 +344,7 @@ function renderSide() {
     const qs = Object.entries(e.q || {}).sort((a, b) => a[0].localeCompare(b[0]));
     body.innerHTML = `<strong>${esc(e.type)}</strong><div class="hint">${esc(e.cat)} › ${esc(e.fam)} · [${e.id}] · ${esc(e.level || '')}${W.ticked.size > 1 ? ` · first of ${W.ticked.size} selected` : ''}</div>
       ${dimsOf(e.type).length ? `<p class="hint">Size from type name: ${dimsOf(e.type).map(d => d.toFixed(3)).join(' x ')} m</p>` : ''}
-      <table class="q"><tbody>${qs.map(([k, [v, u]]) => `<tr><td>${esc(k)}</td><td class="v">${fmt(v, u)} ${esc(u)}</td></tr>`).join('')}</tbody></table>
+      <table class="q"><tbody>${qs.map(([k, [v, u]]) => `<tr><td>${esc(k)}</td><td class="v">${fmt(v, u)} ${esc(uLabel(u))}</td></tr>`).join('')}</tbody></table>
       <h4>All properties</h4><table class="q"><tbody>${Object.entries(e.props || {}).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="v" style="white-space:normal">${esc(v)}</td></tr>`).join('')}</tbody></table>`;
     return;
   }
@@ -329,6 +387,8 @@ function start() {
     labelOf: (id) => { const e = W.byId.get(id); return e ? `${e.type} · ${e.level || ''} [${e.id}]` : ''; },
   });
   TB = new Toolbar($('vbar'), $('vstage'), V, HOST);
+  PT = new PointTakeoff(V, STORE, { versionId: () => W.versionId, label: () => W.label, status });
+  renderCTabs();
   $('wSide').onclick = () => { showSidePanel($('wside').hidden); renderSide(); };
   $('wLeft').onclick = () => {
     const on = $('wleft').hidden; $('wleft').hidden = !on; $('lgrip').hidden = !on; $('wmain').classList.toggle('left', on);
@@ -340,7 +400,7 @@ function start() {
   grip($('hgrip'), (e) => { const r = $('wleft').getBoundingClientRect(); const h = Math.max(120, Math.min(r.height - 160, e.clientY - r.top)); $('wleft').style.setProperty('--top', h + 'px'); });
   // H hides the selected geometry (shortcut); Esc closes menus
   document.addEventListener('keydown', (e) => {
-    if (e.target.closest?.('input,select,textarea,#dialog:not([hidden])')) return;
+    if (e.target.closest?.('input,select,textarea,#dialog:not([hidden]),.tk')) return;
     if ((e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey && W.ticked.size) { e.preventDefault(); hideIds([...W.ticked]); }
     if (e.key === 'Escape') closeMenu();
   });
@@ -349,11 +409,11 @@ function start() {
   if (dark === 'dark' || dark === 'light') document.documentElement.dataset.theme = dark;
   V.setTheme();
   initTree({ W, V, send, host: HOST, paint, setIds, showOnly, hideIds, isolate, setGroupColors, openVersion,
-    openDrawing: openDrawingSide, lastMeasure: () => W.measure });
+    openDrawing: openDrawingCentre, openDrawingSide, focusMeasured, onTreeChange: () => STORE.emit('groups'), lastMeasure: () => W.measure });
   initPanel({ W, get V() { return V; }, askPane, send, setIds, isolate, hideIds, showAll, paint, loadTree });
 }
 start();
-window.__win = { W, get V() { return V; }, setIds };       // used by the automated browser tests
+window.__win = { W, get V() { return V; }, setIds, STORE, TABS, openDrawingCentre, get PT() { return PT; } };       // used by the automated browser tests
 const ready = MODE !== 'app' && typeof Office !== 'undefined' ? Office.onReady().catch(() => ({})) : Promise.resolve({});
 ready.then(async () => {
   if (MODE === 'app') { if (!(await startLink())) return; }
