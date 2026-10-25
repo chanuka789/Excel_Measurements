@@ -1,8 +1,9 @@
 # DWFx Measure - Excel add-in
 
 View any Revit DWFx model (architecture, structure, interiors, MEP) in 3D inside Excel, browse its elements
-by category, family and type, and send measurements to a **Take-off** sheet with live formulas. Models, drawings and saved
-take-offs are stored on the server per user and per project. An optional AI assistant works out QS
+by category, family and type, and send measurements to a **Take-off** sheet with live formulas. Drawings and models
+stay **on your computer** and are processed there; the server (Railway) stores only the projects, the team, the
+measurements and saved take-offs, plus each file's name, size and fingerprint. An optional AI assistant works out QS
 measurement methods; the add-in always calculates the numbers itself from the model.
 
 Live: https://dwfx-addin-production.up.railway.app (Railway project `excel-measurements`, deploys on every push to `main`).
@@ -25,7 +26,7 @@ Generated BOQs are **drafts requiring QS validation**, not a claim that every me
 Run `npm run standards` after updating the source-checked JSON catalogues. Run `npm run manifest` after changing ribbon definitions. Reload or sideload the v0.6 manifest in Excel to see the five ribbon controls.
 
 1. **Sign in** with the email and password your administrator gave you.
-2. **Project** tab: create a project, upload DWFx models (the same model name makes a new version), drawings
+2. **Project** tab: create a project, add DWFx models (the same model name makes a new version) and drawings
    (PDF and images open in the built-in viewer; 2D sheets inside a DWFx are converted automatically), add
    colleagues as Owner / Editor / Viewer, project settings (AI off switch, opening deduction threshold, BOQ house
    style), project QS rules, export as ZIP.
@@ -102,12 +103,29 @@ colleague@company.com | A Colleague | user | scrypt$...
 - Saving the variable restarts the app and updates users. Removing a line disables that user and signs them out;
   their projects stay. Microsoft sign-in is planned as an optional later step and is not configured.
 
+## Files stay on your computer
+- **Add DWFx** and **Add** (drawings) keep the files in the add-in's library on this computer (the browser's
+  IndexedDB for the add-in's address, shared by the task pane and the 3D window). Models are processed here with this
+  computer's power (Python in the browser, Pyodide), so nothing heavy runs on Railway and the model opens quickly next time.
+- The project on the server gets only the name, size and **SHA-256 fingerprint** of each file, the model's summary
+  numbers (elements, categories, sheets) and your measurements.
+- **Teammates**: send them the file. When they open it, the add-in asks them to choose it (or they add it under
+  **On this computer > Add files you received**). The fingerprint must match, so everybody measures the same file.
+- **On this computer** (project page): what is kept here, the space used, *Clear processed* and *Remove*.
+- DXF files are read on the computer. DWG files are converted on the server for that one request (LibreDWG is GPL and
+  stays on the server); the server keeps nothing. Revision compare runs on the computer. The AI gets the elements with
+  each request and keeps none. **Quick open** reads the file on this computer too.
+- Files added before this change are still on the server and open as before (a copy is kept here after the first
+  open). An owner can press **Keep on computers only**: the file is saved on this computer and the server copy deleted.
+- The browser can clear site data when the disk is very full; the add-in asks it to keep the library
+  (`navigator.storage.persist`). If a file is gone, the add-in asks for it again.
+
 ## Railway setup
 | Service | What it is |
 |---|---|
 | `dwfx-addin` | This repo (`node server.js`). Serves the add-in and the API. |
 | `Postgres` | Projects, users, versions, take-offs, audit log, job queue. |
-| Bucket | Railway storage bucket for DWFx files, processed model data, drawings and daily backups. |
+| Bucket | Railway storage bucket for daily backups, audit PDFs and files added before they were kept on the computers. |
 | `dwfx-worker` (optional) | Same repo, start command `node worker.js`; then set `WORKER_IN_API=0` on `dwfx-addin`. |
 
 Variables on `dwfx-addin` (and the worker):
@@ -124,8 +142,12 @@ Variables on `dwfx-addin` (and the worker):
 | `RATE_LIMIT_PER_MIN` | optional API limit per user, default 600 |
 | `LOGIN_LIMIT_PER_IP` | optional sign-in attempts per IP per 15 minutes, default 20 |
 
-Storage layout: `projects/{project}/models/{model}/v{n}/source.dwfx` + `model.json.gz`,
-`projects/{project}/drawings/...`, `backups/YYYY-MM-DD.json.gz` (database backup every day, last 30 kept).
+Storage layout: `backups/YYYY-MM-DD.json.gz` (database backup every day, last 30 kept), `projects/{project}/exports/...`
+(audit PDFs) and, for files added before, `projects/{project}/models/{model}/v{n}/source.dwfx` + `model.json.gz` and
+`projects/{project}/drawings/...`. New files are not stored (`location = 'local'`).
+
+The app code is bundled and minified with esbuild when the server starts (one file per page, cached by the browser for
+a year, a new name after each deploy); set `BUNDLE=0` to serve the separate files while developing.
 
 ## AI settings
 | Variable | DeepSeek | Meta Muse Spark via OpenRouter |

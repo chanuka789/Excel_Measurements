@@ -23,6 +23,7 @@
     "compression": "1.8.2",
     "dwf-viewer": "0.6.7",
     "dxf-parser": "1.1.2",
+    "esbuild": "0.25.10",
     "express": "4.22.3",
     "multer": "2.4.0",
     "pdfjs-dist": "4.10.38",

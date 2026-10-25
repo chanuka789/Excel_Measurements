@@ -27,3 +27,8 @@ export async function versionProject(versionId) {
   if (!uuidOk(versionId)) return null;
   return one(`SELECT v.*, m.project_id, m.name AS model_name FROM model_versions v JOIN models m ON m.id=v.model_id WHERE v.id=$1`, [versionId]);
 }
+
+/** Files kept on the users' computers (location 'local') have no copy on the server. */
+export const LOCAL_MSG = 'This file is kept on the computers of the project team, not on the server. Open it in the add-in on a computer that has it.';
+export function cloudOnly(row) { if (row?.location === 'local') fail(409, LOCAL_MSG); }
+export const DRAWING_TYPES = /\.(pdf|dwfx|dwf|dwg|dxf|png|jpe?g|tiff?|xlsx|docx)$/i;

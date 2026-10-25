@@ -74,7 +74,7 @@ const setProgress = (id, status, progress) => q(`UPDATE model_versions SET statu
 /** Job handler: process one model version. */
 export async function processVersion(versionId) {
   const v = await one(`SELECT * FROM model_versions WHERE id=$1`, [versionId]);
-  if (!v) return;
+  if (!v || v.location === 'local') return;                 // kept on the computers: the server has no copy to process
   const work = path.join(os.tmpdir(), 'job-' + crypto.randomUUID());
   await fs.mkdir(work);
   try {

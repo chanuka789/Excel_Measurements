@@ -1,12 +1,13 @@
 // More CostX drawing tools for the drawing take-off (takeoff2d.js): working area, Convert to Cutout / Remove Cutout,
 // rebar mode, comparing two drawings as an overlay, and Auto Count (image search for a captured symbol).
 // installExtras(DrawingTakeoff) adds these methods to the class.
-import { esc, api } from './core.js';
+import { esc } from './core.js';
 import { dialog } from './wui.js';
 import * as G2 from './geom2d.js';
 import { cutout } from './cutout.js';
 import { makeDim } from './tkstore.js';
 import { toInk } from './autocount.js';
+import { drawingResponse } from './localfiles.js';
 
 let captured = null;          // Auto Count symbol, kept when you open another drawing: { img, ppu, thumb }
 let pdfjs = null;
@@ -37,7 +38,7 @@ function tint(src, rgb) {
 /** A picture of any project drawing (for Compare): { canvas, W, H } with W, H its page size in drawing units. */
 export async function loadRaster(d, page = 1, maxPx = 3000) {
   const isCad = d.kind !== 'sheet' && /\.(dwg|dxf)$/i.test(d.name || '');
-  const res = await api('GET', d.kind === 'sheet' ? `/versions/${d.versionId}/sheets/${d.index}` : isCad ? `/drawings/${d.id}/cad` : `/drawings/${d.id}/file?inline=1`, null, { raw: true });
+  const res = await drawingResponse(d);
   const type = res.headers.get('content-type') || '', name = (d.name || '').toLowerCase();
   const c = document.createElement('canvas'), x = c.getContext('2d');
   if (/pdf/.test(type) || name.endsWith('.pdf')) {

@@ -10,7 +10,7 @@ import { q, audit } from './db.js';
 import * as store from './storage.js';
 import { enqueue } from './jobs.js';
 import { dataKey } from './processing.js';
-import { json, wrap, clean, fail, need, versionProject } from './http.js';
+import { cloudOnly, json, wrap, clean, fail, need, versionProject } from './http.js';
 import { binHeader } from '../public/js/modelmerge.js';
 
 const gunzip = promisify(zlib.gunzip);
@@ -21,7 +21,7 @@ export const LOCAL_TIMEOUT_MIN = 10;
 async function localVersion(req) {
   const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
   const role = await need(req, v.project_id, 'editor');
-  if (v.uploaded_by !== req.user.id && role !== 'owner') fail(403, 'Only the person who uploaded this version (or the project owner) can process it on their computer.');
+  if (v.location !== 'local' && v.uploaded_by !== req.user.id && role !== 'owner') fail(403, 'Only the person who uploaded this version (or the project owner) can process it on their computer.');
   return v;
 }
 const unzip = async (file, max, what) => {
@@ -66,7 +66,7 @@ export function registerLocal(api) {
   }));
   // start (again) on this computer: the browser downloads the original DWFx itself
   api.post('/versions/:vid/local-start', json, wrap(async (req, res) => {
-    const v = await localVersion(req);
+    const v = await localVersion(req); cloudOnly(v);
     if (!['failed', 'queued', 'local'].includes(v.status)) fail(409, 'This version is being processed or is ready.');
     await q(`UPDATE model_versions SET status='local', progress='Processing on the uploader''s computer', error=NULL, local_seen=now() WHERE id=$1`, [v.id]);
     await q(`UPDATE jobs SET status='done', finished_at=now(), error='taken by the uploader''s computer' WHERE kind='process_version' AND status='queued' AND payload->>'versionId'=$1`, [v.id]);
@@ -76,6 +76,7 @@ export function registerLocal(api) {
   api.post('/versions/:vid/server', json, wrap(async (req, res) => {
     const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
     await need(req, v.project_id, 'editor');
+    if (v.location === 'local') fail(409, 'This model is kept on the team\'s computers, so the server cannot process it. Process it on a computer that has the file.');
     if (!['local', 'failed'].includes(v.status)) return res.json({ status: v.status });
     const why = clean(req.body?.reason, 300);
     await q(`UPDATE model_versions SET status='queued', progress=$2, error=NULL WHERE id=$1`, [v.id, why ? `Processing on the server (the computer could not: ${why})` : 'Waiting to be processed on the server']);
@@ -86,7 +87,7 @@ export function registerLocal(api) {
   api.post('/versions/:vid/processed', upload.any(), wrap(async (req, res) => {
     const files = req.files || [];
     try {
-      const v = await localVersion(req);
+      const v = await localVersion(req); cloudOnly(v);       // models kept on the computers finish with /local-ready (localfirst.js)
       if (v.status !== 'local') fail(409, 'This version is no longer waiting for your computer (the server may have taken over).');
       const f = (n) => files.find(x => x.fieldname === n);
       if (!f('model')) fail(400, 'The processed model is missing.');
@@ -124,8 +125,11 @@ export function registerLocal(api) {
 
 /** Worker: a computer that stopped reporting hands its model to the server. */
 export async function localTimeouts() {
+  // a model kept on the computers cannot go to the server: it waits until a computer with the file processes it again
+  await q(`UPDATE model_versions SET status='failed', progress=NULL, error='Processing stopped on the computer. Open the project on a computer that has the file and press "Process here".'
+           WHERE status='local' AND location='local' AND coalesce(local_seen, created_at) < now() - make_interval(mins => $1)`, [LOCAL_TIMEOUT_MIN]);
   const stale = await q(`UPDATE model_versions SET status='queued', progress='The uploader''s computer stopped: processing on the server'
-                         WHERE status='local' AND coalesce(local_seen, created_at) < now() - make_interval(mins => $1) RETURNING id`, [LOCAL_TIMEOUT_MIN]);
+                         WHERE status='local' AND location<>'local' AND coalesce(local_seen, created_at) < now() - make_interval(mins => $1) RETURNING id`, [LOCAL_TIMEOUT_MIN]);
   for (const v of stale) await enqueue('process_version', { versionId: v.id });
   return stale.length;
 }

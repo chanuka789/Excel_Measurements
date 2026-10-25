@@ -13,6 +13,7 @@ import { TakeoffStore, drawingKey } from './tkstore.js';
 import { DrawingTakeoff, newGroupDialog, measurableDrawings } from './takeoff2d.js';
 import { PointTakeoff } from './takeoff3d.js';
 import { initPanel, renderPanel, loadZones } from './wpanel.js';
+import { loadVersion } from './localfiles.js';
 
 const W = { zones: [], zoneOf: new Map(), inExcel: true, ticked: new Set(), hidden: new Set(), isolated: false, level: '', byId: new Map(), E: [], colorMap: null, catColor: new Map(),
   projectId: null, versionId: null, levels: [], side: 'drawings', project: null, mode: 'pane', groupColor: null, drawing: null, measure: null, label: '' };
@@ -94,11 +95,12 @@ async function init(m) {
   $('wTitle').textContent = W.label; $('wSub').textContent = 'Linked with the task pane: selections show in both.';
   $('vload').hidden = false; $('vload').textContent = 'Loading the model…';
   try {
-    const data = await (await api('GET', `/versions/${m.versionId}/model`, null, { raw: true })).json();
+    const r = await loadVersion(m.versionId, { onUpdate: (st) => { $('vload').textContent = `${st.step}${st.pct ? ` (${Math.round(st.pct)}%)` : ''}`; } });
+    const data = r.data;
     let g = null;
-    if (data.geometryFormat === 'bin2') g = parseBin(await (await api('GET', `/versions/${m.versionId}/geometry`, null, { raw: true })).arrayBuffer());
+    if (data.geometryFormat === 'bin2' && r.geometry) g = parseBin(r.geometry);
     else if (data.geometry?.meshes) g = fromLegacy(data.geometry);
-    W.E = data.elements; W.byId = new Map(W.E.map(e => [e.id, e]));
+    W.data = data; W.E = data.elements; W.byId = new Map(W.E.map(e => [e.id, e]));
     const cats = new Map(); W.E.forEach(e => cats.set(e.cat, (cats.get(e.cat) || 0) + 1));
     W.catColor.clear(); [...cats].sort((a, b) => b[1] - a[1]).forEach(([c], i) => W.catColor.set(c, PALETTE[i % PALETTE.length]));
     if (g) V.load(g); else V.clear();
@@ -353,7 +355,7 @@ function renderSide() {
   (W.project?.models || []).forEach(m => m.versions.filter(v => v.id === W.versionId).forEach(v => (v.stats?.sheets || []).forEach(sh => sheets.push({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }))));
   const all = [...sheets, ...drawings];
   if (W.drawing && !all.some(d => same(d, W.drawing))) all.unshift(W.drawing);
-  if (!all.length) { body.innerHTML = '<p class="hint">No viewable drawings in this project yet. Upload PDFs or images: right-click the Drawings tree > Upload Drawings.</p>'; return; }
+  if (!all.length) { body.innerHTML = '<p class="hint">No viewable drawings in this project yet. Add PDFs or images: right-click the Drawings tree > Add Drawings.</p>'; return; }
   const at = Math.max(0, all.findIndex(d => W.drawing && same(d, W.drawing)));
   body.innerHTML = `<label class="field">Drawing<select class="input" id="dwSel">${all.map((d, i) => `<option value="${i}" ${i === at ? 'selected' : ''}>${esc(d.kind === 'sheet' ? 'Sheet: ' + d.name : d.name)}</option>`).join('')}</select></label><div id="drawingHost"></div>`;
   const show = () => { W.drawing = all[+$('dwSel').value]; openDrawing(W.drawing, $('drawingHost')); };

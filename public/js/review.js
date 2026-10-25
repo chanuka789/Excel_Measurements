@@ -3,6 +3,7 @@
 import { $, esc, App, api, status, downloadFile, fmtBytes, fmtDate, confirmBox } from './core.js';
 import { fmt } from './engine.js';
 import { S } from './state.js';
+import { compareVersions, aiModel } from './localfiles.js';
 import { evaluate, missingDataReport, overlapReport, applyFilter } from './measure.js';
 import { selectIds, setColorMode, update, viewer } from './model.js';
 import { readGroups, updateGroupInPlace, writeChangeLog, buildBOQ, addToExcel, loadMeasured } from './excel.js';
@@ -72,7 +73,7 @@ function wireAICheck() {
         totals: Object.entries(g.totals).map(([l, v]) => `${l}: ${typeof v === 'number' ? +v.toFixed(3) : v}`) }));
       const measured = new Set(groups.flatMap(g => g.ids));
       const unmeasured = {}; S.E.filter(e => !measured.has(e.id)).forEach(e => { unmeasured[e.cat] = (unmeasured[e.cat] || 0) + 1; });
-      R.checkResult = await api('POST', '/ai/check', { versionId: S.versionId, groups: [...payload, { ref: 'model', name: 'Elements not in any group (count by category)', unmeasured }] });
+      R.checkResult = await api('POST', '/ai/check', { versionId: S.versionId, ...(await aiModel(S.versionId, S.data)), groups: [...payload, { ref: 'model', name: 'Elements not in any group (count by category)', unmeasured }] });
       out.innerHTML = findingsHtml(R.checkResult);
     } catch (err) { out.innerHTML = `<div class="msg bad">${esc(err.message)}</div>`; }
   };
@@ -96,7 +97,7 @@ export async function getGroups() {
 async function renderRevisions() {
   const box = $('rs-revisions'); if (!box) return;
   const p = App.currentProject?.();
-  if (!p || !S.versionId) { box.innerHTML = '<p class="hint">Revisions work with models saved in a project. Upload each revision as a new version of the same model.</p>'; return; }
+  if (!p || !S.versionId) { box.innerHTML = '<p class="hint">Revisions work with models in a project. Add each revision as a new version of the same model.</p>'; return; }
   const versions = p.models.flatMap(m => m.versions.filter(v => v.status === 'ready').map(v => ({ id: v.id, label: `${m.name} v${v.version} · ${v.file_name}`, model: m.id, n: v.version })));
   const cur = versions.find(v => v.id === S.versionId);
   const prev = versions.filter(v => v.model === cur?.model && v.n < cur.n).sort((a, b) => b.n - a.n)[0];
@@ -112,7 +113,7 @@ async function renderRevisions() {
     const from = $('cmpFrom').value, to = $('cmpTo').value;
     if (from === to) { status('Choose two different versions.', 'bad'); return; }
     $('cmpOut').innerHTML = '<div class="loading">Comparing…</div>';
-    try { R.compare = await api('GET', `/compare?from=${from}&to=${to}`); S.compare = R.compare; $('cmpOut').innerHTML = compareHtml(R.compare); wireCompare(); }
+    try { R.compare = await compareVersions(from, to); S.compare = R.compare; $('cmpOut').innerHTML = compareHtml(R.compare); wireCompare(); }
     catch (err) { $('cmpOut').innerHTML = `<div class="msg bad">${esc(err.message)}</div>`; }
   };
   if (R.compare) wireCompare();

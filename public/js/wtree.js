@@ -1,12 +1,13 @@
 // 3D window, left panel: Drawings / Model / Views tree on top, Dimension Groups / Dimensions below.
 // Folders can be created by the user for drawings and models, and for dimension groups. "Import Objects In" adds
 // BIM dimensions to the current dimension group. Groups go to Excel as schedules (through the task pane).
-import { $, esc, api, upload, status, fmtDate } from './core.js';
+import { $, esc, api, status, fmtDate } from './core.js';
 import { fmt, keyOf, evaluate } from './engine.js';
 import { menu, dialog, ask, confirmIt } from './wui.js';
 import { MTYPES, UNIT, DETAILS, groupTotal, dimensions, groupToSpec, displayUnit, baseValue, quantityNames } from './dims.js';
 import { canView } from './drawings.js';
 import { canMeasure } from './takeoff2d.js';
+import { addDrawings } from './localfiles.js';
 
 let C;                                   // context from window.js: { W, V, paint, send, openDrawing, openProps, openVersion, setIds, ... }
 const T = { folders: [], groups: [], standard: [], open: new Set(['std']), shut: new Set(), cur: null, sel: null, filter: '', dimSel: new Set(), top: 'drawings', bottom: 'groups', zones: [], waiting: null };
@@ -109,13 +110,13 @@ function renderTop() {
         { label: 'New Folder...', disabled: !canEdit(), run: () => newFolder('drawing', f.id) },
         { label: 'Rename Folder...', disabled: !canEdit(), run: () => renameFolder(f) },
         { label: 'Delete Folder', disabled: !canEdit(), run: () => deleteFolder(f) }, '-',
-        { label: 'Upload Drawings Here...', disabled: !canEdit(), run: () => uploadTo(f.id) }, '-',
+        { label: 'Add Drawings Here...', disabled: !canEdit(), run: () => uploadTo(f.id) }, '-',
         { label: 'Expand All', run: () => expandAll('drawing', true) }, { label: 'Collapse All', run: () => expandAll('drawing', false) }, '-', { label: 'Close Menu' }], x, y),
       children: [...folders.filter(x => x.parent_id === f.id).map(folderNode), ...p.models.filter(m => m.folder_id === f.id).map(modelNode), ...p.drawings.filter(d => d.folder_id === f.id).map(drawingNode)] };
   };
   const nodes = [...folders.filter(f => !f.parent_id).map(folderNode), ...p.models.filter(m => !m.folder_id).map(modelNode), ...p.drawings.filter(d => !d.folder_id).map(drawingNode)];
   host.onEmptyMenu = (x, y) => menu([{ label: 'New Folder...', disabled: !canEdit(), run: () => newFolder('drawing', null) },
-    { label: 'Upload Drawings...', disabled: !canEdit(), run: () => uploadTo(null) }, '-',
+    { label: 'Add Drawings...', disabled: !canEdit(), run: () => uploadTo(null) }, '-',
     { label: 'Expand All', run: () => expandAll('drawing', true) }, { label: 'Collapse All', run: () => expandAll('drawing', false) }, '-', { label: 'Close Menu' }], x, y);
   host.onRootDrop = (d) => dropOn(null, d, 'drawing');
   tree(host, nodes, ['Type']);
@@ -371,10 +372,10 @@ function uploadTo(folderId) {
   inp.accept = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.svg,.dwfx,.dwf,.dwg,.dxf,.xlsx,.docx';
   inp.onchange = async () => {
     if (!inp.files.length) return;
-    const fd = new FormData(); [...inp.files].forEach(f => fd.append('files', f, f.name)); if (folderId) fd.append('folderId', folderId);
     try {
-      await upload(`/projects/${C.W.projectId}/drawings`, fd, (p) => status(`Uploading… ${Math.round(p * 100)}%`));
-      await reloadProject(); if (folderId) T.open.add('f' + folderId); render(); status(`${inp.files.length} file(s) uploaded.`, 'ok');
+      status('Adding the files (they stay on this computer)…');
+      await addDrawings(C.W.projectId, [...inp.files], { folderId });
+      await reloadProject(); if (folderId) T.open.add('f' + folderId); render(); status(`${inp.files.length} file(s) added. They stay on this computer.`, 'ok');
     } catch (err) { status(err.message, 'bad'); }
   };
   inp.click();

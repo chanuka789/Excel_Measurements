@@ -5,7 +5,7 @@ import pc from 'polygon-clipping';
 import * as G from '../public/js/geom2d.js';
 import { cutout } from '../public/js/cutout.js';
 import { findMatches, variants } from '../public/js/autocount.js';
-import { normalise, toSvg, extents, UNIT_M } from '../src/cad2svg.js';
+import { normalise, toSvg, extents, UNIT_M } from '../public/js/cad2svg.js';
 import { cleanGeometry, cleanDrawingSettings } from '../src/dims.js';
 
 const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, `${a} ≈ ${b}`);

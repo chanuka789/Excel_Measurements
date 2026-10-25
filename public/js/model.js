@@ -8,6 +8,8 @@ import { dimsOf, fmt, uLabel } from './engine.js';
 import { groupToSpec, groupTotal } from './dims.js';
 import { PointTakeoff } from './takeoff3d.js';
 import { newGroupDialog } from './takeoff2d.js';
+import { loadVersion } from './localfiles.js';
+import { runEngine, canProcessLocally } from './localproc.js';
 import { S, PALETTE, STATUS_COLORS, REV_COLORS, idsOf, count, isVisible, snapshot, undo, redo } from './state.js';
 
 let V = null, TB = null, win = null, PT = null;
@@ -167,22 +169,27 @@ async function withViewerBusy(msg, fn) {
 export async function openVersion(vid, label = '') {
   try {
     const [data, geometry] = await withViewerBusy(`Opening ${label || 'model'}…`, async () => {
-      const res = await api('GET', `/versions/${vid}/model`, null, { raw: true });
-      const d = await res.json();
-      let geo = null;
-      if (d.geometryFormat === 'bin2') geo = await (await api('GET', `/versions/${vid}/geometry`, null, { raw: true })).arrayBuffer();
-      return [d, geo];
+      const r = await loadVersion(vid, { onUpdate: (st) => { $('vload').textContent = `${st.step}${st.pct ? ` (${Math.round(st.pct)}%)` : ''}`; } });
+      return [r.data, r.geometry];
     });
     await loadModelData(data, { versionId: vid, label, geometry });
     try { localStorage.setItem('dwfxLastVersion', vid); } catch { /* storage blocked */ }
   } catch (err) { status('Could not open the model: ' + err.message, 'bad'); if (!S.data) App.selectTab('project'); }
 }
 export async function quickOpen(file) {
-  const fd = new FormData(); fd.append('model', file, file.name);
   try {
-    const data = await withViewerBusy(`Reading ${file.name}. Large models can take a minute…`, () => api('POST', '/model', fd));
-    let geometry = null;
-    if (data.geometryB64) { const bin = Uint8Array.from(atob(data.geometryB64), c => c.charCodeAt(0)); geometry = bin.buffer; delete data.geometryB64; }
+    let data, geometry = null;
+    if (canProcessLocally()) {
+      // read on this computer: the file is not sent anywhere
+      const r = await withViewerBusy(`Reading ${file.name} on this computer. Large models can take a minute…`,
+        () => runEngine(file, (text, pct) => { $('vload').textContent = `${text}${pct ? ` (${Math.round(pct)}%)` : ''}`; }));
+      data = { ...r.payload, fileName: file.name, geometryFormat: r.geometry ? 'bin2' : 'none' };
+      if (r.geometry) geometry = r.geometry.buffer.slice(r.geometry.byteOffset, r.geometry.byteOffset + r.geometry.byteLength);
+    } else {
+      const fd = new FormData(); fd.append('model', file, file.name);
+      data = await withViewerBusy(`Reading ${file.name}. Large models can take a minute…`, () => api('POST', '/model', fd));
+      if (data.geometryB64) { const bin = Uint8Array.from(atob(data.geometryB64), c => c.charCodeAt(0)); geometry = bin.buffer; delete data.geometryB64; }
+    }
     await loadModelData(data, { label: `${file.name} (not saved)`, geometry });
   } catch (err) { status('Could not open this file: ' + err.message, 'bad'); if (!S.data) App.selectTab('project'); }
 }
@@ -473,7 +480,7 @@ async function saveZone(name, color) {
 const WIN_SIZES = { normal: { height: 85, width: 80 }, max: { height: 99.5, width: 99.5 } };
 let winCarry = null;                  // view state carried into the next window when it is re-opened (Maximise, Restore, App window)
 export async function openWindow(mode = 'normal', carry = null) {
-  if (!S.versionId) { status('The 3D window works with models saved in a project. Upload the DWFx to a project first.', 'bad'); return; }
+  if (!S.versionId) { status('The 3D window works with models in a project. Add the DWFx to a project first.', 'bad'); return; }
   winCarry = carry;
   closeWindow();
   const base = new URL('viewer.html', location.href).href;

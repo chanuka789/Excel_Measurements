@@ -125,6 +125,11 @@ const MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS drawing_settings (
      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE, dkey TEXT NOT NULL, props JSONB NOT NULL DEFAULT '{}',
      updated_by INT REFERENCES users(id), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (project_id, dkey));`,
+  // 7: files kept on the users' computers: the server keeps only the name, size and SHA-256 fingerprint (location 'local')
+  `ALTER TABLE model_versions ADD COLUMN IF NOT EXISTS sha256 TEXT;
+   ALTER TABLE model_versions ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'cloud';
+   ALTER TABLE drawings ADD COLUMN IF NOT EXISTS sha256 TEXT;
+   ALTER TABLE drawings ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'cloud';`,
 ];
 
 /** Apply new migrations once, even when the API and the worker start at the same time (advisory lock). */

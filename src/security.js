@@ -74,7 +74,9 @@ export function securityHeaders(publicDir) {
     // Office only shows ribbon icons that can be cached ("must support caching", no no-cache/no-store),
     // and Excel on the web loads them from Microsoft's own site, so /assets/ is cacheable and cross-origin.
     const assets = req.path.startsWith('/assets/');
-    res.setHeader('Cache-Control', assets || req.path.startsWith('/vendor/') || req.path.startsWith('/help/media/') ? 'public, max-age=86400' : 'no-store');
+    // app files: no-cache (the browser keeps them but checks with the server each time, a quick 304); the bundles in /dist/ set their own
+    res.setHeader('Cache-Control', assets || req.path.startsWith('/vendor/') || req.path.startsWith('/help/media/') ? 'public, max-age=86400'
+      : req.path.startsWith('/api/') || req.path.endsWith('.html') || req.path === '/' ? 'no-store' : 'no-cache');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');

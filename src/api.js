@@ -10,10 +10,11 @@ import * as store from './storage.js';
 import { enqueue } from './jobs.js';
 import { backupDatabase, dataKey } from './processing.js';
 import { login, logout, requireUser, requireAdmin, hashPassword, syncUsers, publicUser, downloadTicket } from './auth.js';
-import { json, wrap, clean, safeName, uuidOk, HttpError, fail, need, versionProject, RANK } from './http.js';
+import { cloudOnly, DRAWING_TYPES, json, wrap, clean, safeName, uuidOk, HttpError, fail, need, versionProject, RANK } from './http.js';
 import { registerFeatures } from './features.js';
 import { registerDims } from './dims.js';
-import { registerCad } from './cad.js';
+import { registerCad, registerCadConvert } from './cad.js';
+import { registerLocalFirst } from './localfirst.js';
 import { registerLink } from './link.js';
 import { registerLocal } from './localproc.js';
 import { loginGuard, loginFailed, loginSucceeded, apiLimit } from './security.js';
@@ -73,9 +74,9 @@ api.get('/projects/:pid', wrap(async (req, res) => {
     one(`SELECT * FROM projects WHERE id=$1`, [pid]),
     q(`SELECT u.id, u.name, u.email, m.role FROM project_members m JOIN users u ON u.id=m.user_id WHERE m.project_id=$1 ORDER BY m.role, u.name`, [pid]),
     q(`SELECT * FROM models WHERE project_id=$1 ORDER BY name`, [pid]),
-    q(`SELECT v.id, v.model_id, v.version, v.file_name, v.size, v.status, v.progress, v.error, v.stats, v.note, v.created_at, u.name AS uploaded_by
+    q(`SELECT v.id, v.model_id, v.version, v.file_name, v.size, v.status, v.progress, v.error, v.stats, v.note, v.created_at, v.sha256, v.location, u.name AS uploaded_by
        FROM model_versions v JOIN models m ON m.id=v.model_id LEFT JOIN users u ON u.id=v.uploaded_by WHERE m.project_id=$1 ORDER BY v.version DESC`, [pid]),
-    q(`SELECT d.id, d.name, d.size, d.content_type, d.folder_id, d.created_at, u.name AS uploaded_by FROM drawings d LEFT JOIN users u ON u.id=d.uploaded_by WHERE d.project_id=$1 ORDER BY d.created_at DESC`, [pid]),
+    q(`SELECT d.id, d.name, d.size, d.content_type, d.folder_id, d.created_at, d.sha256, d.location, u.name AS uploaded_by FROM drawings d LEFT JOIN users u ON u.id=d.uploaded_by WHERE d.project_id=$1 ORDER BY d.created_at DESC`, [pid]),
     q(`SELECT t.id, t.name, t.version_id, t.created_at, u.name AS created_by, jsonb_array_length(t.spec->'ids') AS elements
        FROM takeoffs t LEFT JOIN users u ON u.id=t.created_by WHERE t.project_id=$1 ORDER BY t.created_at`, [pid]),
   ]);
@@ -151,18 +152,18 @@ api.post('/projects/:pid/models', upload.single('model'), wrap(async (req, res) 
 api.get('/versions/:vid', wrap(async (req, res) => {
   const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
   await need(req, v.project_id, 'viewer');
-  res.json({ version: { id: v.id, version: v.version, status: v.status, progress: v.progress, error: v.error, stats: v.stats, model_name: v.model_name, file_name: v.file_name } });
+  res.json({ version: { id: v.id, version: v.version, status: v.status, progress: v.progress, error: v.error, stats: v.stats, model_name: v.model_name, file_name: v.file_name, size: Number(v.size), sha256: v.sha256, location: v.location, model_id: v.model_id, project_id: v.project_id, processed_at: v.processed_at } });
 }));
 api.get('/versions/:vid/model', wrap(async (req, res) => {
   const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
-  await need(req, v.project_id, 'viewer');
+  await need(req, v.project_id, 'viewer'); cloudOnly(v);
   if (v.status !== 'ready') fail(409, 'This model version is not ready yet.');
   res.set({ 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' });
   (await store.getStream(dataKey(v.storage_key, 'model.json.gz'))).pipe(res);
 }));
 api.get('/versions/:vid/geometry', wrap(async (req, res) => {
   const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
-  await need(req, v.project_id, 'viewer');
+  await need(req, v.project_id, 'viewer'); cloudOnly(v);
   if (v.status !== 'ready') fail(409, 'This model version is not ready yet.');
   const key = dataKey(v.storage_key, 'geometry.bin.gz');
   if (!(await store.exists(key))) fail(404, 'This version was processed with an older format. Press "Try again" to reprocess it.');
@@ -171,13 +172,13 @@ api.get('/versions/:vid/geometry', wrap(async (req, res) => {
 }));
 api.get('/versions/:vid/source', wrap(async (req, res) => {
   const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
-  await need(req, v.project_id, 'viewer');
+  await need(req, v.project_id, 'viewer'); cloudOnly(v);
   res.set({ 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="${v.file_name}"` });
   (await store.getStream(v.storage_key)).pipe(res);
 }));
 api.post('/versions/:vid/reprocess', wrap(async (req, res) => {
   const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
-  await need(req, v.project_id, 'editor');
+  await need(req, v.project_id, 'editor'); cloudOnly(v);
   await q(`UPDATE model_versions SET status='queued', progress='Waiting to be processed', error=NULL WHERE id=$1`, [v.id]);
   await enqueue('process_version', { versionId: v.id });
   res.json({ ok: true });
@@ -185,7 +186,7 @@ api.post('/versions/:vid/reprocess', wrap(async (req, res) => {
 api.delete('/versions/:vid', wrap(async (req, res) => {
   const v = await versionProject(req.params.vid); if (!v) fail(404, 'Model version not found.');
   await need(req, v.project_id, 'owner');
-  await store.removePrefix(v.storage_key.replace(/source\.dwfx$/, ''));
+  if (v.location !== 'local') await store.removePrefix(v.storage_key.replace(/source\.dwfx$/, ''));
   await q(`DELETE FROM model_versions WHERE id=$1`, [v.id]);
   await q(`DELETE FROM models m WHERE m.id=$1 AND NOT EXISTS (SELECT 1 FROM model_versions WHERE model_id=m.id)`, [v.model_id]);
   await audit(req.user.id, v.project_id, 'model.delete_version', { model: v.model_name, version: v.version });
@@ -193,7 +194,6 @@ api.delete('/versions/:vid', wrap(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------- drawings
-const DRAWING_TYPES = /\.(pdf|dwfx|dwf|dwg|dxf|png|jpe?g|tiff?|xlsx|docx)$/i;
 api.post('/projects/:pid/drawings', upload.array('files', 20), wrap(async (req, res) => {
   try {
     await need(req, req.params.pid, 'editor');
@@ -222,7 +222,7 @@ api.post('/projects/:pid/drawings', upload.array('files', 20), wrap(async (req, 
 api.get('/drawings/:id/file', wrap(async (req, res) => {
   if (!uuidOk(req.params.id)) fail(404, 'Drawing not found.');
   const d = await one(`SELECT * FROM drawings WHERE id=$1`, [req.params.id]); if (!d) fail(404, 'Drawing not found.');
-  await need(req, d.project_id, 'viewer');
+  await need(req, d.project_id, 'viewer'); cloudOnly(d);
   res.set({ 'Content-Type': d.content_type || 'application/octet-stream', 'Content-Disposition': `${req.query.inline ? 'inline' : 'attachment'}; filename="${d.name}"` });
   (await store.getStream(d.storage_key)).pipe(res);
 }));
@@ -230,7 +230,7 @@ api.delete('/drawings/:id', wrap(async (req, res) => {
   if (!uuidOk(req.params.id)) fail(404, 'Drawing not found.');
   const d = await one(`SELECT * FROM drawings WHERE id=$1`, [req.params.id]); if (!d) fail(404, 'Drawing not found.');
   await need(req, d.project_id, 'editor');
-  await store.removePrefix(`projects/${d.project_id}/drawings/${d.id}/`);
+  if (d.location !== 'local') await store.removePrefix(`projects/${d.project_id}/drawings/${d.id}/`);
   await q(`DELETE FROM drawings WHERE id=$1`, [d.id]);
   await audit(req.user.id, d.project_id, 'drawing.delete', { name: d.name });
   res.json({ ok: true });
@@ -270,8 +270,8 @@ api.get('/projects/:pid/export', wrap(async (req, res) => {
   const meta = {
     exported_at: new Date().toISOString(), exported_by: req.user.email, project: p,
     members: await q(`SELECT u.name, u.email, m.role FROM project_members m JOIN users u ON u.id=m.user_id WHERE project_id=$1`, [pid]),
-    models: await q(`SELECT m.name, m.discipline, v.version, v.file_name, v.size, v.status, v.stats, v.created_at FROM models m JOIN model_versions v ON v.model_id=m.id WHERE m.project_id=$1 ORDER BY m.name, v.version`, [pid]),
-    drawings: await q(`SELECT name, size, created_at FROM drawings WHERE project_id=$1`, [pid]),
+    models: await q(`SELECT m.name, m.discipline, v.version, v.file_name, v.size, v.status, v.stats, v.location, v.sha256, v.created_at FROM models m JOIN model_versions v ON v.model_id=m.id WHERE m.project_id=$1 ORDER BY m.name, v.version`, [pid]),
+    drawings: await q(`SELECT name, size, location, sha256, created_at FROM drawings WHERE project_id=$1`, [pid]),
     takeoffs: await q(`SELECT name, spec, created_at FROM takeoffs WHERE project_id=$1 ORDER BY created_at`, [pid]),
     activity: await q(`SELECT a.at, u.email, a.action, a.detail FROM audit a LEFT JOIN users u ON u.id=a.user_id WHERE project_id=$1 ORDER BY at`, [pid]),
   };
@@ -280,9 +280,9 @@ api.get('/projects/:pid/export', wrap(async (req, res) => {
   zip.on('error', (e) => res.destroy(e));
   zip.pipe(res);
   zip.append(JSON.stringify(meta, null, 2), { name: 'project.json' });
-  const vers = await q(`SELECT v.storage_key, v.version, v.file_name, m.name FROM model_versions v JOIN models m ON m.id=v.model_id WHERE m.project_id=$1`, [pid]);
+  const vers = await q(`SELECT v.storage_key, v.version, v.file_name, m.name FROM model_versions v JOIN models m ON m.id=v.model_id WHERE m.project_id=$1 AND v.location<>'local'`, [pid]);
   for (const v of vers) zip.append(await store.getStream(v.storage_key), { name: `models/${safeName(v.name)}/v${v.version}_${v.file_name}` });
-  for (const d of await q(`SELECT name, storage_key FROM drawings WHERE project_id=$1`, [pid])) zip.append(await store.getStream(d.storage_key), { name: `drawings/${d.name}` });
+  for (const d of await q(`SELECT name, storage_key FROM drawings WHERE project_id=$1 AND location<>'local'`, [pid])) zip.append(await store.getStream(d.storage_key), { name: `drawings/${d.name}` });
   await zip.finalize();
   await audit(req.user.id, pid, 'project.export');
 }));
@@ -315,6 +315,8 @@ api.post('/admin/backup', requireAdmin, wrap(async (req, res) => { res.json({ ke
 registerFeatures(api);
 registerDims(api);
 registerCad(api);
+registerCadConvert(api);
+registerLocalFirst(api);
 registerLink(api);
 registerLocal(api);
 
