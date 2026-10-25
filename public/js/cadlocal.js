@@ -3,11 +3,11 @@
 import DxfParser from 'dxf-parser';
 import { normalise, toSvg } from './cad2svg.js';
 
-self.onmessage = ({ data: { buf } }) => {
+self.onmessage = ({ data: { id, buf } }) => {
   try {
     const db = new DxfParser().parseSync(new TextDecoder().decode(buf));
     const n = normalise(db, 'dxf');
     if (!n.paths.length && !n.texts.length) throw new Error('No drawing lines were found in this file (only model space is shown).');
-    self.postMessage({ ok: true, svg: toSvg(n) });
-  } catch (err) { self.postMessage({ ok: false, error: err?.message || String(err) }); }
+    self.postMessage({ id, ok: true, svg: toSvg(n) });
+  } catch (err) { self.postMessage({ id, ok: false, error: err?.message || String(err) }); }
 };

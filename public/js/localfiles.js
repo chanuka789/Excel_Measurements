@@ -139,14 +139,28 @@ export async function addDrawings(pid, files, { folderId = null } = {}) {
 }
 
 // ---------------------------------------------------------------- drawings
-let cadWorker = null;
+let cadWorker = null, cadSeq = 0;
+const cadJobs = new Map();          // request id -> { resolve, reject }: each answer goes to its own drawing
 function dxfHere(blob) {
   return new Promise(async (resolve, reject) => {
     try {
-      cadWorker ||= new Worker(new URL('./cadlocal.js', import.meta.url), { type: 'module' });
-      cadWorker.onmessage = ({ data }) => (data.ok ? resolve(data.svg) : reject(new Error(data.error)));
-      cadWorker.onerror = (e) => { cadWorker = null; reject(new Error(e.message || 'The DXF reader could not start.')); };
-      cadWorker.postMessage({ buf: await blob.arrayBuffer() });
+      if (!cadWorker) {
+        cadWorker = new Worker(new URL('./cadlocal.js', import.meta.url), { type: 'module' });
+        cadWorker.onmessage = ({ data }) => {
+          const job = cadJobs.get(data.id); if (!job) return;
+          cadJobs.delete(data.id);
+          data.ok ? job.resolve(data.svg) : job.reject(new Error(data.error));
+        };
+        cadWorker.onerror = (e) => {
+          cadWorker = null;
+          const err = new Error(e.message || 'The DXF reader could not start.');
+          for (const job of cadJobs.values()) job.reject(err);
+          cadJobs.clear();
+        };
+      }
+      const id = ++cadSeq;
+      cadJobs.set(id, { resolve, reject });
+      cadWorker.postMessage({ id, buf: await blob.arrayBuffer() });
     } catch (err) { reject(err); }
   });
 }
