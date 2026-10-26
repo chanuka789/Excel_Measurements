@@ -276,6 +276,26 @@ export function registerDims(api) {
     await audit(req.user.id, pid, 'drawing.settings', { dkey });
     res.json({ props });
   }));
+  // Drawing Sets: named lists of drawings that open together (kept in the project settings)
+  api.put('/projects/:pid/drawing-sets', json, wrap(async (req, res) => {
+    const pid = req.params.pid;
+    await need(req, pid, 'editor');
+    const sets = cleanDrawingSets(req.body?.sets);
+    const r = await one(`UPDATE projects SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{drawingSets}', $2::jsonb), updated_at=now() WHERE id=$1 RETURNING settings`, [pid, JSON.stringify(sets)]);
+    await audit(req.user.id, pid, 'drawing.sets', { sets: sets.length });
+    res.json({ sets: r.settings.drawingSets });
+  }));
+}
+/** [{ name, keys: [drawing keys] }], at most 100 sets of 500 drawings, names unique. */
+export function cleanDrawingSets(list) {
+  if (!Array.isArray(list)) fail(400, 'Send the drawing sets as a list.');
+  const out = [], seen = new Set();
+  for (const s of list.slice(0, 100)) {
+    const name = clean(s?.name, 120); if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    out.push({ name, keys: [...new Set((Array.isArray(s.keys) ? s.keys : []).filter(k => typeof k === 'string' && DKEY_RE.test(k)))].slice(0, 500) });
+  }
+  return out;
 }
 
 /** d:<drawing id> for an uploaded drawing, s:<version id>:<sheet number> for a 2D sheet inside a DWFx. */

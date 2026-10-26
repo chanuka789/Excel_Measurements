@@ -18,7 +18,69 @@ export function cleanStats(b = {}) {
     source: clean(b.source, 40) || null, geoNote: clean(b.geoNote, 300) || null, qs: Math.trunc(num(b.qs)), sheets, processedOn: 'computer', processMs: Math.trunc(num(b.ms)) || null };
 }
 
+/** Projects of this user that have a file with this fingerprint (as a model version or a drawing). */
+async function projectsWith(req, fp, min = 'viewer') {
+  const rows = await q(`SELECT m.project_id FROM model_versions v JOIN models m ON m.id=v.model_id WHERE v.sha256=$1
+                        UNION SELECT project_id FROM drawings WHERE sha256=$1`, [fp]);
+  const out = [];
+  for (const r of rows) { try { await need(req, r.project_id, min); out.push(r.project_id); } catch { /* not this user's project */ } }
+  return out;
+}
+const COMPUTER = /^[A-Za-z0-9_-]{8,64}$/;
+export function cleanPath(b = {}) {
+  const kind = b.kind === 'sharepoint' ? 'sharepoint' : 'local';
+  const path = clean(b.path, 1000);
+  if (!path) fail(400, 'Write where the file is (a folder path or a SharePoint link).');
+  if (kind === 'sharepoint' && !/^https:\/\/[^\s/]+\.(sharepoint\.com|sharepoint\.us|sharepoint-mil\.us|sharepoint\.cn)\//i.test(path)) fail(400, 'A SharePoint link starts with https://<your company>.sharepoint.com/.');
+  const cid = String(b.computer?.id || '');
+  if (!COMPUTER.test(cid)) fail(400, 'This computer has no id yet. Reload the add-in.');
+  return { kind, path, label: clean(b.label, 120) || null, computerId: cid, computerName: clean(b.computer?.name, 80) || null };
+}
+
 export function registerLocalFirst(api) {
+  // ---------------------------------------------------------------- file paths (several per file, one or more per computer)
+  api.get('/paths/:sha', wrap(async (req, res) => {
+    const fp = sha(req.params.sha);
+    const pids = await projectsWith(req, fp);
+    if (!pids.length) return res.json({ paths: [] });
+    const paths = await q(`SELECT f.id, f.project_id, f.kind, f.label, f.path, f.computer_id, f.computer_name, f.added_at, f.last_used, u.name AS added_by
+                           FROM file_paths f LEFT JOIN users u ON u.id=f.added_by WHERE f.sha256=$1 AND f.project_id = ANY($2::uuid[])
+                           ORDER BY f.last_used DESC NULLS LAST, f.added_at DESC LIMIT 200`, [fp, pids]);
+    res.json({ paths });
+  }));
+  api.post('/paths', json, wrap(async (req, res) => {
+    const fp = sha(req.body?.sha256);
+    const p = cleanPath(req.body);
+    const pids = req.body?.projectId && uuidOk(req.body.projectId) ? (await projectsWith(req, fp)).filter(x => x === req.body.projectId) : await projectsWith(req, fp);
+    if (!pids.length) fail(404, 'No project of yours has this file.');
+    const out = [];
+    for (const pid of pids) {
+      const r = await one(`INSERT INTO file_paths (project_id, sha256, kind, label, path, computer_id, computer_name, added_by, last_used)
+                           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())
+                           ON CONFLICT (project_id, sha256, computer_id, path) DO UPDATE SET kind=EXCLUDED.kind, label=COALESCE(EXCLUDED.label, file_paths.label),
+                             computer_name=COALESCE(EXCLUDED.computer_name, file_paths.computer_name), last_used=now() RETURNING *`,
+        [pid, fp, p.kind, p.label, p.path, p.computerId, p.computerName, req.user.id]);
+      await audit(req.user.id, pid, 'file.path_add', { kind: p.kind, computer: p.computerName });
+      out.push(r);
+    }
+    res.status(201).json({ paths: out });
+  }));
+  api.post('/paths/:id/used', wrap(async (req, res) => {
+    if (!uuidOk(req.params.id)) fail(404, 'Path not found.');
+    const row = await one(`SELECT project_id FROM file_paths WHERE id=$1`, [req.params.id]); if (!row) fail(404, 'Path not found.');
+    await need(req, row.project_id, 'viewer');
+    await q(`UPDATE file_paths SET last_used=now() WHERE id=$1`, [req.params.id]);
+    res.json({ ok: true });
+  }));
+  api.delete('/paths/:id', wrap(async (req, res) => {
+    if (!uuidOk(req.params.id)) fail(404, 'Path not found.');
+    const row = await one(`SELECT project_id, added_by FROM file_paths WHERE id=$1`, [req.params.id]); if (!row) fail(404, 'Path not found.');
+    await need(req, row.project_id, row.added_by === req.user.id ? 'viewer' : 'editor');
+    await q(`DELETE FROM file_paths WHERE id=$1`, [req.params.id]);
+    await audit(req.user.id, row.project_id, 'file.path_remove', {});
+    res.json({ ok: true });
+  }));
+
   // a new model version whose DWFx stays on this computer
   api.post('/projects/:pid/models/local', json, wrap(async (req, res) => {
     const pid = req.params.pid;

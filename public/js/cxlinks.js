@@ -99,6 +99,8 @@ export async function loadTree(pid = App.currentProjectId?.()) {
   return X.tree;
 }
 export const tree = () => X.tree;
+/** Use a tree read elsewhere (the tests, or a window that already has it). */
+export function setTree(t, pid = X.pid) { X.tree = t; X.pid = pid; pushValues(); }
 /** Model-object totals from the measurement window (it has the model open). Kept on this computer per project. */
 export function setBimTotals(groups) {
   if (!groups || typeof groups !== 'object') return;

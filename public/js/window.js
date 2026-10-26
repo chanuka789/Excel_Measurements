@@ -18,6 +18,7 @@ import { PointTakeoff } from './takeoff3d.js';
 import { initPanel, renderPanel, loadZones } from './wpanel.js';
 import { loadVersion, compareVersions } from './localfiles.js';
 import { library } from './localstore.js';
+import { computer, pathsOf, removePath, savePath } from './paths.js';
 import { REV_COLORS } from './state.js';
 import { Ribbon } from './ribbon.js';
 import { buildCommands, RIBBON_TABS, fileMenu } from './commands.js';
@@ -501,11 +502,39 @@ async function drawingManager() {
   const rows = list.map((x, i) => { const s = STORE.drawing(x.key), n = (s.pages && Object.keys(s.pages).length) || 0, p1 = s.pages?.[1];
     const dims = STORE.groups().reduce((t, g) => t + (g.props.measured || []).filter(m => m.src?.key === x.key).length, 0);
     return `<tr><td>${esc(x.name)}</td><td>${esc(x.type)}</td><td>${p1?.ratio ? '1:' + p1.ratio : p1?.scale ? 'calibrated' : ''}${n > 1 ? ` (+${n - 1} pages)` : ''}</td><td>${s.multiplier !== 1 ? '×' + s.multiplier : ''}</td><td class="v">${dims}</td>
-      <td>${x.d.kind === 'sheet' ? 'in the model' : x.d.location === 'local' ? (here.has(x.d.sha256) ? 'this computer' : 'not here yet') : 'server'}</td><td><button class="btn small" data-o="${i}" ${canMeasure(x.name) || x.d.kind === 'sheet' ? '' : 'disabled'}>Open</button></td></tr>`; }).join('');
+      <td>${x.d.kind === 'sheet' ? 'in the model' : x.d.location === 'local' ? (here.has(x.d.sha256) ? 'this computer' : 'not here yet') : 'server'}</td><td><button class="btn small" data-o="${i}" ${canMeasure(x.name) || x.d.kind === 'sheet' ? '' : 'disabled'}>Open</button>${x.d.sha256 ? ` <button class="btn small" data-p="${i}" title="Where each computer keeps this file">Paths</button>` : ''}</td></tr>`; }).join('');
   await dialog({ title: 'Drawing Manager', wide: true, body: list.length ? `<div class="dg-list"><table class="links"><thead><tr><th>Drawing</th><th>Type</th><th>Scale</th><th>Multiplier</th><th>Dimensions</th><th>File</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="hint">No drawings in this project yet.</p>',
     buttons: [{ label: 'Close', value: null }],
-    onOpen: (dlg) => dlg.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { dlg.querySelector('.dlg-actions button')?.click(); openDrawingCentre(list[+b.dataset.o].d); }) });
+    onOpen: (dlg) => {
+      dlg.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { dlg.querySelector('.dlg-actions button')?.click(); openDrawingCentre(list[+b.dataset.o].d); });
+      dlg.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { dlg.querySelector('.dlg-actions button')?.click(); filePaths(list[+b.dataset.p].d); });
+    } });
 }
+/** Every path of one file: each computer's local or synced folder, and SharePoint links. Add or remove paths here. */
+async function filePaths(d) {
+  const me = computer();
+  const list = await pathsOf(d.sha256);
+  let typed = '';
+  const r = await dialog({ title: `Paths of ${d.name}`, wide: true, body: `<p class="hint">The same file can be in a different place on each computer (a local folder, or a SharePoint / OneDrive folder synced to the computer). Every path is kept, so going back to a computer uses its path again. The file itself never goes to the server.</p>
+    ${list.length ? `<table class="links"><thead><tr><th>Computer</th><th>Type</th><th>Path</th><th>Added by</th><th>Last used</th><th></th></tr></thead><tbody>${list.map((k, i) => `<tr><td>${esc(k.computer_name || '')}${k.computer_id === me.id ? ' <span class="badge">this one</span>' : ''}</td><td>${k.kind === 'sharepoint' ? 'SharePoint link' : 'Folder path'}</td>
+      <td><code>${esc(k.path)}</code></td><td>${esc(k.added_by || '')}</td><td>${k.last_used ? esc(new Date(k.last_used).toLocaleDateString()) : ''}</td>
+      <td>${k.kind === 'sharepoint' ? `<button class="btn small" data-open="${i}">Open link</button> ` : ''}<button class="btn small subtle danger-text" data-rm="${i}">Remove</button></td></tr>`).join('')}</tbody></table>` : '<p class="hint">No paths saved yet. A path is saved when the file is chosen on a computer.</p>'}
+    <h4>Add a path for this computer (${esc(me.name)})</h4>
+    <label class="field">Folder path or SharePoint link<input class="input" id="fpPath" maxlength="1000" placeholder="D:\\Projects\\Villa or https://company.sharepoint.com/sites/..."></label>`,
+    buttons: [{ label: 'Close', value: null }, { label: 'Add path', value: 'add', primary: true }],
+    validate: (dlg) => { typed = dlg.querySelector('#fpPath').value.trim(); return typed ? '' : 'Write a folder path or a SharePoint link.'; },
+    onOpen: (dlg) => {
+      dlg.querySelectorAll('[data-open]').forEach(b => b.onclick = () => window.open(list[+b.dataset.open].path, '_blank', 'noopener'));
+      dlg.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => { try { await removePath(list[+b.dataset.rm].id); b.closest('tr').remove(); status('Path removed.', 'ok'); } catch (err) { status(err.message, 'bad'); } });
+    },
+  });
+  if (r !== 'add') return;
+  try {
+    await savePath(d.sha256, { path: typed, kind: /^https:\/\//i.test(typed) ? 'sharepoint' : 'local', projectId: W.projectId });
+    status('Path saved for this computer. The file is also found from there next time.', 'ok');
+  } catch (err) { status(err.message, 'bad'); }
+}
+
 async function drawingSets() {
   const p = W.project; if (!p) return;
   const sets = p.project.settings?.drawingSets || [];

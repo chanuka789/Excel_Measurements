@@ -48,7 +48,11 @@ const BY = [['type', 'Type'], ['level', 'Level'], ['zone', 'Zone'], ['category',
 function presets(qs, ids) {
   const has = (n) => qs.find(q => q.name === n && q.n);
   const vol = has('Net volume') || has('Geo volume') || has('Volume');
-  const fw = qs.filter(q => /^FW /.test(q.name) && q.unit === 'm2' && q.n);
+  // formwork faces without counting a total and its parts twice: soffit (or its propping-height bands), sides (or
+  // narrow + wide sides), sloping faces
+  const fwq = qs.filter(q => /^FW /.test(q.name) && q.unit === 'm2' && q.n);
+  const pick = (whole, parts) => { const w = fwq.find(q => q.name === whole); return w ? [w] : fwq.filter(q => parts.test(q.name)); };
+  const fw = [...pick('FW soffit', /^FW soffit \d/), ...pick('FW sides', /^FW (narrow|wide) sides$/), ...fwq.filter(q => /^FW sloping /.test(q.name))];
   const out = [];
   if (fw.length) out.push({ id: 'fw', label: 'Formwork (all faces)', f: { label: 'Formwork', unit: 'm2', expr: fw.map(q => `{${keyOf(q.name)}}`).join(' + ') } });
   if (vol) {

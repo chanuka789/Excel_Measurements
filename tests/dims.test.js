@@ -145,6 +145,16 @@ test('QS setup: editors set the assumptions; values are checked; no measurement-
   assert.equal(p.settings.qs.wpUpturn, 0.3);
 });
 
+test('drawing sets: named lists of drawings kept in the project settings (editors)', async () => {
+  const k = 'd:' + '0'.repeat(8) + '-0000-0000-0000-' + '0'.repeat(12);
+  let r = await call('PUT', `/api/projects/${P.id}/drawing-sets`, { token: T.user, body: { sets: [{ name: 'Level 1', keys: [k, k, 'bad'] }, { name: 'level 1', keys: [] }, { name: '' }] } });
+  assert.equal(r.status, 200); assert.deepEqual(r.data.sets, [{ name: 'Level 1', keys: [k] }]);
+  assert.equal((await call('PUT', `/api/projects/${P.id}/drawing-sets`, { token: T.user, body: { sets: 'x' } })).status, 400);
+  assert.equal((await call('PUT', `/api/projects/${P.id}/drawing-sets`, { token: T.other, body: { sets: [] } })).status, 403);
+  const p = (await call('GET', `/api/projects/${P.id}`, { token: T.user })).data.project;
+  assert.deepEqual(p.settings.drawingSets, [{ name: 'Level 1', keys: [k] }]);
+});
+
 test('window link: one-time claim gives the app window its own session; messages go both ways through the server', async () => {
   const { id, claim } = (await call('POST', '/api/link', { token: T.user, body: {} })).data;
   assert.ok(id && claim);

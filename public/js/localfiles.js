@@ -4,6 +4,7 @@
 // (added before) are downloaded once and kept in the library too, so they open quickly next time.
 import { $, esc, api, fmtBytes } from './core.js';
 import { library, sha256 } from './localstore.js';
+import { computer, setComputerName, pathsOf, pickers, pickFile, pickFolder, fromPlaces, remember } from './paths.js';
 import { runEngine, LOCAL } from './localproc.js';
 import { compareModels } from './compare.js';
 import { binHeader } from './modelmerge.js';
@@ -23,32 +24,73 @@ export async function versionMeta(vid, { fresh = false } = {}) {
 }
 export const isLocal = (x) => x?.location === 'local';
 
-/** Ask the user for a file this computer does not have yet. Resolves with the Blob once its fingerprint matches. */
-export function chooseFile({ name, size, sha256: want, why = '' }) {
+/** Ask the user for a file this computer does not have yet. Resolves with the Blob once its fingerprint matches.
+ * The dialog lists the paths the project knows for the file (every computer, local folders, synced SharePoint or OneDrive
+ * folders, SharePoint links); the file is chosen directly or found in a folder, and its path is remembered. */
+export function chooseFile({ name, size, sha256: want, why = '', projectId = null }) {
   return new Promise((resolve, reject) => {
     const d = $('dialog');
     if (!d) { reject(new Error(`${name} is not on this computer. Add it from the project page.`)); return; }
+    const me = computer(), can = pickers();
     d.innerHTML = `<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="cfTitle">
-      <h2 id="cfTitle">Choose ${esc(name)}</h2>
+      <h2 id="cfTitle">Find ${esc(name)}</h2>
       <div class="dlg-body"><p>${esc(why || 'This file is kept on the computers of the project team, not on the server, and this computer does not have it yet.')}</p>
-        <p class="hint">Choose the same file the person who added it used (${esc(name)}${size ? `, ${fmtBytes(Number(size))}` : ''}). The add-in checks its fingerprint, so the measurements line up. It is then kept on this computer.</p>
-        <input type="file" id="cfFile" aria-label="Choose ${esc(name)}"><div id="cfMsg" class="small" aria-live="polite"></div></div>
+        <div id="cfPaths" class="small"><span class="hint">Looking for saved paths…</span></div>
+        <p class="hint">Choose the same file (${esc(name)}${size ? `, ${fmtBytes(Number(size))}` : ''}). The add-in checks its fingerprint, so the measurements line up. It is then kept on this computer, and its path is saved so this computer finds it again.</p>
+        <div class="row">${can.files ? '<button class="btn primary" id="cfPick">Choose the file…</button>' : '<input type="file" id="cfFile" aria-label="Choose the file">'}
+          ${can.folders ? '<button class="btn" id="cfDir" title="A local folder, or a SharePoint / OneDrive folder synced to this computer">Choose a folder…</button>' : ''}</div>
+        ${can.folders ? '<label class="check small"><input type="checkbox" id="cfAll" checked> Also look in this folder for the other project files</label>' : ''}
+        <details class="small"><summary>Path details (saved with the project)</summary>
+          <label class="field">This computer's name<input class="input" id="cfPc" maxlength="80" value="${esc(me.name)}"></label>
+          <label class="field">Where the file is on this computer<input class="input" id="cfPath" maxlength="1000" placeholder="e.g. D:\\Projects\\Villa\\${esc(name)} or C:\\Users\\me\\Company\\Villa - Documents"></label>
+          <label class="field">SharePoint link (optional)<input class="input" id="cfSp" maxlength="1000" placeholder="https://company.sharepoint.com/sites/..."></label></details>
+        <div id="cfMsg" class="small" aria-live="polite"></div></div>
       <div class="dlg-actions"><button id="cfNo" class="btn">Cancel</button></div></div>`;
     d.hidden = false;
+    const msg = (t, bad = false) => { const m = $('cfMsg'); if (m) { m.className = 'small' + (bad ? ' bad' : ''); m.textContent = t; } };
     const done = (err, blob) => { d.hidden = true; d.innerHTML = ''; err ? reject(err) : resolve(blob); };
-    $('cfNo').onclick = () => done(new Error(`${name} was not chosen, so it cannot be opened on this computer.`));
-    d.onkeydown = (e) => { if (e.key === 'Escape') $('cfNo')?.click(); };
-    $('cfFile').onchange = async (e) => {
-      const f = e.target.files[0]; if (!f) return;
-      const msg = $('cfMsg'); msg.className = 'small'; msg.textContent = 'Checking the file…';
+    let known = [];
+    const accept = async (f, { handle = null, kind = 'file' } = {}) => {
+      if (!f) { msg(`${name} was not found there. Choose the file itself, or another folder.`, true); return; }
+      msg('Checking the file…');
       try {
         const got = await sha256(f);
-        if (want && got !== want) { msg.className = 'small bad'; msg.textContent = `${f.name} is not the same file (its content is different). Choose the file that was added to the project, or add the new file as a new version.`; e.target.value = ''; return; }
+        if (want && got !== want) { msg(`${f.name} is not the same file (its content is different). Choose the file that was added to the project, or add the new file as a new version.`, true); return; }
         await library.putFile(f, { name, key: got });
+        setComputerName($('cfPc')?.value);
+        const mine = known.find(k => k.computer_id === me.id && k.kind === 'local');
+        const path = $('cfPath')?.value.trim() || mine?.path || `${handle?.kind === 'directory' || kind === 'dir' ? handle.name + ' (folder)' : f.name}`;
+        await remember(got, { handle, kind, path, projectId, folderForAll: Boolean($('cfAll')?.checked) });
+        const sp = $('cfSp')?.value.trim();
+        if (sp) await remember(got, { path: sp, linkKind: 'sharepoint', projectId });
         done(null, f);
-      } catch (err) { msg.className = 'small bad'; msg.textContent = err.message; }
+      } catch (err) { msg(err.message, true); }
     };
-    $('cfFile').focus();
+    $('cfNo').onclick = () => done(new Error(`${name} was not chosen, so it cannot be opened on this computer.`));
+    d.onkeydown = (e) => { if (e.key === 'Escape') $('cfNo')?.click(); };
+    if ($('cfFile')) $('cfFile').onchange = (e) => { const f = e.target.files[0]; if (f) accept(f); e.target.value = ''; };
+    if ($('cfPick')) $('cfPick').onclick = async () => { try { const r = await pickFile(name); accept(r.file, r); } catch (err) { if (err.name !== 'AbortError') msg(err.message, true); } };
+    if ($('cfDir')) $('cfDir').onclick = async () => { try { msg('Searching the folder…'); const r = await pickFolder({ name, size }); accept(r.file, r); } catch (err) { if (err.name !== 'AbortError') msg(err.message, true); else msg(''); } };
+    ($('cfPick') || $('cfFile')).focus();
+    if (!want) { $('cfPaths').innerHTML = ''; return; }
+    pathsOf(want).then((list) => {
+      known = list;
+      const box = $('cfPaths'); if (!box) return;
+      if (!list.length) { box.innerHTML = '<span class="hint">No paths saved for this file yet.</span>'; return; }
+      const mine = list.find(k => k.computer_id === me.id && k.kind === 'local');
+      if (mine && $('cfPath') && !$('cfPath').value) $('cfPath').value = mine.path;
+      box.innerHTML = `<strong>Saved paths</strong><ul class="paths">${list.map((k, i) => `<li><span class="badge">${k.kind === 'sharepoint' ? 'SharePoint' : esc(k.computer_name || 'Computer')}${k.computer_id === me.id ? ' (this one)' : ''}</span>
+        <code title="${esc(k.path)}">${esc(k.path)}</code>${k.last_used ? ` <span class="hint">used ${esc(new Date(k.last_used).toLocaleDateString())}</span>` : ''}
+        ${k.kind === 'sharepoint' ? `<button class="btn small" data-open="${i}" title="Open the link to download or sync the file, then choose it here">Open link</button>` : ''}
+        ${k.computer_id === me.id && k.kind === 'local' ? `<button class="btn small primary" data-use="${i}">Use this path</button>` : ''}</li>`).join('')}</ul>`;
+      box.querySelectorAll('[data-open]').forEach(b => b.onclick = () => window.open(list[+b.dataset.open].path, '_blank', 'noopener'));
+      box.querySelectorAll('[data-use]').forEach(b => b.onclick = async () => {
+        msg('Opening the saved path…');
+        const r = await fromPlaces({ sha256: want, name, size }, { ask: true });
+        if (r) { api('POST', `/paths/${list[+b.dataset.use].id}/used`).catch(() => {}); accept(r.file, { handle: r.place.handle, kind: r.place.kind }); }
+        else msg('This computer could not open that path any more (moved, renamed or permission refused). Choose the file or its folder again.', true);
+      });
+    });
   });
 }
 let choosing = Promise.resolve();
@@ -57,8 +99,11 @@ let choosing = Promise.resolve();
 export async function fileFor(item) {
   const rec = await library.getFile(item.sha256);
   if (rec) return rec.blob;
-  const turn = choosing.catch(() => {}).then(async () => (await library.getFile(item.sha256))?.blob
-    || chooseFile({ name: item.file_name || item.name, size: item.size, sha256: item.sha256 }));
+  const want = { name: item.file_name || item.name, size: item.size, sha256: item.sha256, projectId: item.project_id || null };
+  // a path this computer already has permission for: no question
+  const found = item.sha256 ? await fromPlaces(want).catch(() => null) : null;
+  if (found) { await library.putFile(found.file, { name: want.name, key: item.sha256 }).catch(() => {}); return found.file; }
+  const turn = choosing.catch(() => {}).then(async () => (await library.getFile(item.sha256))?.blob || chooseFile(want));
   choosing = turn;
   return turn;
 }

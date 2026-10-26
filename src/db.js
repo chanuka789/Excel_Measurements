@@ -130,6 +130,14 @@ const MIGRATIONS = [
    ALTER TABLE model_versions ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'cloud';
    ALTER TABLE drawings ADD COLUMN IF NOT EXISTS sha256 TEXT;
    ALTER TABLE drawings ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'cloud';`,
+  // 8: where each computer keeps a file: several paths per drawing or model (local folders, synced SharePoint/OneDrive
+  // folders, SharePoint links), one or more per computer. Only the path text is stored, never the file.
+  `CREATE TABLE IF NOT EXISTS file_paths (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+     sha256 TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('local','sharepoint')), label TEXT, path TEXT NOT NULL,
+     computer_id TEXT NOT NULL, computer_name TEXT, added_by INT REFERENCES users(id) ON DELETE SET NULL,
+     added_at TIMESTAMPTZ NOT NULL DEFAULT now(), last_used TIMESTAMPTZ, UNIQUE (project_id, sha256, computer_id, path));
+   CREATE INDEX IF NOT EXISTS file_paths_sha ON file_paths (sha256);`,
 ];
 
 /** Apply new migrations once, even when the API and the worker start at the same time (advisory lock). */
