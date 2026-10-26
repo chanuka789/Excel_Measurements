@@ -118,7 +118,7 @@ export function installExtras(C) {
       await this.store.updateDims((m, g) => {
         if (used.has(m.id)) return null;                     // the negative dimension becomes the hole
         const ps = pieces.get(m.id); if (!ps) return undefined;
-        const mk = (p, i) => { const holes = p.holes.filter(h => h.length >= 6); const q = G2.measure2d('area', p.pts, this.scaleFor(m), { holes });
+        const mk = (p, i) => { const holes = p.holes.filter(h => h.length >= 6); const q = G2.measure2d('area', p.pts, this.scaleFor(m), { holes, ky: this.kyFor(m) });
           const d = { ...m, pts: p.pts, value: q?.value ?? m.value, len: q?.len ?? m.len }; if (holes.length) d.holes = holes; else delete d.holes;
           if (i) { d.id = Math.random().toString(36).slice(2, 10); d.label = `${m.label} (${i + 1})`; } return d; };
         if (ps.length > 1) extras.set(g.id, [...(extras.get(g.id) || []), ...ps.slice(1).map((p, i) => mk(p, i + 1))]);
@@ -131,7 +131,7 @@ export function installExtras(C) {
     async removeCutout(x, i) {
       await this.store.updateDims((m) => {
         if (m.id !== x.m.id) return undefined;
-        const holes = (m.holes || []).filter((_, k) => k !== i), q = G2.measure2d('area', m.pts, this.scaleFor(m), { holes });
+        const holes = (m.holes || []).filter((_, k) => k !== i), q = G2.measure2d('area', m.pts, this.scaleFor(m), { holes, ky: this.kyFor(m) });
         const d = { ...m, value: q?.value ?? m.value, len: q?.len ?? m.len }; if (holes.length) d.holes = holes; else delete d.holes; return d;
       }).catch(err => this.say(err.message, 'bad'));
       this.say('Cutout removed (the negative dimension is not restored).', 'ok'); this.drawDims();
@@ -237,10 +237,21 @@ export function installExtras(C) {
       this.renderBar(); this.acPanel();
       this.say(captured ? 'Auto Count: press Search, or Capture a new symbol.' : 'Auto Count: press Capture, then drag a box around one symbol (a door, a light fitting…).');
     },
-    acStop() { this.ac = null; this.host.querySelector('.tk-acbar')?.remove(); if (this.tool === 'autocount' || this.tool === 'capture') this.setTool('select'); this.drawDims(); },
-    acPanel() {
+    acStop() {
+      this.ac = null; this.host.querySelector('.tk-acbar')?.remove();
+      const dock = this.o.acHost?.(); if (dock) dock.innerHTML = '<p class="hint">Auto Count finds every copy of a symbol on the drawing. Make a Count group current, then press Auto Count on the Dimensions ribbon.</p>';
+      if (this.tool === 'autocount' || this.tool === 'capture') this.setTool('select'); this.drawDims();
+    },
+    /** The Auto Count panel: in the window's Auto Count tab (acHost) or floating over the drawing. */
+    acBox() {
+      const dock = this.o.acHost?.(this);
+      if (dock) { dock.classList.add('tk-acbar', 'tk-acdock'); return dock; }
       let p = this.host.querySelector('.tk-acbar');
       if (!p) { p = document.createElement('div'); p.className = 'tk-panel tk-acbar'; this.el.view.append(p); }
+      return p;
+    },
+    acPanel() {
+      const p = this.acBox();
       const a = this.ac, shown = a.matches.filter(m => m.score >= a.show), st = (m) => m.state || (m.score >= a.accept ? 'acc' : 'unc');
       const acc = shown.filter(m => st(m) === 'acc').length, unc = shown.filter(m => st(m) === 'unc').length, rej = shown.filter(m => st(m) === 'rej').length;
       p.innerHTML = `<div class="tk-ph">Auto Count <button class="close" aria-label="Close Auto Count">×</button></div>
@@ -276,7 +287,7 @@ export function installExtras(C) {
       let tpl = captured.img;
       if (Math.abs(captured.ppu - ppu) / ppu > 0.02) tpl = resample(tpl, ppu / captured.ppu);       // captured on a drawing of another size
       this.say('Searching the drawing… (rotated and mirrored copies too)');
-      const p = this.host.querySelector('.tk-acbar [data-a=search]'); if (p) { p.disabled = true; p.textContent = 'Searching…'; }
+      const p = this.acBox().querySelector('[data-a=search]'); if (p) { p.disabled = true; p.textContent = 'Searching…'; }
       try {
         const r = await this.rasterize({ ppu, region: area });
         const x = r.canvas.getContext('2d'), im = x.getImageData(0, 0, r.canvas.width, r.canvas.height);

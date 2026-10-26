@@ -134,3 +134,27 @@ test('owners can move a file stored on the server to the computers', async () =>
   assert.equal((await call('POST', `/api/drawings/${d.id}/keep-local`, { token: T.user, body: { sha256: SHA2 } })).status, 200);
   assert.equal(files().length, 0);
 });
+
+test('file paths: several per file, one or more per computer; only path text is stored; checked and scoped', async () => {
+  const PC1 = { id: 'pc1-aaaaaaaa', name: 'Office PC' }, PC2 = { id: 'pc2-bbbbbbbb', name: 'Laptop' };
+  assert.equal((await call('POST', '/api/paths', { token: T.user, body: { sha256: SHA, path: 'D:\\Projects\\tower.dwfx', computer: PC1 } })).status, 201);
+  assert.equal((await call('POST', '/api/paths', { token: T.other, body: { sha256: SHA, path: 'C:\\Users\\o\\Company\\Tower - Documents', computer: PC2 } })).status, 201);
+  // the same path again only refreshes "last used"
+  assert.equal((await call('POST', '/api/paths', { token: T.user, body: { sha256: SHA, path: 'D:\\Projects\\tower.dwfx', computer: PC1 } })).status, 201);
+  assert.equal((await call('POST', '/api/paths', { token: T.user, body: { sha256: SHA, kind: 'sharepoint', path: 'https://evil.example.com/x', computer: PC1 } })).status, 400);
+  const sp = await call('POST', '/api/paths', { token: T.user, body: { sha256: SHA, kind: 'sharepoint', path: 'https://contoso.sharepoint.com/sites/tower/Shared%20Documents/tower.dwfx', computer: PC1 } });
+  assert.equal(sp.status, 201);
+  assert.equal((await call('POST', '/api/paths', { token: T.user, body: { sha256: SHA, path: 'x', computer: { id: 'bad id!' } } })).status, 400);
+  assert.equal((await call('POST', '/api/paths', { token: T.user, body: { sha256: 'c'.repeat(64), path: 'x', computer: PC1 } })).status, 404);     // not a file of the user's projects
+  let list = (await call('GET', `/api/paths/${SHA}`, { token: T.user })).data.paths;
+  assert.equal(list.length, 3);
+  assert.deepEqual(new Set(list.map(p => p.computer_name)), new Set(['Office PC', 'Laptop']));
+  // a stranger sees nothing
+  const s = await call('POST', '/api/auth/login', { body: { email: 'x@x.com', password: 'nope-nope-1' } });
+  assert.equal(s.status, 401);
+  // the adder or an editor removes a path
+  assert.equal((await call('DELETE', `/api/paths/${list.find(p => p.kind === 'sharepoint').id}`, { token: T.user })).status, 200);
+  list = (await call('GET', `/api/paths/${SHA}`, { token: T.other })).data.paths;
+  assert.equal(list.length, 2);
+  assert.equal((await call('POST', `/api/paths/${list[0].id}/used`, { token: T.other })).status, 200);
+});

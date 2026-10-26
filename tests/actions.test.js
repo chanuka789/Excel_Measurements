@@ -18,15 +18,17 @@ test('actions: unknown ones are dropped, the Take-off sheet cannot be deleted, k
   const { actions, dropped } = cleanActions([{ do: 'select', filter: { category: ['Floors'] } }, { do: 'format_disk' }, { do: 'delete_sheet', name: 'Take-off' }, { do: 'delete_zone', name: 'A' }]);
   assert.deepEqual(actions.map(a => a.do), ['select', 'delete_zone']);
   assert.deepEqual(dropped, ['format_disk', 'delete_sheet Take-off']);
-  assert.equal(actionKind({ do: 'select' }), 'view'); assert.equal(actionKind({ do: 'measure_item' }), 'write'); assert.equal(actionKind({ do: 'delete_zone' }), 'delete');
+  assert.equal(actionKind({ do: 'select' }), 'view'); assert.equal(actionKind({ do: 'add_groups' }), 'write'); assert.equal(actionKind({ do: 'delete_zone' }), 'delete');
   assert.match(actionText({ do: 'create_zone', name: 'Villa', filter: { level: ['L1'] } }), /Villa.*level L1/);
-  assert.match(ACTIONS_TEXT, /measure_item \(write\)/);
+  assert.match(ACTIONS_TEXT, /add_groups \(write\)/);
+  assert.doesNotMatch(ACTIONS_TEXT, /NRM|POMI|measure_item|set_rules|create_structure_groups|build_boq/);
 });
 
-test('plan: a question removes write actions (ask first, act after the answer); rules used are kept', () => {
-  const p = normalizePlan({ question: 'What is the ground level?', actions: [{ do: 'select', filter: {} }, { do: 'measure_item', item: 'st-walls' }], rules_used: [{ ref: 'NRM2 11.15', use: 'soffits' }, { use: 'no ref' }] });
+test('plan: a question removes write actions (ask first, act after the answer); removed actions are dropped', () => {
+  const p = normalizePlan({ question: 'Which rate?', actions: [{ do: 'select', filter: {} }, { do: 'add_groups' }, { do: 'measure_item', item: 'st-walls' }], rules_used: [{ ref: 'x' }] });
   assert.deepEqual(p.actions.map(a => a.do), ['select']);
-  assert.equal(p.rules_used.length, 1);
+  assert.deepEqual(p.dropped, ['measure_item']);
+  assert.equal(p.rules_used, undefined);
 });
 
 test('filter: material and QS element kind', () => {
@@ -35,10 +37,10 @@ test('filter: material and QS element kind', () => {
   assert.deepEqual(matchFilter(E, { category: ['Floors', 'Structural Columns'], level: ['l1'] }).map(e => e.id), [1, 2]);
 });
 
-test('scoring of action cases: required actions, arguments, order, categories, no writes, citations', () => {
-  const plan = { actions: [{ do: 'set_rules', rule_set: 'POMI' }, { do: 'measure_item', item: 'st-columns', rule: 'POMI C2' }, { do: 'isolate', filter: { category: ['Structural Columns'] } }] };
-  assert.equal(scoreCase({ expect: { actions: [{ do: 'set_rules', rule_set: 'POMI' }, { do: 'measure_item', item: 'st-columns' }], order: ['set_rules', 'measure_item'], cite: true } }, plan, data).pass, true);
-  assert.equal(scoreCase({ expect: { order: ['measure_item', 'set_rules'] } }, plan, data).pass, false);
+test('scoring of action cases: required actions, arguments, order, categories, no writes', () => {
+  const plan = { actions: [{ do: 'create_folder', name: 'Frame' }, { do: 'add_groups' }, { do: 'isolate', filter: { category: ['Structural Columns'] } }] };
+  assert.equal(scoreCase({ expect: { actions: [{ do: 'create_folder', name: 'Frame' }, { do: 'add_groups' }], order: ['create_folder', 'add_groups'] } }, plan, data).pass, true);
+  assert.equal(scoreCase({ expect: { order: ['add_groups', 'create_folder'] } }, plan, data).pass, false);
   assert.equal(scoreCase({ expect: { actions: [{ do: 'isolate', categories: ['Structural Columns'] }] } }, plan, data).pass, true);
   assert.equal(scoreCase({ expect: { actions: [{ do: 'isolate', categories: ['Floors'] }] } }, plan, data).pass, false);
   assert.equal(scoreCase({ expect: { no_writes: true } }, plan, data).pass, false);

@@ -45,6 +45,10 @@ export const rectPts = (a, b) => [a[0], a[1], b[0], a[1], b[0], b[1], a[0], b[1]
  */
 export function measure2d(shape, pts, scale, m = {}) {
   if (!(scale > 0)) return null;
+  if (m.ky > 0 && m.ky !== 1) {          // calibrated separately in Y: stretch the y values, then measure as usual
+    const sy = (p) => p.map((v, i) => (i % 2 ? v * m.ky : v));
+    pts = sy(pts); m = { ...m, ky: 1, ...(m.holes ? { holes: m.holes.map(sy) } : {}) };
+  }
   const n = pts.length / 2;
   if (shape === 'area') {
     if (n < 3) return null;

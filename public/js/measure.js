@@ -1,60 +1,20 @@
-// Measure tab, templates (method library and discipline packs), openings deduction and model checks.
+// DWFx Schedules window, Schedule tab: the user picks the elements, the data columns (type, level, mark, ...) and the
+// quantities each element really has; calculated columns (formwork, reinforcement, any formula) go in the SAME table.
+// Also templates (saved methods), openings deduction and model checks.
 import { $, esc, App, api, status } from './core.js';
 import { dimsOf, keyOf, evaluate as evaluateSpec, fmt } from './engine.js';
 import { S } from './state.js';
 import { selectIds, update } from './model.js';
-import { mountQs } from './qsui.js';
 import { filterIds } from './filter.js';
-import { createStructureGroups } from './actions.js';
-import { enrichElementQs } from './rules.js';
+import { DETAILS, DEFAULT_DETAILS } from './dims.js';
+import { enrichElementQs, deriveOpenings, kindOf, DEFAULT_RATES } from './rules.js';
 
 export const evaluate = (spec) => evaluateSpec(spec, S.byId);
 
 // ================================================================== derived quantities (openings)
-const OPENING_CATS = /^(doors|windows)$/i;
-const WALL_CATS = /walls?$/i;
-/**
- * Doors and windows are matched to the wall they sit in (largest box overlap) and their area is added to
- * the wall as "Openings area", "Openings count" and "Openings to deduct" (only openings over the threshold,
- * default 0.5 m2, the usual rule for finishes).
- */
 export function computeDerived() {
   S.E?.forEach(enrichElementQs);
-  const thr = Number(S.settings.openingThreshold ?? 0.5);
-  const openings = S.E.filter(e => OPENING_CATS.test(e.cat) && e.bb);
-  const walls = S.E.filter(e => WALL_CATS.test(e.cat) && e.bb);
-  walls.forEach(w => { delete w.q['Openings area']; delete w.q['Openings count']; delete w.q['Openings to deduct']; });
-  if (!openings.length || !walls.length) return;
-  const up = { x: 0, y: 1, z: 2 }[S.data.up || 'y'];
-  const hz = [0, 1, 2].filter(i => i !== up);
-  // grid on the horizontal plane keeps this fast on big models
-  const cell = 5, grid = new Map();
-  const keyOfCell = (a, b) => a + ',' + b;
-  walls.forEach(w => {
-    for (let a = Math.floor(w.bb[hz[0]] / cell); a <= Math.floor(w.bb[hz[0] + 3] / cell); a++)
-      for (let b = Math.floor(w.bb[hz[1]] / cell); b <= Math.floor(w.bb[hz[1] + 3] / cell); b++) {
-        const k = keyOfCell(a, b); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(w);
-      }
-  });
-  for (const o of openings) {
-    const cands = new Set();
-    for (let a = Math.floor(o.bb[hz[0]] / cell); a <= Math.floor(o.bb[hz[0] + 3] / cell); a++)
-      for (let b = Math.floor(o.bb[hz[1]] / cell); b <= Math.floor(o.bb[hz[1] + 3] / cell); b++) (grid.get(keyOfCell(a, b)) || []).forEach(w => cands.add(w));
-    let best = null, bestV = 0;
-    for (const w of cands) {
-      let v = 1;
-      for (let i = 0; i < 3; i++) { const d = Math.min(o.bb[i + 3], w.bb[i + 3] + 0.05) - Math.max(o.bb[i], w.bb[i] - 0.05); if (d <= 0) { v = 0; break; } v *= d; }
-      if (v > bestV) { bestV = v; best = w; }
-    }
-    if (!best) continue;
-    const ext = [0, 1, 2].map(i => o.bb[i + 3] - o.bb[i]);
-    const width = o.q.Width?.[0] || Math.max(ext[hz[0]], ext[hz[1]]);
-    const height = o.q.Height?.[0] || ext[up];
-    const area = width * height;
-    const add = (n, v, u) => { best.q[n] = [Math.round(((best.q[n]?.[0] || 0) + v) * 1000) / 1000, u]; };
-    add('Openings area', area, 'm2'); add('Openings count', 1, 'nr');
-    add('Openings to deduct', area > thr ? area : 0, 'm2');
-  }
+  deriveOpenings(S.E, S.data?.up, S.settings.openingThreshold);
 }
 
 // ================================================================== Measure tab
@@ -84,32 +44,70 @@ export function defaultName(ids) {
 }
 const BY = [['type', 'Type'], ['level', 'Level'], ['zone', 'Zone'], ['category', 'Category'], ['', 'None']];
 
+/** Calculated columns offered for the selection: formwork and reinforcement in the same table as the volume. */
+function presets(qs, ids) {
+  const has = (n) => qs.find(q => q.name === n && q.n);
+  const vol = has('Net volume') || has('Geo volume') || has('Volume');
+  // formwork faces without counting a total and its parts twice: soffit (or its propping-height bands), sides (or
+  // narrow + wide sides), sloping faces
+  const fwq = qs.filter(q => /^FW /.test(q.name) && q.unit === 'm2' && q.n);
+  const pick = (whole, parts) => { const w = fwq.find(q => q.name === whole); return w ? [w] : fwq.filter(q => parts.test(q.name)); };
+  const fw = [...pick('FW soffit', /^FW soffit \d/), ...pick('FW sides', /^FW (narrow|wide) sides$/), ...fwq.filter(q => /^FW sloping /.test(q.name))];
+  const out = [];
+  if (fw.length) out.push({ id: 'fw', label: 'Formwork (all faces)', f: { label: 'Formwork', unit: 'm2', expr: fw.map(q => `{${keyOf(q.name)}}`).join(' + ') } });
+  if (vol) {
+    const kinds = new Map(); ids.forEach(id => { const k = kindOf(S.byId.get(id)); kinds.set(k, (kinds.get(k) || 0) + 1); });
+    const kind = [...kinds].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const rate = DEFAULT_RATES[kind] || 100;
+    out.push({ id: 'rebar', label: `Reinforcement (${vol.name} × rate)`, c: { key: 'Rate', label: 'Reinforcement rate', value: rate, unit: 'kg/m3' },
+      f: { label: 'Reinforcement', unit: 'kg', expr: `{${keyOf(vol.name)}} * {Rate}` } });
+    out.push({ id: 'tonnes', label: 'Reinforcement in tonnes', needs: 'rebar', f: { label: 'Reinforcement (t)', unit: 't', expr: `{${keyOf(vol.name)}} * {Rate} / 1000` } });
+  }
+  return out;
+}
 export function renderMeasure() {
   const box = $('measureBody'); const ids = [...S.ticked];
-  if (!ids.length) { box.innerHTML = '<div class="empty">Select elements in the Elements tab or in 3D (click, Ctrl+click or Box select), then choose what to measure here. Or apply a template below, or ask the AI.</div>'; return; }
+  if (!ids.length) { box.innerHTML = '<div class="empty">Select elements in the Elements tab or in 3D (click, Ctrl+click or Box select), then choose the columns of the schedule here. Or apply a template below, or ask the AI.</div>'; return; }
   const qs = quantitiesFor(ids);
-  const src = (q) => q.source === 'type_dim' ? 'type name' : q.name.startsWith('Geo') ? 'geometry' : /^Openings/.test(q.name) ? 'doors/windows' : 'Revit';
+  if (!S.details) S.details = [...DEFAULT_DETAILS];
+  if (!S.customC) S.customC = [];
+  const src = (q) => q.source === 'type_dim' ? 'type name' : q.name.startsWith('Geo') || q.name.startsWith('FW ') ? 'geometry' : /^Openings/.test(q.name) ? 'doors/windows' : 'Revit';
+  const pre = presets(qs, ids);
   box.innerHTML = `<div class="sum">${ids.length} element${ids.length > 1 ? 's' : ''} selected</div>
-    <label class="field">Take-off group name <input type="text" id="gName" value="${esc(defaultName(ids))}"></label>
+    <label class="field">Schedule name <input type="text" id="gName" value="${esc(defaultName(ids))}"></label>
+    <h4>Data columns</h4>
+    <div class="chips">${DETAILS.map(([k, l]) => `<label class="check"><input type="checkbox" data-det="${k}" ${S.details.includes(k) ? 'checked' : ''}> ${esc(l)}</label>`).join('')}</div>
+    <h4>Quantities</h4>
     <table class="q"><thead><tr><th></th><th>Quantity</th><th>Source</th><th style="text-align:right">Total</th></tr></thead><tbody>
     <tr><td><input type="checkbox" data-i="-1" checked aria-label="Count"></td><td>Count <code>{Count}</code></td><td class="hint">model</td><td class="v">${ids.length} nr</td></tr>
     ${qs.map((q, i) => `<tr><td><input type="checkbox" data-i="${i}" ${DEFAULT_Q.test(q.name) && q.n >= ids.length / 2 ? 'checked' : ''} aria-label="${esc(q.name)}"></td>
       <td>${esc(q.name)} <code>{${keyOf(q.name)}}</code>${q.n < ids.length ? ` <span class="hint">(${q.n} of ${ids.length})</span>` : ''}</td><td class="hint">${src(q)}</td>
       <td class="v">${q.source === 'type_dim' ? '' : fmt(q.sum, q.unit) + ' ' + esc(q.unit)}</td></tr>`).join('')}
     </tbody></table>
-    <h4>Formula columns</h4>
-    <div id="cfList">${S.customF.map((f, i) => `<div class="row"><code>${esc(f.label)} (${esc(f.unit)}) = ${esc(f.expr)}</code> <button data-del="${i}">Remove</button></div>`).join('') || '<div class="hint">None. Example: formwork to beams = {Geo_bottom_area} + {Geo_side_area}</div>'}</div>
+    <h4>Calculated columns (in the same table)</h4>
+    ${pre.length ? `<div class="row">${pre.map(p => `<button class="btn small" data-pre="${p.id}">+ ${esc(p.label)}</button>`).join('')}</div>` : ''}
+    <div id="cfList">${S.customC.map((c, i) => `<div class="row"><code>${esc(c.label)} = ${esc(c.value)} ${esc(c.unit)}</code> <span class="hint">yellow cell in Excel</span> <button data-cdel="${i}">Remove</button></div>`).join('')}
+      ${S.customF.map((f, i) => `<div class="row"><code>${esc(f.label)} (${esc(f.unit)}) = ${esc(f.expr)}</code> <button data-del="${i}">Remove</button></div>`).join('') || '<div class="hint">None. Example: formwork to beams = {Geo_bottom_area} + {Geo_side_area}</div>'}</div>
     <div class="row"><input type="text" id="cfLabel" placeholder="Column name" style="flex:1;min-width:110px"><input type="text" id="cfUnit" placeholder="Unit" value="m2" style="width:56px"></div>
     <div class="row"><input type="text" id="cfExpr" placeholder="Formula, e.g. {Length} * {Unconnected_Height} * 2" style="flex:1"><button id="cfAdd">Add column</button></div>
     <div class="row"><label>Sub-totals by <select id="gBy">${BY.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label></div>
     <div class="row">
-      ${S.inExcel ? '<button class="primary" id="toExcel">Add to Excel take-off</button>' : '<button class="primary" id="toList">Add to take-off list</button>'}
+      ${S.inExcel ? '<button class="primary" id="toExcel">Export schedule to Excel</button>' : '<button class="primary" id="toList">Add to take-off list</button>'}
       ${!S.inExcel ? `<button id="csv" ${S.takeoff.length ? '' : 'disabled'}>Download take-off (${S.takeoff.length} groups)</button>` : ''}
-      <button id="saveTpl" title="Save this method (quantities and formulas) to reuse on any project">Save as template</button>
+      <button id="saveTpl" title="Save this method (columns and formulas) to reuse on any project">Save as template</button>
     </div>
     <div id="mErr" class="hint" role="alert"></div>
-    <div class="hint">Revit values are converted to metres. "Geo" values are measured exactly from the 3D faces. Formula columns are written to Excel as live formulas.</div>`;
+    <div class="hint">Revit values are converted to metres. "Geo" and "FW" values are measured exactly from the 3D faces. Calculated columns are written to Excel as live formulas in the same table; rates are yellow cells you can change.</div>`;
   box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { S.customF.splice(+b.dataset.del, 1); renderMeasure(); });
+  box.querySelectorAll('[data-cdel]').forEach(b => b.onclick = () => { S.customC.splice(+b.dataset.cdel, 1); renderMeasure(); });
+  box.querySelectorAll('[data-det]').forEach(c => c.onchange = () => { S.details = [...box.querySelectorAll('[data-det]:checked')].map(x => x.dataset.det); });
+  box.querySelectorAll('[data-pre]').forEach(b => b.onclick = () => {
+    const p = pre.find(x => x.id === b.dataset.pre);
+    if (p.needs && !S.customF.some(f => f.label === pre.find(x => x.id === p.needs).f.label)) { const n = pre.find(x => x.id === p.needs); if (n.c && !S.customC.some(c => c.key === n.c.key)) S.customC.push({ ...n.c }); S.customF.push({ ...n.f }); }
+    if (p.c && !S.customC.some(c => c.key === p.c.key)) S.customC.push({ ...p.c });
+    if (!S.customF.some(f => f.label === p.f.label)) S.customF.push({ ...p.f });
+    renderMeasure();
+  });
   $('cfAdd').onclick = () => {
     const label = $('cfLabel').value.trim(), expr = $('cfExpr').value.trim(), unit = $('cfUnit').value.trim();
     if (!label || !expr) { $('mErr').textContent = 'Give the column a name and a formula.'; return; }
@@ -123,8 +121,9 @@ export function renderMeasure() {
     const inputs = [];
     if (picked.includes(-1) || S.customF.some(f => f.expr.includes('{Count}'))) inputs.push({ key: 'Count', label: 'Count', unit: 'nr', source: 'count', sum: true });
     [...used].sort((a, b) => a - b).forEach(i => inputs.push(all[i]));
+    const constants = S.customC.map(c => ({ key: keyOf(c.key || c.label), label: c.label, value: Number(c.value) || 0, unit: c.unit || '' }));
     const formulas = S.customF.map((f, i) => ({ key: 'F' + (i + 1), label: f.label, unit: f.unit, expr: f.expr }));
-    return { name: $('gName').value.trim() || defaultName(ids), ids, by: $('gBy').value, note: '', inputs, constants: [], formulas };
+    return { name: $('gName').value.trim() || defaultName(ids), ids, by: $('gBy').value, note: '', details: [...S.details], inputs, constants, formulas };
   };
   const go = async (fnc) => { try { const s = build(); evaluate(s); await fnc(s); } catch (err) { $('mErr').textContent = err.message; } };
   if (S.inExcel) $('toExcel').onclick = () => go((s) => App.addToExcel(s));
@@ -276,10 +275,5 @@ export function initMeasure() {
   App.computeDerived = computeDerived;
   App.specFromPlanGroup = specFromPlanGroup;
   $('tplBox').addEventListener('toggle', () => { if ($('tplBox').open) renderTemplates(); });
-  const qs = mountQs({ host: $('qsBody'), E: () => S.E, byId: () => S.byId, ticked: () => [...S.ticked], project: () => App.currentProject?.(),
-    selectIds, status, get inExcel() { return S.inExcel; }, add: (spec) => (S.inExcel ? App.addToExcel(spec) : App.addToList(spec)),
-    createGroups: (ids) => createStructureGroups(App.paneHost, ids ? { filter: { ids } } : {}) });
-  App.renderQs = () => { if ($('qsBox').open) qs.render(); };
-  $('qsBox').addEventListener('toggle', App.renderQs);
 }
 export { update };

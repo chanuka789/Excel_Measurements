@@ -276,6 +276,26 @@ export function registerDims(api) {
     await audit(req.user.id, pid, 'drawing.settings', { dkey });
     res.json({ props });
   }));
+  // Drawing Sets: named lists of drawings that open together (kept in the project settings)
+  api.put('/projects/:pid/drawing-sets', json, wrap(async (req, res) => {
+    const pid = req.params.pid;
+    await need(req, pid, 'editor');
+    const sets = cleanDrawingSets(req.body?.sets);
+    const r = await one(`UPDATE projects SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{drawingSets}', $2::jsonb), updated_at=now() WHERE id=$1 RETURNING settings`, [pid, JSON.stringify(sets)]);
+    await audit(req.user.id, pid, 'drawing.sets', { sets: sets.length });
+    res.json({ sets: r.settings.drawingSets });
+  }));
+}
+/** [{ name, keys: [drawing keys] }], at most 100 sets of 500 drawings, names unique. */
+export function cleanDrawingSets(list) {
+  if (!Array.isArray(list)) fail(400, 'Send the drawing sets as a list.');
+  const out = [], seen = new Set();
+  for (const s of list.slice(0, 100)) {
+    const name = clean(s?.name, 120); if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    out.push({ name, keys: [...new Set((Array.isArray(s.keys) ? s.keys : []).filter(k => typeof k === 'string' && DKEY_RE.test(k)))].slice(0, 500) });
+  }
+  return out;
 }
 
 /** d:<drawing id> for an uploaded drawing, s:<version id>:<sheet number> for a 2D sheet inside a DWFx. */
@@ -295,7 +315,9 @@ export function cleanDrawingSettings(p = {}) {
     const a = v?.area, area = a && ['x0', 'y0', 'x1', 'y1'].every(k => Number.isFinite(Number(a[k]))) && Number(a.x1) > Number(a.x0) && Number(a.y1) > Number(a.y0)
       ? { x0: num(a.x0), y0: num(a.y0), x1: num(a.x1), y1: num(a.y1) } : undefined;
     if (!(n >= 1 && n <= 10000) || !(scale >= 0 && scale < 1e6) || (!scale && !area)) continue;     // a page can keep a working area before it has a scale
-    pages[n] = { scale, ratio: num(v?.ratio, 0) > 0 ? num(v.ratio) : undefined, calibrated: Boolean(v?.calibrated) || undefined, area };
+    const ky = num(v?.ky, 1);
+    pages[n] = { scale, ratio: num(v?.ratio, 0) > 0 ? num(v.ratio) : undefined, calibrated: Boolean(v?.calibrated) || undefined, area,
+      ky: scale && ky > 0.01 && ky < 100 && ky !== 1 ? ky : undefined };      // separate Y calibration (stretch of the y axis)
   }
   const markups = (Array.isArray(src.markups) ? src.markups.slice(0, 1000) : []).map(m => ({
     id: clean(m?.id, 40) || Math.random().toString(36).slice(2, 10), page: Math.max(1, Math.round(num(m?.page, 1))),

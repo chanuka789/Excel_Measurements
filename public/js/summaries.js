@@ -1,15 +1,11 @@
 // Excel summaries built only from formulas (no pasted numbers), so they follow every change in the take-off:
 //   Quantities       one row per measured item, take-off group and level (or zone): SUMIFS over the Take-off sheet
 //   Summary          pivot-style table: items down, levels (or zones) across, totals; SUMIFS over Quantities
-//   NRM2 / POMI ...  quantities by work section in rule order, with rates and amounts
-//   NRM1 Elemental   elemental cost plan: items under NRM1 elements, rates, allowances, cost per m2 GIFA
 //   custom sheets    built from a sheet definition (the AI writes these on request), formulas checked first
 // Pure builders: they return a layout { name, rows, kinds, ... } that excel.js writes with the formatting standard.
-import { RULE_SETS, NRM1, nrm1Name } from './rules.js';
 import { unitFmt } from './engine.js';
 
-export const QSHEET = 'Quantities', SUMMARY = 'Summary', NRM1SHEET = 'NRM1 Elemental';
-export const setSheet = (set) => `${set} Summary`;
+export const QSHEET = 'Quantities', SUMMARY = 'Summary';
 export const colL = (n) => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - 1 - m) / 26; } return s; };
 const qt = (s) => '"' + String(s).replace(/"/g, '""') + '"';
 /** SUMIFS criterion for an exact text match (wildcards escaped; "=" alone matches blank cells). */
@@ -30,7 +26,7 @@ export const STYLE = {
 const SECTION_ORDER = ['Piling', 'Concrete', 'Formwork', 'Reinforcement', 'Precast concrete', 'Structural steel', 'Waterproofing'];
 const sectionRank = (s) => { const i = SECTION_ORDER.indexOf(s); return i < 0 ? 100 : i; };
 
-/** A stable code for one measured item: rule set, rule key and the column heading. */
+/** A stable code for one measured item: its source, key and the column heading. */
 export function itemCode(c) {
   const r = c.rule;
   return `${r?.set || 'X'}:${r?.key || ''}:${slug(`${c.label} ${c.unit}`)}`;
@@ -72,10 +68,10 @@ export function buildRegister(groups, { by = 'level' } = {}) {
       }
     }
   }
-  const head = ['Code', 'Rule set', 'Work section', 'Description', 'Rule ref', 'NRM1 element', 'Take-off group', 'Level', 'Zone', 'Unit', 'Quantity', 'Check'];
+  const head = ['Code', 'Source', 'Section', 'Description', 'Ref', 'Element', 'Take-off group', 'Level', 'Zone', 'Unit', 'Quantity', 'Check'];
   const rows = [['QUANTITIES REGISTER'], [`Every quantity is a SUMIFS formula over the ${TAKEOFF} sheet (rows of each group by ${by === 'none' ? 'group' : by}). Summary sheets read this register. Rebuild after adding tables.`], [], head];
   const kinds = ['title', 'note', 'blank', 'head'];
-  entries.forEach(e => { rows.push([e.code, e.set, e.section, e.desc, e.ref, e.nrm1, e.group, e.level, e.zone, e.unit, e.formula, e.confirm ? 'Confirm the rule against your RICS copy' : '']); kinds.push('item'); });
+  entries.forEach(e => { rows.push([e.code, e.set, e.section, e.desc, e.ref, e.nrm1, e.group, e.level, e.zone, e.unit, e.formula, '']); kinds.push('item'); });
   if (!entries.length) { rows.push(['', '', '', 'No measured items yet: add take-off tables first.']); kinds.push('note'); }
   const units = entries.map(e => e.unit);
   return { entries, skipped, layout: { name: QSHEET, rows, kinds, headRow: 4, widths: [70, 50, 110, 260, 90, 55, 180, 90, 80, 40, 85, 160], hidden: [0],
@@ -96,7 +92,7 @@ export function buildSummary(entries, { by = 'level', order = [] } = {}) {
   const vals = by === 'none' ? [] : [...new Set(entries.map(e => e[key]).filter(Boolean))];
   const rank = (v) => { const i = order.indexOf(v); return i < 0 ? (v.startsWith('(') ? 1e6 : 1e5) : i; };
   vals.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-  const head = ['Code', 'Description', 'Rule ref', 'Unit', ...vals, 'Total'];
+  const head = ['Code', 'Description', 'Ref', 'Unit', ...vals, 'Total'];
   const H = 4, rows = [['QUANTITY SUMMARY'], [`Totals by ${by === 'none' ? 'item' : by}. Every cell is SUMIFS over the ${QSHEET} sheet, so it follows the take-off.`], [], head];
   const kinds = ['title', 'note', 'blank', 'head'], units = [];
   let section = null;
@@ -111,77 +107,9 @@ export function buildSummary(entries, { by = 'level', order = [] } = {}) {
     numFmt: (r, c) => (kinds[r] === 'item' && c >= 4 ? unitFmt(units[r - 4]) : null) };
 }
 
-/** NRM2 or POMI summary: items by work section, with rates (kept between rebuilds) and amounts. */
-export function buildRuleSummary(entries, set, { keep = new Map() } = {}) {
-  const rows = [[`${set} QUANTITY SUMMARY`], [`${RULE_SETS[set]?.full || set}. Quantities link to the ${QSHEET} register. Yellow rates are yours; amounts are formulas.`], [],
-    ['Code', 'Item', 'Description', 'Rule ref', 'Unit', 'Quantity', 'Rate', 'Amount', 'Note']];
-  const kinds = ['title', 'note', 'blank', 'head'], units = [null, null, null, null], inputs = [], totals = [];
-  const items = itemsOf(entries, e => e.set === set || !e.set || e.set === 'X');
-  const sections = [...new Set(items.map(i => (i.set === set ? i.section : 'Other measured items')))];
-  sections.forEach((sec, si) => {
-    rows.push(['', `${si + 1}`, sec.toUpperCase()]); kinds.push('section'); units.push(null);
-    const first = rows.length + 1; let n = 0;
-    items.filter(i => (i.set === set ? i.section : 'Other measured items') === sec).forEach(it => {
-      const r = rows.length + 1;
-      rows.push([it.code, `${si + 1}.${++n}`, it.desc, it.ref, it.unit, `=SUMIFS(${QQ},${QA},$A${r})`, keep.get(it.code) ?? '', `=IF(G${r}="","",F${r}*G${r})`,
-        it.confirm ? 'Confirm the rule against your RICS copy' : '']);
-      kinds.push('item'); units.push(it.unit); inputs.push([r, 6]);
-    });
-    const last = rows.length;
-    rows.push(['', '', `Total ${sec.toLowerCase()}`, '', '', '', '', `=SUM(H${first}:H${last})`]); kinds.push('subtotal'); units.push(null);
-    totals.push(`H${rows.length}`);
-  });
-  rows.push(['', '', 'TOTAL', '', '', '', '', totals.length ? `=${totals.join('+')}` : 0]); kinds.push('total'); units.push(null);
-  return { name: setSheet(set), rows, kinds, headRow: 4, hidden: [0], inputs, keepCol: 6, widths: [70, 40, 300, 90, 40, 85, 70, 95, 180],
-    numFmt: (r, c) => (kinds[r] === 'item' && c === 5 ? unitFmt(units[r]) : (c === 6 || c === 7) && kinds[r] !== 'head' ? '#,##0.00' : null) };
-}
-
-/** NRM1 elemental cost plan. keep: Map(rowKey -> value) for rates, allowances and GIFA kept between rebuilds. */
-export function buildNrm1(entries, { keep = new Map(), gifa = null } = {}) {
-  const GIFA = '$E$4';
-  const rows = [['ELEMENTAL SUMMARY (NRM1)'], ['RICS NRM1 3rd edition elements. Measured items link to the Quantities register. Yellow cells (GIFA, rates, allowances) are yours. Check element codes against your RICS copy.'], [],
-    ['GIFA', '', 'Gross internal floor area (RICS Code of Measuring Practice)', 'm2', keep.get('GIFA') ?? gifa ?? ''], [],
-    ['Code', 'NRM1', 'Element / item', 'Unit', 'Quantity', 'Rate', 'Total', 'Cost per m2 GIFA', '% of total']];
-  const kinds = ['title', 'note', 'blank', 'gifa', 'blank', 'head'], units = Array(6).fill(null), inputs = [[4, 4]];
-  const grand = [], pct = [];
-  const per = (r) => `=IF(${GIFA}>0,G${r}/${GIFA},"")`;
-  for (const grp of NRM1) {
-    rows.push(['', grp.code, grp.name.toUpperCase()]); kinds.push('group'); units.push(null);
-    const elements = grp.kids?.length ? grp.kids : [[grp.code, grp.name]];
-    const elTotals = [];
-    for (const [code, name] of elements) {
-      if (grp.kids?.length) { rows.push(['', code, name]); kinds.push('section'); units.push(null); }
-      const first = rows.length + 1;
-      itemsOf(entries, e => e.nrm1 === code || e.nrm1.startsWith(code + '.')).forEach(it => {
-        const r = rows.length + 1, k = `${it.code}@${code}`;
-        rows.push([k, '', `${it.desc}${it.ref ? ` (${it.ref})` : ''}`, it.unit, `=SUMIFS(${QQ},${QA},${qt(it.code)},${sheetRef(QSHEET)}!$F:$F,${crit(code)})${entries.some(e => e.code === it.code && e.nrm1.startsWith(code + '.')) ? `+SUMIFS(${QQ},${QA},${qt(it.code)},${sheetRef(QSHEET)}!$F:$F,${qt(code + '.*')})` : ''}`, keep.get(k) ?? '',
-          `=IF(F${r}="",0,E${r}*F${r})`, per(r)]);
-        kinds.push('item'); units.push(it.unit); inputs.push([r, 5]); pct.push(r);
-      });
-      const ar = rows.length + 1, ak = `ALLOW@${code}`;
-      rows.push([ak, '', 'Other items and allowances (not measured from the model)', 'item', '', '', keep.get(ak) ?? 0, per(ar)]);
-      kinds.push('allow'); units.push(null); inputs.push([ar, 6]); pct.push(ar);
-      const tr = rows.length + 1;
-      rows.push(['', '', `Total ${code} ${name}`, '', '', '', `=SUM(G${first}:G${tr - 1})`, per(tr)]); kinds.push('subtotal'); units.push(null); pct.push(tr);
-      elTotals.push(`G${tr}`);
-    }
-    if (grp.kids?.length) {
-      const r = rows.length + 1;
-      rows.push(['', '', `Total ${grp.code} ${grp.name}`, '', '', '', `=${elTotals.join('+')}`, per(r)]); kinds.push('subtotal'); units.push(null); pct.push(r);
-      grand.push(`G${r}`);
-    } else grand.push(...elTotals);
-  }
-  const gr = rows.length + 1;
-  rows.push(['', '', 'TOTAL COST ESTIMATE', '', '', '', `=${grand.join('+')}`, per(gr), 1]); kinds.push('total'); units.push(null);
-  pct.forEach(r => { rows[r - 1][8] = `=IF($G$${gr}=0,"",G${r}/$G$${gr})`; });
-  return { name: NRM1SHEET, rows, kinds, headRow: 6, hidden: [0], inputs, widths: [70, 45, 330, 40, 85, 70, 100, 90, 60],
-    numFmt: (r, c) => (kinds[r] === 'item' && c === 4 ? unitFmt(units[r]) : c >= 5 && c <= 7 && kinds[r] !== 'head' ? '#,##0.00' : c === 8 && kinds[r] !== 'head' ? '0.0%' : null) };
-}
-export const nrm1Label = (code) => `${code} ${nrm1Name(code)}`;
-
 // ------------------------------------------------------------------ custom sheets (AI "new sheet")
 const BLOCKED = /\b(WEBSERVICE|FILTERXML|HYPERLINK|CALL|REGISTER|EXEC|INDIRECT|RTD|IMPORTDATA|CUBE\w*|INFO)\s*\(|\[|\bDDE\b|^=\s*cmd/i;
-const RESERVED = new Set([QSHEET, SUMMARY, NRM1SHEET, TAKEOFF, '_dwfx', 'BOQ', 'Change log'].map(s => s.toLowerCase()));
+const RESERVED = new Set([QSHEET, SUMMARY, TAKEOFF, '_dwfx', '_cxlinks', 'BOQ', 'Change log'].map(s => s.toLowerCase()));
 /**
  * def: { name, title, note, columns: [{ head, width, format }], rows: [{ style, cells: [] }] }
  * Formula helpers: QTY("item code" [, "level"]) and QTYD("description text" [, "unit"]) read the Quantities register;
@@ -190,7 +118,7 @@ const RESERVED = new Set([QSHEET, SUMMARY, NRM1SHEET, TAKEOFF, '_dwfx', 'BOQ', '
 export function buildCustom(def, { names = new Set() } = {}) {
   const name = String(def?.name || '').replace(/[\\/?*[\]:]/g, ' ').trim().slice(0, 31);
   if (!name) throw new Error('The new sheet needs a name.');
-  if (RESERVED.has(name.toLowerCase()) || /^(NRM2|POMI) Summary$/i.test(name)) throw new Error(`"${name}" is a sheet the add-in manages. Choose another name.`);
+  if (RESERVED.has(name.toLowerCase())) throw new Error(`"${name}" is a sheet the add-in manages. Choose another name.`);
   const cols = (def.columns || []).slice(0, 30);
   if (!cols.length) throw new Error('The new sheet needs at least one column.');
   const rowsIn = (def.rows || []).slice(0, 2000);

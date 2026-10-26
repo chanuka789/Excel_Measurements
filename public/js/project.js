@@ -1,8 +1,7 @@
 // Projects tab: list, create, details (models + versions, drawings, team, saved take-offs, activity, export, delete).
 import { $, esc, App, api, downloadFile, fmtBytes, fmtDate, fmtDay, status, confirmBox, session } from './core.js';
 import { openDrawing, canView } from './drawings.js';
-import { DrawingTakeoff, canMeasure, measurableDrawings } from './takeoff2d.js';
-import { TakeoffStore } from './tkstore.js';
+import { canMeasure } from './takeoff2d.js';
 import { S } from './state.js';
 import { canProcessLocally, processLocally, LOCAL } from './localproc.js';
 import { library, sha256 } from './localstore.js';
@@ -12,20 +11,12 @@ const P = { list: [], detail: null, filter: '', poll: null, users: null, open: n
 const DISCIPLINES = ['Architecture', 'Structure', 'Interiors', 'Mechanical', 'Electrical', 'Plumbing', 'Fire', 'Landscape', 'Other'];
 const ROLE_LABEL = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
 const can = (min) => ({ viewer: 1, editor: 2, owner: 3 }[P.detail?.my_role] || 0) >= ({ viewer: 1, editor: 2, owner: 3 }[min]);
-/** Dimension groups and drawing settings of the open project, for on-screen take-off (drawings and 3D points). */
-export const tkStore = new TakeoffStore({ projectId: () => P.detail?.project.id || null, canEdit: () => can('editor') });
-App.tkStore = tkStore;                 // the 3D view uses it too (point measurement)
-let tk2d = null;
-/** Open a drawing to measure on it (CostX style); other file types open in the plain viewer. */
+/** Open a drawing to measure: in the measurement window (CostX style). Other file types open in the plain viewer. */
 function openMeasure(d) {
   if (!d) return;
   if (d.kind !== 'sheet' && !canMeasure(d.name)) return openDrawing(d);
-  const box = $('drawingViewer'); box.hidden = false;
-  tk2d?.destroy();
-  tk2d = new DrawingTakeoff(box, tkStore, { close: true, onClose: () => { box.hidden = true; tk2d = null; }, drawings: () => measurableDrawings(P.detail) });
-  tk2d.open(d);
+  App.openMeasureWindow?.({ drawing: d });
 }
-window.__tk2d = () => tk2d;                // used by the automated browser tests
 const STATUS = { queued: ['Waiting', 'neutral'], processing: ['Processing', 'info'], local: ['On a computer', 'info'], ready: ['Ready', 'ok'], failed: ['Failed', 'bad'] };
 const LOCAL_OK = canProcessLocally();
 const box = () => $('projectBody');
@@ -55,13 +46,10 @@ function renderList() {
         <span class="pmeta">Updated ${fmtDay(p.updated_at)} · <span class="badge">${ROLE_LABEL[p.my_role] || ''}</span></span>
       </button></li>`).join('')}</ul>`
       : `<div class="empty-state"><p><strong>${P.list.length ? 'No projects match your search.' : 'No projects yet.'}</strong></p><p>${P.list.length ? 'Clear the search to see all projects.' : 'Create a project, then add DWFx models and drawings to it. The files stay on your computer; the project and your measurements are saved to your account.'}</p></div>`}
-    <details class="quick"><summary>Open a DWFx without saving it</summary>
-      <p class="muted">For a quick look only. The file is read and deleted straight away; nothing is stored.</p>
-      <input type="file" id="quickFile" accept=".dwfx"></details>`;
+`;
   $('pNew').onclick = newProjectForm;
   $('pFilter') && ($('pFilter').oninput = (e) => { P.filter = e.target.value; renderList(); $('pFilter').focus(); });
   box().querySelectorAll('.prow').forEach(b => b.onclick = () => openProject(b.dataset.id));
-  $('quickFile').onchange = (e) => e.target.files[0] && App.quickOpen(e.target.files[0]);
 }
 function newProjectForm() {
   $('pNewForm').innerHTML = `<form class="card form" id="npf">
@@ -156,7 +144,7 @@ function modelsHtml() {
         ${v.status === 'local' ? localHtml(v) : ''}
         ${v.status === 'failed' ? `<div class="msg bad small">${esc(v.error || 'Processing failed.')}</div>` : ''}
         <div class="vact">
-          ${v.status === 'ready' ? `<button class="btn small primary" data-open="${v.id}">${isOpen ? 'Reload' : 'Open'}</button>` : ''}
+          ${v.status === 'ready' ? `<button class="btn small primary" data-open="${v.id}" title="Open the model in the measurement window">Measure</button><button class="btn small" data-sched="${v.id}" title="DWFx quantity schedules from the model data">Schedules</button>` : ''}
           ${v.stats?.sheets?.length ? `<button class="btn small" data-sheets="${v.id}">2D sheets (${v.stats.sheets.length})</button>` : ''}
           ${isLocal(v) ? `<button class="btn small" data-savev="${v.id}" title="Save a copy of the DWFx kept on this computer">Save a copy</button>` : `<button class="btn small" data-src="${v.id}" data-name="${esc(v.file_name)}">Download</button>`}
           ${v.status === 'failed' && can('editor') && !isLocal(v) ? `<button class="btn small" data-re="${v.id}">Try again on the server</button>` : ''}
@@ -227,13 +215,12 @@ function drawingsHtml() {
 function takeoffsHtml() {
   const d = P.detail;
   if (!d.takeoffs.length) return '<div class="empty-state"><p>No saved take-off groups yet. Groups you add to Excel while this project is open are saved here automatically, so you can rebuild the Take-off sheet in any workbook.</p></div>';
-  const open = App.currentVersionId?.();
-  return `<p class="muted small">Restore writes the groups into the open workbook's Take-off sheet with live formulas. Open the model version first so the elements can be matched.</p>
-    <div class="actions left"><button class="btn small primary" id="toRestoreAll" ${open ? '' : 'disabled'}>Restore all to workbook</button></div>
+  return `<p class="muted small">Restore writes the groups into the open workbook's Take-off sheet with live formulas. The model version each group was measured on is read from this computer.</p>
+    <div class="actions left"><button class="btn small primary" id="toRestoreAll">Restore all to workbook</button></div>
     <table class="tbl"><thead><tr><th>Group</th><th>Elements</th><th>Saved</th><th></th></tr></thead><tbody>${d.takeoffs.map(t => `
-    <tr><td class="wrap">${esc(t.name)}${t.version_id && t.version_id !== open ? ' <span class="pill neutral" title="Measured on a different model version">other version</span>' : ''}</td><td class="num">${t.elements}</td>
+    <tr><td class="wrap">${esc(t.name)}</td><td class="num">${t.elements}</td>
     <td class="small">${fmtDay(t.created_at)}<br><span class="muted">${esc(t.created_by || '')}</span></td>
-    <td class="right"><button class="btn small" data-rest="${t.id}" ${open ? '' : 'disabled'}>Restore</button>${can('editor') ? ` <button class="btn small subtle danger-text" data-delt="${t.id}" data-name="${esc(t.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+    <td class="right"><button class="btn small" data-rest="${t.id}">Restore</button>${can('editor') ? ` <button class="btn small subtle danger-text" data-delt="${t.id}" data-name="${esc(t.name)}">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 function teamHtml() {
   const d = P.detail; const me = session.get()?.user?.id;
@@ -371,10 +358,9 @@ function wireDetail() {
       } catch (err) { $('upErr').hidden = false; $('upErr').textContent = err.message; $('upGo').disabled = false; bar.hidden = true; }
     };
   }
-  box().querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
-    const m = d.models.find(x => x.versions.some(v => v.id === b.dataset.open)), v = m.versions.find(x => x.id === b.dataset.open);
-    App.openVersion(b.dataset.open, `${m.name} v${v.version} · ${v.file_name}`);
-  });
+  const vlabel = (vid) => { const m = d.models.find(x => x.versions.some(v => v.id === vid)), v = m.versions.find(x => x.id === vid); return `${m.name} v${v.version} · ${v.file_name}`; };
+  box().querySelectorAll('[data-open]').forEach(b => b.onclick = () => App.openMeasureWindow?.({ versionId: b.dataset.open, label: vlabel(b.dataset.open) }));
+  box().querySelectorAll('[data-sched]').forEach(b => b.onclick = () => App.openSchedulesWindow?.({ versionId: b.dataset.sched, label: vlabel(b.dataset.sched) }));
   box().querySelectorAll('[data-src]').forEach(b => b.onclick = () => dl(`/versions/${b.dataset.src}/source`, b.dataset.name));
   box().querySelectorAll('[data-re]').forEach(b => b.onclick = async () => { await api('POST', `/versions/${b.dataset.re}/reprocess`); openProject(pid, true); });
   box().querySelectorAll('[data-server]').forEach(b => b.onclick = async () => {
@@ -516,7 +502,10 @@ async function restore(ids) {
   const all = (await api('GET', `/projects/${P.detail.project.id}/takeoffs`)).takeoffs;
   const list = all.filter(t => ids.includes(t.id));
   let n = 0;
-  for (const t of list) { try { await App.addToExcel(t.spec, { save: false, takeoffId: t.id }); n++; } catch (err) { status(`"${t.name}": ${err.message}`, 'bad'); return; } }
+  for (const t of list) {
+    try { if (t.version_id) await App.useVersion?.(t.version_id); await App.addToExcel(t.spec, { save: false, takeoffId: t.id }); n++; }
+    catch (err) { status(`"${t.name}": ${err.message}`, 'bad'); return; }
+  }
   status(`${n} group${n === 1 ? '' : 's'} restored to the Take-off sheet.`, 'ok');
 }
 

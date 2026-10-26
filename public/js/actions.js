@@ -1,4 +1,4 @@
-// AI plans in the app: the answer, the rules it used, a checklist of actions (run after the user's OK when they change
+// AI plans in the Schedules window: the answer, a checklist of actions (run after the user's OK when they change
 // anything), custom take-off tables, and Undo. Shared by the task pane and the 3D / app window through a host object:
 // host = { E(), byId(), ticked(), zoneOf(), project(), onProjectChanged(p), versionId(), canEdit(), inExcel(),
 //          select(ids, fit), isolate(ids), hide(ids), showAll(), setView(v), colorBy(mode), viewState(), restoreView(s),
@@ -7,13 +7,11 @@
 import { esc, api } from './core.js';
 import { evaluate, keyOf, fmt } from './engine.js';
 import { qsSetup } from './rules.js';
-import { ITEMS, itemIds, itemSpecs } from './qsitems.js';
 import { filterIds, matchFilter } from './filter.js';
 import { mergeList, groupToSpec } from './dims.js';
-import { structureGroupPlan, POMI_SECTIONS, ELEMENT_GROUPS } from './qsgroups.js';
 import { ACTIONS, actionKind, actionText, describeFilter } from './actdefs.js';
 
-export const stepLabel = (t) => ({ test_item: 'Tested a measure item by the rules:', rule_info: 'Read the measurement rules:', project_state: 'Read the project set-up:', find_elements: 'Searched the model:', type_details: 'Read the quantities of a type:', test_plan: 'Tested the method on the model:', search_rules: 'Checked the QS rules:', list_templates: 'Looked at saved methods:', get_template: 'Opened a saved method:' })[t] || t;
+export const stepLabel = (t) => ({ project_state: 'Read the project set-up:', find_elements: 'Searched the model:', type_details: 'Read the quantities of a type:', test_plan: 'Tested the method on the model:', search_rules: 'Checked the house rules:', list_templates: 'Looked at saved methods:', get_template: 'Opened a saved method:' })[t] || t;
 const KIND_LABEL = { view: 'View', read: 'Check', write: 'Change', delete: 'Delete' };
 const ICON = { wait: '○', run: '…', ok: '✓', bad: '✕', skip: '–' };
 
@@ -59,12 +57,6 @@ export async function runAction(a, host, ctx = {}) {
     case 'view': host.setView(['top', 'bottom', 'front', 'back', 'left', 'right', 'iso'].includes(a.view) ? a.view : 'iso'); return { text: 'done' };
     case 'color_by': host.colorBy(String(a.mode || 'category')); return { text: 'done' };
     case 'run_checks': return { text: await host.checks(a.check === 'overlaps' ? 'overlaps' : 'missing') };
-    case 'set_rules': {
-      if (!['NRM2', 'POMI', 'NRM1'].includes(a.rule_set)) throw new Error('Unknown rule set.');
-      const before = qsSetup(host.project()?.project?.settings).ruleSet;
-      await saveQs(host, { ruleSet: a.rule_set });
-      return { text: `now ${a.rule_set}`, undo: () => saveQs(host, { ruleSet: before }) };
-    }
     case 'qs_setup': {
       const before = qsSetup(host.project()?.project?.settings);
       const map = { ground_level: 'groundLevel', wp_upturn: 'wpUpturn', roof_upturn: 'roofUpturn', wp_under_ground: 'wpUnderGround', wp_foundation_sides: 'wpFoundationSides', wp_roof: 'wpRoof', earth_faced: 'earthFaced' };
@@ -122,7 +114,6 @@ export async function runAction(a, host, ctx = {}) {
         host.refreshZones?.();
       } };
     }
-    case 'create_structure_groups': return createStructureGroups(host, a);
     case 'groups_to_excel': {
       const t = await tree(host);
       let groups = t.groups;
@@ -134,10 +125,9 @@ export async function runAction(a, host, ctx = {}) {
         groups = groups.filter(g => sub.has(g.folder_id));
       }
       const byId = host.byId(), refs = [];
-      // folder order (Substructure, Frame, Superstructure, Roof), then names with numbers in order
-      const pathOf = (fid) => { const out = []; for (let f = t.folders.find(x => x.id === fid); f; f = t.folders.find(x => x.id === f.parent_id)) out.unshift(f.name); return out; };
-      const rank = (g) => { const p = pathOf(g.folder_id); return [POMI_SECTIONS.indexOf(p.find(n => POMI_SECTIONS.includes(n))), ELEMENT_GROUPS.indexOf(p.at(-1))]; };
-      groups = [...groups].sort((a, b) => { const [a1, a2] = rank(a), [b1, b2] = rank(b); return a1 - b1 || a2 - b2 || a.name.localeCompare(b.name, undefined, { numeric: true }); });
+      // folder path, then names with numbers in order
+      const pathOf = (fid) => { const out = []; for (let f = t.folders.find(x => x.id === fid); f; f = t.folders.find(x => x.id === f.parent_id)) out.unshift(f.name); return out.join('\\'); };
+      groups = [...groups].sort((a, b) => pathOf(a.folder_id).localeCompare(pathOf(b.folder_id), undefined, { numeric: true }) || a.name.localeCompare(b.name, undefined, { numeric: true }));
       for (const g of groups) {
         if (!g.items.some(i => byId.has(i.element_id))) continue;
         const spec = groupToSpec(g, byId, { details: ['type', 'level', 'mark'] });
@@ -145,17 +135,6 @@ export async function runAction(a, host, ctx = {}) {
       }
       if (!refs.length) throw new Error('None of these dimension groups has elements in this model.');
       return { text: `${refs.length} table${refs.length === 1 ? '' : 's'}` };
-    }
-    case 'measure_item': {
-      const item = ITEMS.find(i => i.id === a.item); if (!item) throw new Error(`Unknown measure item "${a.item}".`);
-      const E = host.E(), byId = host.byId(), setup = qsSetup(host.project()?.project?.settings);
-      let ids = itemIds(item, E, (f) => filterIds(E, f, host.ticked(), host.zoneOf?.()));
-      if (a.filter) { const keep = new Set(filterIds(E, a.filter, host.ticked(), host.zoneOf?.())); ids = ids.filter(id => keep.has(id)); }
-      if (!ids.length) throw new Error(`No elements for "${item.name}"${a.filter ? ` with ${describeFilter(a.filter)}` : ''}.`);
-      const specs = itemSpecs(item, ids, byId, { set: setup.ruleSet, setup: host.project()?.project?.settings?.qs || {}, elements: E });
-      const refs = [];
-      for (const sp of specs) { if (a.name) sp.name = `${a.name} - ${sp.name}`; refs.push(await host.addSpec(sp)); }
-      return { text: `${specs.length} table${specs.length === 1 ? '' : 's'} (${[...new Set(refs.filter(Boolean))].join(', ') || 'list'})` };
     }
     case 'add_groups': {
       const specs = ctx.specs || [];
@@ -165,9 +144,8 @@ export async function runAction(a, host, ctx = {}) {
       return { text: `${refs.length} table${refs.length === 1 ? '' : 's'}` };
     }
     case 'build_summaries': {
-      const kinds = (Array.isArray(a.kinds) ? a.kinds : ['summary']).filter(k => ['summary', 'NRM2', 'POMI', 'NRM1'].includes(k));
       const before = new Set((await host.excel('workbook')).sheets || []);
-      const r = await host.excel('buildSummaries', { kinds: kinds.length ? kinds : ['summary'], by: ['level', 'zone', 'none'].includes(a.by) ? a.by : 'level', gifa: Number(a.gifa) || null });
+      const r = await host.excel('buildSummaries', { kinds: ['summary'], by: ['level', 'zone', 'none'].includes(a.by) ? a.by : 'level' });
       const created = (r.sheets || []).filter(n => !before.has(n));
       return { text: `${(r.sheets || []).join(', ')}`, undo: created.length ? async () => { for (const n of created) await host.excel('deleteSheet', { name: n }); } : null };
     }
@@ -175,7 +153,6 @@ export async function runAction(a, host, ctx = {}) {
       const r = await host.excel('customSheet', { def: a.sheet || {} });
       return { text: `${r.sheet} (${r.rows} rows)`, undo: r.replaced ? null : () => host.excel('deleteSheet', { name: r.sheet }) };
     }
-    case 'build_boq': { const r = await host.excel('buildBoq', { ai: Boolean(a.ai_descriptions) }); return { text: `${r.items} items` }; }
     case 'delete_folder': {
       needEdit(host);
       const f = byName((await tree(host)).folders.filter(x => x.kind === 'dim'), a.name); if (!f) throw new Error(`There is no folder "${a.name}".`);
@@ -204,61 +181,6 @@ export async function runAction(a, host, ctx = {}) {
   }
 }
 
-/** Folders by path (created when missing), then one group per element type with all its quantities. */
-export async function createStructureGroups(host, a = {}) {
-  needEdit(host);
-  const E = host.E(), byId = host.byId();
-  const ids = a.filter ? filterIds(E, a.filter, host.ticked(), host.zoneOf?.()) : null;
-  if (ids && !ids.length) throw new Error(`No elements match: ${describeFilter(a.filter)}.`);
-  const settings = host.project()?.project?.settings || {};
-  const plan = structureGroupPlan(E, byId, { ids, setup: settings.qs || {}, root: a.root || '' });
-  if (!plan.length) throw new Error('No structural concrete or steel elements found.');
-  const pid = host.projectId(), vid = host.versionId();
-  let t = await tree(host);
-  const folders = t.folders.filter(f => f.kind === 'dim');
-  const made = { folders: [], groups: [], updated: [] };
-  const folderFor = async (path) => {
-    let parent = null;
-    for (const name of path) {
-      let f = folders.find(x => x.name.toLowerCase() === name.toLowerCase() && (x.parent_id || null) === parent);
-      if (!f) {
-        const order = POMI_SECTIONS.indexOf(name) >= 0 ? POMI_SECTIONS.indexOf(name) + 1 : ELEMENT_GROUPS.indexOf(name) >= 0 ? ELEMENT_GROUPS.indexOf(name) + 1 : (name === 'Slabs' ? 1 : name === 'Walls' ? 2 : 0);     // keeps B..R, Substructure..Roof, Slabs/Walls in order
-        f = (await api('POST', `/projects/${pid}/folders`, { kind: 'dim', name, parentId: parent, sort: Math.max(order, 0) })).folder; folders.push(f); made.folders.push(f.id);
-      }
-      parent = f.id;
-    }
-    return parent;
-  };
-  for (const g of plan) {
-    const fid = await folderFor(g.path);
-    const old = t.groups.find(x => x.folder_id === fid && x.name.toLowerCase() === g.name.toLowerCase());
-    if (old) {
-      await api('PATCH', `/dimgroups/${old.id}`, { name: g.name, mtype: g.mtype, props: { ...old.props, ...g.props } });
-      await api('POST', `/dimgroups/${old.id}/items/remove`, { all: true });
-      await api('POST', `/dimgroups/${old.id}/items`, { ids: g.ids, versionId: vid });
-      made.updated.push(old);
-    } else {
-      const { group } = await api('POST', `/projects/${pid}/dimgroups`, { name: g.name, mtype: g.mtype, folderId: fid, props: g.props });
-      await api('POST', `/dimgroups/${group.id}/items`, { ids: g.ids, versionId: vid });
-      made.groups.push(group.id);
-    }
-  }
-  host.refreshTree?.();
-  const nf = new Set(plan.map(g => g.path.join('\\'))).size;
-  return { text: `${made.groups.length} new, ${made.updated.length} updated group${made.updated.length === 1 ? '' : 's'} in ${nf} folders`, plan,
-    undo: async () => {
-      for (const id of made.groups) await api('DELETE', `/dimgroups/${id}`).catch(() => {});
-      for (const g of made.updated) {
-        await api('PATCH', `/dimgroups/${g.id}`, { name: g.name, mtype: g.mtype, props: g.props });
-        await api('POST', `/dimgroups/${g.id}/items/remove`, { all: true });
-        const by = new Map(); g.items.forEach(i => { const k = `${i.version_id}|${i.sign}`; if (!by.has(k)) by.set(k, []); by.get(k).push(i.element_id); });
-        for (const [k, list] of by) { const [v, sign] = k.split('|'); await api('POST', `/dimgroups/${g.id}/items`, { ids: list, versionId: v === 'null' ? null : v, sign: Number(sign) }); }
-      }
-      for (const id of made.folders.reverse()) await api('DELETE', `/folders/${id}`).catch(() => {});
-      host.refreshTree?.();
-    } };
-}
-
 // ------------------------------------------------------------------ the plan card
 /**
  * Render an AI answer into box. data: { plan, model, provider, steps }. Returns nothing; everything is wired here.
@@ -277,16 +199,15 @@ export function renderPlan(box, data, host, { stepLabel = (t) => t, onAnswer = n
       box.append(f);
     }
   }
-  if ((plan.rules_used || []).length) add(`<div class="card"><h3>Rules used</h3><ul class="rules-used">${plan.rules_used.map(r => `<li><span class="badge">${esc(r.ref)}</span> ${esc(r.use)}</li>`).join('')}</ul></div>`);
   if (steps.length) add(`<details class="box"><summary>How the AI worked it out (${steps.length} step${steps.length > 1 ? 's' : ''})</summary>
     <ol class="steps">${steps.map(s => `<li><strong>${esc(stepLabel(s.tool))}</strong> ${esc(s.result || '')}</li>`).join('')}</ol></details>`);
   const specs = mergeList((plan.groups || []).map(g => specFromGroup(g, host)));
-  const actions = (plan.actions || []).filter(a => ACTIONS[a.do]).map(a => (a.do === 'measure_item' ? { ...a, itemName: ITEMS.find(i => i.id === a.item)?.name } : a));
+  const actions = (plan.actions || []).filter(a => ACTIONS[a.do]);
   if (actions.length) renderActions(box, actions, host, { specs });
   specs.forEach(spec => groupCard(box, spec, host, { auto: actions.some(a => a.do === 'add_groups') }));
   if (!specs.length && !actions.length && !plan.message && !plan.question) add('<div class="aimsg">The AI did not return a plan. Describe what you want more clearly.</div>');
   if (plan.dropped?.length) add(`<div class="hint">Left out (not something the app can do): ${esc(plan.dropped.join(', '))}</div>`);
-  if (model) add(`<div class="hint">AI: ${esc(provider || '')} ${esc(model)}. The AI chose the elements, the rules and the method; every number is calculated by the add-in from the model.</div>`);
+  if (model) add(`<div class="hint">AI: ${esc(provider || '')} ${esc(model)}. The AI chose the elements, the columns and the calculations; every number is calculated by the add-in from the model.</div>`);
 }
 
 function renderActions(box, actions, host, ctx) {

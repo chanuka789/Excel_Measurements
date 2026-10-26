@@ -43,13 +43,13 @@
     <li><a href="#view">The 3D view</a></li>
     <li><a href="#select">Selecting elements and zones</a></li>
     <li><a href="#measure">Measuring</a></li>
-    <li><a href="#dimgroups">3D window: project tree and dimension groups</a></li>
+    <li><a href="#dimgroups">measurement window: project tree and dimension groups</a></li>
     <li><a href="#onscreen">On-screen take-off on drawings and in 3D</a></li>
     <li><a href="#ai">AI assistant</a></li>
-    <li><a href="#review">Checks</a></li>
-    <li><a href="#revisions">Revisions</a></li>
-    <li><a href="#output">BOQ and audit PDF</a></li>
-    <li><a href="#first">Your first take-off, step by step</a></li>
+    <li><a href="#review">Live links with Excel</a></li>
+    <li><a href="#revisions">DWFx Schedules window</a></li>
+    <li><a href="#output">The same file on more than one computer</a></li>
+    <li><a href="#first">Your first measurement, step by step</a></li>
     <li><a href="#admin">For administrators</a></li>
     <li><a href="#trouble">Problems and answers</a></li>
   </ol>
@@ -82,7 +82,7 @@
   <ol>
     <li><strong>New project</strong>: give it a name, and a code and client if you like.</li>
     <li><strong>Add DWFx</strong>: choose the file exported from Revit and a model name such as <em>Structure</em> or <em>Architecture</em>. Adding again with the same model name creates version 2, 3 and so on.</li>
-    <li>The model is processed <strong>on this computer</strong>. Wait until the version shows <strong>Ready</strong> (large models take a minute; keep the add-in open), then press <strong>Open</strong>.</li>
+    <li>The model is processed <strong>on this computer</strong>. Wait until the version shows <strong>Ready</strong> (large models take a minute; keep the add-in open), then press <strong>Measure</strong> (measurement window) or <strong>Schedules</strong> (DWFx Schedules window).</li>
     <li><strong>Drawings and documents</strong>: add PDFs, images, DWG and DXF; press <strong>Open &amp; measure</strong>. 2D sheets inside a DWFx appear as <strong>2D sheets</strong> on the version.</li>
     <li><strong>Team</strong>: add colleagues as <em>Viewer</em> (open), <em>Editor</em> (also add files and measure) or <em>Owner</em> (also manage the team, settings and delete).</li>
     <li><strong>Project settings</strong> (owners): switch the AI off for confidential work, set the opening size that is not deducted (default 0.5 m²), and describe your BOQ house style.</li>
@@ -92,7 +92,7 @@
   <figure><video controls preload="none" poster="media/02-3d-tools.jpg?v=3" src="media/02-3d-tools.webm?v=3"></video><figcaption>Video, 2 minutes, recorded inside Excel: views, section box, level plan, box select, measuring, colours and isolate.</figcaption></figure>
   <table class="ref">
     <tr><th>Tool</th><th>What it does</th></tr>
-    <tr><td>Mouse</td><td>Left drag: orbit. Right drag: pan. Wheel: zoom. Click: select. <kbd>Ctrl</kbd>+click: add to the selection. Double-click: zoom to an element. Right-click: properties (in the task pane) or the object menu (in the 3D window, see <a href="#dimgroups">section 7</a>).</td></tr>
+    <tr><td>Mouse</td><td>Left drag: orbit. Right drag: pan. Wheel: zoom. Click: select. <kbd>Ctrl</kbd>+click: add to the selection. Double-click: zoom to an element. Right-click: properties (in the task pane) or the object menu (in the measurement window, see <a href="#dimgroups">section 7</a>).</td></tr>
     <tr><td>View cube and Views</td><td>Click a face of the cube, or use Views for top, front, sides and isometric. Tick <em>Orthographic</em> for a drawing-like view.</td></tr>
     <tr><td>Section</td><td>Cut the model with a box; drag the sliders. <em>Fit to selection</em> cuts around the selected elements.</td></tr>
     <tr><td>Plan</td><td>Top view of one level, cut at a height you choose (default 1.2 m). <em>Back to 3D</em> returns.</td></tr>
@@ -102,27 +102,27 @@
     <tr><td>X-ray, Edges</td><td>See the selection through other elements; show or hide outlines.</td></tr>
     <tr><td>Saved views</td><td>Save the camera, section, selection and colours for the whole team.</td></tr>
     <tr><td>Picture</td><td>Puts a picture of the 3D view into the active sheet.</td></tr>
-    <tr><td>3D window</td><td>Opens the model in a large window (good on a second screen) with drawings and properties beside it. Selections stay linked with the pane and the sheet.</td></tr>
+    <tr><td>measurement window</td><td>Opens the model in a large window (good on a second screen) with drawings and properties beside it. Selections stay linked with the pane and the sheet.</td></tr>
   </table>
   <p>Drag the bar under the 3D view to make it taller or shorter. Keyboard: click the model, then <kbd>1</kbd>–<kbd>7</kbd> standard views, <kbd>F</kbd> fit, arrows orbit, <kbd>+</kbd>/<kbd>−</kbd> zoom, <kbd>Esc</kbd> stops a tool.</p>
 
   <h2 id="select">5. Selecting elements and zones</h2>
   <ul>
-    <li><strong>Elements</strong> tab: Category › Family › Type › element. Tick any level of the tree. Search by type, family or Revit ID; filter by level.</li>
+    <li><strong>Elements</strong> tab (DWFx Schedules window): Category › Family › Type › element. Tick any level of the tree. Search by type, family or Revit ID; filter by level.</li>
     <li><strong>Isolate</strong> shows only the selection, <strong>Hide</strong> hides it, <strong>Show all</strong> brings everything back. <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> undo and redo.</li>
-    <li><strong>Zones</strong> (bottom of the Elements tab): select elements (box select on a level plan works well), type a name such as <em>Villa A</em>, press <strong>Create from selection</strong>. Zones can colour the model and split take-offs (sub-totals by zone).</li>
+    <li><strong>Zones</strong> (bottom of the Elements tab, DWFx Schedules window): select elements (box select on a level plan works well), type a name such as <em>Villa A</em>, press <strong>Create from selection</strong>. Zones can colour the model and split take-offs (sub-totals by zone).</li>
     <li>Select rows in the Take-off sheet and the elements light up in 3D (or press <strong>Select from Excel</strong> on the ribbon).</li>
   </ul>
 
   <h2 id="measure">6. Measuring</h2>
   <figure><video controls preload="none" poster="media/03-measure.jpg?v=3" src="media/03-measure.webm?v=3"></video><figcaption>Video, 47 seconds, recorded inside Excel: quantities, a formula column, Add to Excel and templates.</figcaption></figure>
   <ol>
-    <li>Select the elements, then open the <strong>Measure</strong> tab.</li>
+    <li>Select the elements, then open the <strong>Schedule</strong> tab of the <strong>DWFx Schedules</strong> window.</li>
     <li>Tick the quantities you need. The <em>Source</em> column says where each number comes from: <em>Revit</em> (exported values), <em>geometry</em> (measured exactly from the 3D faces), <em>type name</em> (sizes like 200X750) or <em>doors/windows</em> (openings in walls).</li>
     <li>Optional: add formula columns using the <code>{keys}</code>, for example <code>{Geo_bottom_area} + {Geo_side_area}</code> for beam formwork.</li>
-    <li>Choose sub-totals (type, level, zone, category) and press <strong>Add to Excel take-off</strong>. The group (G1, G2…) is written to the <em>Take-off</em> sheet with live formulas and saved to the project.</li>
+    <li>Choose sub-totals (type, level, zone, category) and press <strong>Export schedule to Excel</strong>. The group (G1, G2…) is written to the <em>Take-off</em> sheet with live formulas and saved to the project.</li>
   </ol>
-  <p><strong>Templates and discipline packs</strong> (bottom of the Measure tab) hold ready methods for Structure, Architecture, Interiors and MEP, plus methods you save with <strong>Save as template</strong>. <strong>Apply</strong> finds the matching elements and previews the totals.</p>
+  <p><strong>Templates and discipline packs</strong> (bottom of the Schedule tab) hold ready methods for Structure, Architecture, Interiors and MEP, plus methods you save with <strong>Save as template</strong>. <strong>Apply</strong> finds the matching elements and previews the totals.</p>
   <table class="ref">
     <tr><th>Geometry quantity</th><th>Typical use</th></tr>
     <tr><td>Geo volume</td><td>Concrete (only for closed solids; otherwise use Revit Volume)</td></tr>
@@ -134,9 +134,9 @@
   <div class="tip">In Excel, yellow cells are assumptions (for example slab thickness). Change them and every row recalculates. Green column headers are formula columns.</div>
   <div class="tip"><strong>One table for the same elements.</strong> When you add concrete, formwork, reinforcement, waterproofing… for exactly the same elements (from the Measure tab, a template, the AI or a dimension group), the add-in adds the new columns to the table that already holds those elements instead of starting a new table. Different element sets still get their own tables.</div>
 
-  <h2 id="dimgroups">7. 3D window: project tree and dimension groups</h2>
+  <h2 id="dimgroups">7. measurement window: project tree and dimension groups</h2>
   <figure><video controls preload="none" poster="media/06-dimension-groups.jpg?v=3" src="media/06-dimension-groups.webm?v=3"></video><figcaption>Video, 1.9 minutes, recorded inside Excel: folders, the object menu, dimension groups with custom quantities, import, deductions and one Excel table for concrete and formwork.</figcaption></figure>
-  <p>Press <strong>3D window</strong> (ribbon or 3D toolbar). The window is a full measuring workspace: the <strong>project tree</strong> on the left, the model in the middle, drawings and properties on the right (<strong>Drawings and properties</strong> button). Drag the grey bars to resize.</p>
+  <p>Press <strong>measurement window</strong> (ribbon or 3D toolbar). The window is a full measuring workspace: the <strong>project tree</strong> on the left, the model in the middle, drawings and properties on the right (<strong>Drawings and properties</strong> button). Drag the grey bars to resize.</p>
   <h3>Drawings, Model and Views tabs (top left)</h3>
   <ul>
     <li><strong>Drawings</strong>: your folders, 3D models (with their versions and DWFx sheets) and drawings. Right-click for <em>New Folder</em>, <em>Rename Folder</em>, <em>Delete Folder</em> (the contents move up, nothing is lost) and <em>Add Drawings Here</em>. Move a model or drawing with <em>Change Folder…</em> or drag it onto a folder. Double-click a version to open it (the task pane follows); double-click a drawing to see it on the right.</li>
@@ -170,7 +170,7 @@
   <p>The <strong>Dimensions</strong> tab lists the dimensions of the current group. Click to select in 3D; right-click to delete, change the multiplier, or make dimensions negative (deductions). <strong>Add measured…</strong> adds the last distance or face area you measured in 3D, or a value you type.</p>
 
   <h3>Click a schedule row to isolate it in 3D</h3>
-  <figure><video controls preload="none" poster="media/07-schedule-isolate.jpg?v=3" src="media/07-schedule-isolate.webm?v=3"></video><figcaption>Video, 1.2 minutes, recorded inside Excel: restore schedules, click a row, isolate the elements in the 3D window.</figcaption></figure>
+  <figure><video controls preload="none" poster="media/07-schedule-isolate.jpg?v=3" src="media/07-schedule-isolate.webm?v=3"></video><figcaption>Video, 1.2 minutes, recorded inside Excel: restore schedules, click a row, isolate the elements in the measurement window.</figcaption></figure>
   <p>Every schedule row keeps the Revit ID of its element, so the sheet and the 3D model stay linked both ways.</p>
   <ol>
     <li>Click a row number in a schedule (or drag over several row numbers). The elements of those rows are selected in 3D and the view moves to them.</li>
@@ -191,7 +191,7 @@
   <h3>Open a drawing to measure</h3>
   <ol>
     <li>Add PDFs or images in <strong>Project &amp; Models &gt; Drawings and documents</strong>. 2D sheets inside a DWFx can be measured too.</li>
-    <li>Press <strong>Open &amp; measure</strong> (task pane), or double-click the drawing in the 3D window's Drawings tree. In the 3D window the drawing opens in a tab next to <strong>3D model</strong>.</li>
+    <li>Press <strong>Open &amp; measure</strong> (task pane), or double-click the drawing in the measurement window's Drawings tree. In the measurement window the drawing opens in a tab next to <strong>3D model</strong>.</li>
     <li>Set the <strong>Scale</strong> of the page: choose 1:50, 1:100 … (PDFs and DWFx sheets), or choose <strong>Calibrate…</strong>, click the two ends of a length you know and type it in metres. Images always need calibration. Changing the scale recalculates every dimension already on the page.</li>
   </ol>
   <h3>Measure</h3>
@@ -221,7 +221,7 @@
     <li>In the 3D toolbar press <strong>Measure</strong>. Under <em>Take-off into a dimension group</em>, choose the current group (or <strong>+ Group</strong>) and tick Negative if needed.</li>
     <li><strong>Measure by points</strong>: click corners on the model for an area, points along it for a length, or items for a count. Enter, double-click or right-click finishes. Shift-click a face to take its whole area.</li>
     <li><strong>Face area</strong>: one click takes the whole flat face of an element (for example a slab soffit or a wall face).</li>
-    <li>The dimensions are drawn on the model in the group's colour. In the 3D window, click a dimension in the <strong>Dimensions</strong> tab to show it on its drawing or in 3D.</li>
+    <li>The dimensions are drawn on the model in the group's colour. In the measurement window, click a dimension in the <strong>Dimensions</strong> tab to show it on its drawing or in 3D.</li>
   </ol>
   <h3>Auto Count</h3>
   <ol>
@@ -258,43 +258,47 @@
   <h2 id="ai">9. AI assistant</h2>
   <figure><video controls preload="none" poster="media/04-ai.jpg?v=3" src="media/04-ai.webm?v=3"></video><figcaption>Video, 41 seconds, recorded inside Excel: ask the AI, see its working, add the result and check the take-off.</figcaption></figure>
   <ol>
-    <li>Open the <strong>AI</strong> tab and describe what to measure, for example <em>"Formwork to beams on Level 1, soffit and sides less a 200 mm slab"</em>, or pick a common request.</li>
-    <li>The AI searches the model, reads the real quantities, tests its formulas and checks your QS rules. Open <em>How the AI worked it out</em> to see its steps.</li>
+    <li>Open the <strong>AI</strong> tab of the DWFx Schedules window and describe what to measure, for example <em>"Formwork to beams on Level 1, soffit and sides less a 200 mm slab"</em>, or pick a common request.</li>
+    <li>The AI searches the model, reads the real quantities, tests its formulas and tests the schedule on the elements. Open <em>How the AI worked it out</em> to see its steps.</li>
     <li>Check the method and assumptions, change them if needed, then <strong>Add to Excel</strong>. <strong>Save as template</strong> keeps a good method for the team.</li>
   </ol>
   <p>The AI chooses the method; the add-in calculates every number from the model. The AI receives element names, counts, levels and quantity names, never the file or the 3D geometry. It can be switched off per project.</p>
 
-  <h2 id="review">10. Checks (Review tab)</h2>
-  <ul>
-    <li><strong>Missing data</strong>: elements without 3D, without a level, concrete without a volume, beams without a size in the type name.</li>
-    <li><strong>Measured status</strong>: green measured once, purple measured twice or more (possible double count), red not measured.</li>
-    <li><strong>Overlapping concrete</strong>: duplicates or elements that would be counted twice.</li>
-    <li><strong>AI take-off check</strong>: a review for missing items, odd values, unit mistakes and double counting.</li>
-  </ul>
-
-  <h2 id="revisions">11. Revisions</h2>
-  <figure><video controls preload="none" poster="media/05-revisions-output.jpg?v=3" src="media/05-revisions-output.webm?v=3"></video><figcaption>Video, 1.3 minutes, recorded inside Excel: restore saved groups, upload a revision, compare, update, BOQ and audit PDF.</figcaption></figure>
+  <h2 id="review">10. Live links between Excel and the measurements</h2>
   <ol>
-    <li>Add the new DWFx with the <em>same model name</em>, so it becomes the next version, and open it.</li>
-    <li><strong>Review › Revisions › Compare</strong>: added, removed and changed elements, and the quantity differences. <strong>Colour the model by changes</strong> shows them in 3D.</li>
-    <li><strong>Update selected groups</strong> re-measures your take-off on the new version by Revit ID. Formulas and your assumption values stay; groups made from a template or the AI also pick up new elements. A <em>Change log</em> sheet records the before and after totals.</li>
+    <li>Select a cell in Excel.</li>
+    <li>In the measurement window (or the task pane list), <strong>drag</strong> a dimension group or a dimension onto the blue bar <em>Drop here to link to the selected Excel cell</em>, <strong>double-click</strong> it, or press <strong>Link to Cell</strong>. Excel does not let an add-in drop straight into a cell, so the bar is the drop target.</li>
+    <li>The cell gets a live formula, for example <code>=CX.QTY("1a2b3c4d")</code> for the group total or <code>=CX.VALUE("1a2b3c4d","9f8e7d6c")</code> for one dimension. It changes as soon as you measure. You can use it inside your own formulas: <code>=CX.QTY("1a2b3c4d")*1.05</code>.</li>
+    <li><strong>Follow Excel</strong> on: click a linked cell and the measurement window opens the drawing (or the 3D model) and highlights where it was measured. Select a group or a dimension and its linked cells are selected in Excel. Switch Follow Excel off when you do not want the window to jump; the links always stay.</li>
+    <li><strong>Workbook View</strong> (tab in the measurement window) lists every linked cell with <em>Go to cell</em>, <em>Show</em> and <em>Remove link</em> (the cell keeps its last value).</li>
+  </ol>
+  <div class="tip">After updating to version 0.7, add the new <code>manifest.xml</code> to Excel again (remove the old add-in first). Without it, the CX formulas show <code>#NAME?</code>.</div>
+
+  <h2 id="revisions">11. DWFx Schedules window</h2>
+  <ol>
+    <li>Ribbon <strong>DWFx Schedules</strong> (or <em>Schedules</em> on a model version in Projects). Choose the model version at the top right.</li>
+    <li>Select elements in the <strong>Elements</strong> tab or in 3D.</li>
+    <li><strong>Schedule</strong> tab: tick the data columns (category, family, type, level, mark, zone) and the quantities the elements have.</li>
+    <li>Add calculated columns to the same table: <strong>Formwork (all faces)</strong>, <strong>Reinforcement</strong> (volume × rate; the rate is a yellow cell you can change), tonnes, or your own formula.</li>
+    <li><strong>Export schedule to Excel</strong>. Clicking a row on the Take-off sheet highlights its elements in the Schedules window. <strong>Summary sheets</strong> build totals by level or zone with formulas.</li>
+    <li>Or ask the <strong>AI</strong>: <em>"Schedule all beams by level with volume, formwork and reinforcement"</em>. You see the schedule first; nothing is written until you press Run or Export.</li>
   </ol>
 
-  <h2 id="output">12. BOQ and audit PDF</h2>
+  <h2 id="output">12. The same file on more than one computer (paths)</h2>
   <ul>
-    <li><strong>Build BOQ sheet</strong>: choose the totals that become BOQ items (final results are ticked by default to avoid double counting). Quantities link to the take-off totals, so the BOQ updates with them. Rates you type are kept when you rebuild. Tick the AI option for item descriptions in your house style.</li>
-    <li><strong>Create audit PDF</strong>: method, assumptions, element counts, totals and a 3D picture for every group, saved to the project.</li>
-    <li><strong>Project › Saved take-off groups › Restore</strong> rebuilds the Take-off sheet in any workbook.</li>
+    <li>Files stay on the computers. When a computer does not have a drawing or model yet, the add-in looks in the places this computer remembers, then shows the <strong>saved paths</strong> of every computer.</li>
+    <li>Press <strong>Choose the file…</strong> or <strong>Choose a folder…</strong> (a local folder, or a SharePoint / OneDrive library synced to the computer). The fingerprint is checked and the path is saved for this computer. Older paths are kept, so going back to a previous computer works again.</li>
+    <li>SharePoint links can be saved too; <em>Open link</em> opens them in the browser to download or sync the file. Syncing the SharePoint library with OneDrive is the easiest setup.</li>
+    <li><strong>Drawing Manager › Paths</strong> lists, adds and removes the paths of a drawing.</li>
   </ul>
 
-  <h2 id="first">13. Your first take-off, step by step</h2>
+  <h2 id="first">13. Your first measurement, step by step</h2>
   <ol>
-    <li>Ribbon <strong>DWFx Measure › Projects</strong>, sign in.</li>
-    <li><strong>New project</strong> › name › <strong>Create project</strong>.</li>
-    <li><strong>Add DWFx</strong> › choose the file › model name <em>Structure</em> › <strong>Add and process</strong>. Wait for <strong>Ready</strong>, press <strong>Open</strong>.</li>
-    <li><strong>Measure</strong> tab › <strong>Templates and discipline packs</strong> › <em>Concrete to beams</em> › <strong>Apply</strong> › <strong>Add to Excel</strong>.</li>
-    <li>Check the new <em>Take-off</em> sheet: group G1 with one row per beam and the totals.</li>
-    <li><strong>Review › Output › Build BOQ sheet</strong>. Type a rate in a yellow cell to see the amount.</li>
+    <li>Ribbon <strong>DWFx Measure › Projects</strong>, sign in, <strong>New project</strong>.</li>
+    <li>Add a PDF drawing in <strong>Drawings and documents</strong>, then press <strong>Open &amp; measure</strong>: the measurement window opens.</li>
+    <li>Set the scale (Drawings › Scale, or Calibrate). Dimensions › <strong>Add</strong> a dimension group, for example <em>Floor tiles</em> (Area).</li>
+    <li>Click the corners of a room and press Enter. The group total updates in the task pane.</li>
+    <li>Select a cell in Excel and double-click the group: the cell shows <code>=CX.QTY(...)</code> and follows every change.</li>
   </ol>
 
   <h2 id="admin">14. For administrators</h2>
@@ -314,7 +318,7 @@
     <tr><td>A version shows <em>Failed</em></td><td>Press <strong>Try again</strong>. If it fails again, publish the DWFx from Revit with element properties included, and tell your administrator.</td></tr>
     <tr><td>An old version has no exact quantities or opens slowly</td><td>It was processed before the update: press <strong>Try again</strong> on the version to reprocess it.</td></tr>
     <tr><td>An error message shows a reference</td><td>Send the reference (for example <code>A1B2C3D4</code>) to your administrator; it identifies the error in Admin › Errors.</td></tr>
-    <tr><td>Some elements are not in 3D</td><td>Their geometry is not in the DWFx; they can still be measured from their properties (Review › Missing data lists them).</td></tr>
+    <tr><td>Some elements are not in 3D</td><td>Their geometry is not in the DWFx; they can still be measured from their properties (Schedules window checks: Missing data lists them).</td></tr>
     <tr><td>Geo volume is missing for an element</td><td>The element is not a closed solid in the export. Use the Revit Volume for it.</td></tr>
   </table>
   <p class="muted small">Your data: projects, files and take-offs are stored on the company's Railway server (EU region) and are only visible to the project team. Deleting a project removes its files from the server.</p>

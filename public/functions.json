@@ -1,0 +1,39 @@
+{
+  "functions": [
+    {
+      "id": "QTY", "name": "QTY",
+      "description": "Quantity of a DWFx Measure dimension group (or of one of its dimensions). Updates live when the measurement changes.",
+      "parameters": [
+        { "name": "group", "description": "Group reference (the first 8 characters of the group id).", "type": "string" },
+        { "name": "quantity", "description": "Optional: empty for the total, \"Count\", \"Base\" or \"Length\".", "type": "string", "optional": true },
+        { "name": "dimension", "description": "Optional: dimension reference, or a model object id.", "type": "string", "optional": true }
+      ],
+      "result": { "type": "any" },
+      "options": { "stream": true, "cancelable": true }
+    },
+    {
+      "id": "VALUE", "name": "VALUE",
+      "description": "Quantity of one dimension of a DWFx Measure dimension group.",
+      "parameters": [
+        { "name": "group", "description": "Group reference.", "type": "string" },
+        { "name": "dimension", "description": "Dimension reference, or a model object id.", "type": "string" }
+      ],
+      "result": { "type": "any" },
+      "options": { "stream": true, "cancelable": true }
+    },
+    {
+      "id": "NAME", "name": "NAME",
+      "description": "Name of a DWFx Measure dimension group.",
+      "parameters": [ { "name": "group", "description": "Group reference.", "type": "string" } ],
+      "result": { "type": "any" },
+      "options": { "stream": true, "cancelable": true }
+    },
+    {
+      "id": "UNIT", "name": "UNIT",
+      "description": "Unit of a DWFx Measure dimension group (m, m2, m3, nr).",
+      "parameters": [ { "name": "group", "description": "Group reference.", "type": "string" } ],
+      "result": { "type": "any" },
+      "options": { "stream": true, "cancelable": true }
+    }
+  ]
+}

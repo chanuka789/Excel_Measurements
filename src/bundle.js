@@ -1,4 +1,4 @@
-// One bundled, minified file per page (task pane, 3D window) instead of ~45 separate modules, built in memory when the
+// One bundled, minified file per page (task pane, measurement window, DWFx Schedules window) instead of ~45 separate modules, built in memory when the
 // server starts. The bundles have content-hashed names, so Excel keeps them for a year and only downloads a new one
 // after a deploy; the HTML pages are never cached, so they always point at the newest bundle.
 // Workers (model processing, Auto Count) are built under their own names next to the bundles, because the code finds
@@ -8,7 +8,8 @@ import fs from 'fs';
 import zlib from 'zlib';
 
 const PAGES = { taskpane: { html: 'taskpane.html', entry: 'taskpane.js', tag: '<script type="module" src="taskpane.js"></script>' },
-  window: { html: 'viewer.html', entry: 'js/window.js', tag: '<script type="module" src="js/window.js"></script>' } };
+  window: { html: 'viewer.html', entry: 'js/window.js', tag: '<script type="module" src="js/window.js"></script>' },
+  schedules: { html: 'schedules.html', entry: 'js/schedwin.js', tag: '<script type="module" src="js/schedwin.js"></script>' } };
 const WORKERS = ['js/procworker.js', 'js/acworker.js', 'js/cadlocal.js'];
 
 /** Build the bundles. Returns { files: Map(url → { body, type, immutable }), pages: Map(html name → rewritten html) } or null. */

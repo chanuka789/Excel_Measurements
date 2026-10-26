@@ -146,7 +146,9 @@ export function groupToSpec(g, byId, opts = {}) {
     formulas.push({ key, label: c.label, unit: c.unit || '', expr, ...(c.rule ? { rule: c.rule } : {}) }); known.add(key);
   }
   if (p.rule) { const q = formulas.find(f => f.key === 'Qty') || inputs.find(i => i.key === baseKey); if (q) q.rule = p.rule; }
-  const manual = measured.map(m => ({ label: m.src?.name ? `${m.label} · ${m.src.name}` : m.label, v: { [baseKey]: m.value, ...(hasFactor ? { Factor: itemFactor(m) } : {}) } }));
+  // manual rows keep the dimension id: the Excel cell becomes a live link (=CX.QTY(group, "Base", dimension))
+  const manual = measured.map(m => ({ label: m.src?.name ? `${m.label} · ${m.src.name}` : m.label, v: { [baseKey]: m.value, ...(hasFactor ? { Factor: itemFactor(m) } : {}) },
+    ...(m.id ? { cx: { gid: g.id, mid: m.id, key: baseKey } } : {}) }));
   return { name: g.name, ids, by: opts.by ?? 'type', note: p.description || `Dimension group (${g.mtype}${conv.display !== g.mtype ? ' shown as ' + conv.display : ''})`,
     details: opts.details || DEFAULT_DETAILS, inputs, constants, formulas, manual, dimGroupId: g.id, parts: [g.name] };
 }

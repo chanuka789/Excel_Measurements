@@ -1,16 +1,16 @@
-// Everything that touches the workbook: the Take-off sheet (live formulas, named totals), the hidden
-// _dwfx sheet that links groups to the project, reading groups back, updating a group in place after a
-// revision, the BOQ sheet, the change log, measured status and Excel <-> 3D selection.
+// Everything that touches the workbook (task pane only): the Take-off sheet (schedule tables with live formulas
+// and named totals), the hidden _dwfx sheet that links tables to the project, reading tables back, updating a table
+// in place, the summary sheets, measured status and Take-off rows <-> model objects.
 import { App, api, status } from './core.js';
-import { unitFmt } from './engine.js';
+import { unitFmt, evaluate as evaluateSpec } from './engine.js';
 import { S } from './state.js';
-import { evaluate } from './measure.js';
-import { update } from './model.js';
 import { DEFAULT_DETAILS, detailLabel, detailValue, sameElements, mergeSpecs } from './dims.js';
-import { STYLE, QSHEET, SUMMARY, NRM1SHEET, setSheet, buildRegister, buildSummary, buildRuleSummary, buildNrm1, buildCustom } from './summaries.js';
-import { elementKey } from './standards.js';
+import { STYLE, QSHEET, SUMMARY, buildRegister, buildSummary, buildCustom } from './summaries.js';
+import { formulaFor } from './cxlinks.js';
 
-export const SHEET = 'Take-off', META = '_dwfx', BOQ = 'BOQ', LOG = 'Change log';
+const evaluate = (spec) => evaluateSpec(spec, S.byId);
+
+export const SHEET = 'Take-off', META = '_dwfx';
 const colL = (n) => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - 1 - m) / 26; } return s; };
 /** Text written to Excel must never turn into a formula (names, types and AI text can start with = + - @). */
 export const safeText = (v) => (typeof v === 'string' && /^[=+\-@\t\r]/.test(v) ? "'" + v : v);
@@ -61,7 +61,8 @@ function buildBlock(spec, ref, top, evRows) {
     manual.forEach(m => {
       n++; const r = rowNo();
       const det = details.map((d, i) => (i === at ? safeText(String(m.label || 'Measured dimension')) : ''));
-      push([`${ref}.${n}`, '', ...det, ...spec.inputs.map(i => m.v?.[i.key] ?? ''), ...spec.formulas.map(f => toXl(f.expr, r))], 'data');
+      const cell = (i) => (m.cx && i.key === m.cx.key ? formulaFor({ gid: m.cx.gid, mid: m.cx.mid, quantity: 'Base' }) : m.v?.[i.key] ?? '');
+      push([`${ref}.${n}`, '', ...det, ...spec.inputs.map(cell), ...spec.formulas.map(f => toXl(f.expr, r))], 'data');
     });
     subtotal('measured dimensions', start);
   }
@@ -180,7 +181,7 @@ export async function addToExcel(spec, { save = true, takeoffId = null, merge = 
     status(`Added ${ref} "${spec.name}" to the ${SHEET} sheet${id ? ' and saved it to the project' : ''}.`, 'ok');
   } catch (err) { status('Excel error: ' + err.message, 'bad'); throw err; }
   await refreshSummaries().catch(() => {});
-  if (S.colorBy === 'measured') App.setColorMode?.('measured');
+  App.onTakeoffChanged?.();
   return ref;
 }
 async function mergeIntoGroup(g, spec, { save }) {
@@ -196,7 +197,7 @@ async function mergeIntoGroup(g, spec, { save }) {
   await refreshSummaries().catch(() => {});
   const added = merged.formulas.length + merged.inputs.length - g.meta.method.formulas.length - g.meta.method.inputs.length;
   status(`"${spec.name}" uses the same ${spec.ids.length} elements as ${g.ref}, so it was added to that table (${added} new column${added === 1 ? '' : 's'}).`, 'ok');
-  if (S.colorBy === 'measured') App.setColorMode?.('measured');
+  App.onTakeoffChanged?.();
   return g.ref;
 }
 /** Outside Excel: the take-off list follows the same rule (one group for the same elements). */
@@ -292,78 +293,6 @@ export async function updateGroupInPlace(ref, spec, { keepAssumptions = true, ta
   S.rowsById = null;
 }
 
-/** Append rows to the Change log sheet. rows: [[date, group, version, added, removed, changed, column, before, after, diff]] */
-export async function writeChangeLog(rows) {
-  if (!S.inExcel || !rows.length) return;
-  await Excel.run(async (ctx) => {
-    let sh = ctx.workbook.worksheets.getItemOrNullObject(LOG); await ctx.sync();
-    if (sh.isNullObject) {
-      sh = ctx.workbook.worksheets.add(LOG);
-      sh.getRange('A1:J1').values = [['Date', 'Group', 'Updated to', 'Elements added', 'Elements removed', 'Elements changed', 'Column', 'Before', 'After', 'Difference']];
-      sh.getRange('A1:J1').format.font.set({ bold: true, name: 'Arial', size: 9 }); sh.getRange('A1:J1').format.fill.color = '#D9E6F2';
-    }
-    const used = sh.getUsedRange(true); used.load('rowCount'); await ctx.sync();
-    const r0 = used.rowCount + 1;
-    const rng = sh.getRange(`A${r0}:J${r0 + rows.length - 1}`);
-    rng.values = rows.map(r => r.map(safeText)); rng.format.font.set({ name: 'Arial', size: 9 });
-    sh.getRange(`H${r0}:J${r0 + rows.length - 1}`).numberFormat = rows.map(() => ['#,##0.000', '#,##0.000', '+#,##0.000;-#,##0.000;0']);
-    await ctx.sync();
-  });
-}
-
-// ================================================================== BOQ sheet
-/**
- * items: [{ ref, group, column, label, unit, nameKey, description, heading }]
- * Quantities link to the named totals of the Take-off groups, so the BOQ follows every change.
- * Rates already typed in an existing BOQ sheet are kept (matched by item number).
- */
-export async function buildBOQ(items, { title = 'BILL OF QUANTITIES' } = {}) {
-  await Excel.run(async (ctx) => {
-    let sh = ctx.workbook.worksheets.getItemOrNullObject(BOQ); await ctx.sync();
-    const rates = new Map();
-    if (!sh.isNullObject) {
-      const used = sh.getUsedRangeOrNullObject(true); used.load('values'); await ctx.sync();
-      if (!used.isNullObject) used.values.forEach(v => { if (v[0] && typeof v[4] === 'number') rates.set(String(v[0]), v[4]); });
-      sh.delete(); await ctx.sync();
-    }
-    sh = ctx.workbook.worksheets.add(BOQ);
-    const rows = [[title, '', '', '', '', ''], [safeText(`${App.currentProject?.()?.project?.name || ''} · ${S.label || ''}`), '', '', '', '', ''], ['', '', '', '', '', ''],
-      ['Item', 'Description', 'Unit', 'Quantity', 'Rate', 'Amount']];
-    const kinds = ['title', 'sub', 'blank', 'head'];
-    let lastHeading = null;
-    items.forEach((it) => {
-      if (it.heading && it.heading !== lastHeading) { rows.push(['', safeText(it.heading), '', '', '', '']); kinds.push('heading'); lastHeading = it.heading; }
-      const r = rows.length + 1;
-      rows.push([safeText(it.item), safeText(it.description), safeText(it.unit), `=${it.nameKey}`, rates.get(String(it.item)) ?? '', `=IF(E${r}="","",D${r}*E${r})`]);
-      kinds.push('item');
-    });
-    const first = 5, lastItem = rows.length;
-    rows.push(['', 'TOTAL CARRIED TO SUMMARY', '', '', '', `=SUM(F${first}:F${lastItem})`]); kinds.push('total');
-    const end = rows.length;
-    sh.getRange(`A1:F${end}`).formulas = rows;
-    sh.getRange(`A1:F${end}`).format.font.set({ name: 'Arial', size: 9, color: '#1d2730' });
-    ['A:A', 'B:B', 'C:C', 'D:D', 'E:E', 'F:F'].forEach((c, i) => { sh.getRange(c).format.columnWidth = [52, 330, 40, 75, 70, 90][i]; });
-    sh.getRange(`B1:B${end}`).format.wrapText = true;
-    sh.getRange(`D5:D${end}`).numberFormat = Array(end - 4).fill(['#,##0.00']);
-    sh.getRange(`E5:F${end}`).numberFormat = Array(end - 4).fill(['#,##0.00', '#,##0.00']);
-    kinds.forEach((k, i) => {
-      const row = sh.getRange(`A${i + 1}:F${i + 1}`);
-      if (k === 'title') row.format.font.set({ bold: true, size: 13, color: '#0a5082' });
-      if (k === 'sub') row.format.font.set({ italic: true, color: '#5b6670' });
-      if (k === 'head') { row.format.fill.color = '#0a5082'; row.format.font.set({ bold: true, color: '#FFFFFF' }); }
-      if (k === 'heading') row.format.font.set({ bold: true, underline: Excel.RangeUnderlineStyle.single });
-      if (k === 'item') { sh.getRange(`E${i + 1}`).format.fill.color = '#FFF2CC'; sh.getRange(`E${i + 1}`).format.font.color = '#0000FF'; }
-      if (k === 'total') { row.format.font.bold = true; row.format.fill.color = '#E2E8EE'; }
-    });
-    const B = Excel.BorderIndex;
-    [B.edgeTop, B.edgeBottom, B.edgeLeft, B.edgeRight, B.insideVertical, B.insideHorizontal].forEach(ed => { const bd = sh.getRange(`A4:F${end}`).format.borders.getItem(ed); bd.style = 'Continuous'; bd.color = '#BFBFBF'; });
-    sh.getRange('A:A').format.verticalAlignment = 'Top'; sh.getRange('B:B').format.verticalAlignment = 'Top';
-    sh.freezePanes.freezeRows(4);
-    sh.activate(); sh.getRange('A5').select();
-    await ctx.sync();
-  });
-}
-
 // ================================================================== measured status and Excel <-> 3D
 export async function rowsById() {
   if (S.rowsById) return S.rowsById;
@@ -375,7 +304,7 @@ export async function rowsById() {
     const used = sh.getUsedRangeOrNullObject(true); used.load('rowCount,rowIndex'); await ctx.sync();
     if (used.isNullObject) return;
     const r = sh.getRange(`A1:B${used.rowIndex + used.rowCount + 5}`); r.load('values'); await ctx.sync();
-    r.values.forEach(([a, v], i) => { if (typeof v === 'number' && S.byId.has(v) && /^G\d+\.\d+$/.test(String(a))) { if (!S.rowsById.has(v)) S.rowsById.set(v, []); S.rowsById.get(v).push(i + 1); } });
+    r.values.forEach(([a, v], i) => { if (typeof v === 'number' && /^G\d+\.\d+$/.test(String(a))) { if (!S.rowsById.has(v)) S.rowsById.set(v, []); S.rowsById.get(v).push(i + 1); } });
   }).catch(() => {});
   return S.rowsById;
 }
@@ -390,19 +319,9 @@ export async function loadMeasured() {
   return S.measured;
 }
 export async function goToRows(ids) {
+  if (!S.inExcel) return;
   const map = await rowsById();
   const rows = ids.flatMap(id => map.get(id) || []).slice(0, 80);
-  if (!rows.length && S.inExcel) {
-    await Excel.run(async ctx => {
-      const registry = ctx.workbook.worksheets.getItemOrNullObject('Smart Links'); await ctx.sync(); if (registry.isNullObject) return;
-      const used = registry.getUsedRangeOrNullObject(true); used.load('values'); await ctx.sync(); if (used.isNullObject) return;
-      const links = used.values.slice(4).filter(r => ids.includes(r[2]) && String(r[3]) === String(S.versionId || '') && r[4] && r[5] && r[1] === elementKey(S.byId.get(r[2]) || {}, { projectId: App.currentProjectId?.() || '', modelId: S.versionId || S.label || 'quick-open' }));
-      const name = links[0]?.[4]; if (!name) return;
-      const sh = ctx.workbook.worksheets.getItem(name), matching = [...new Set(links.filter(r => r[4] === name).map(r => r[5]))].slice(0, 80);
-      S.quiet = Date.now(); sh.activate(); sh.getRanges(matching.map(r => `C${r}:I${r}`).join(',')).select(); await ctx.sync();
-    }).catch(() => {});
-    return;
-  }
   if (!rows.length) return;
   S.quiet = Date.now();
   await Excel.run(async (ctx) => {
@@ -410,55 +329,27 @@ export async function goToRows(ids) {
     sh.getRanges(rows.map(r => `A${r}:G${r}`).join(',')).select(); await ctx.sync();
   }).catch(() => {});
 }
-/** Rows of the Smart Links sheet, cached for 20 s so clicking around other sheets stays fast in big workbooks. */
-let linkCache = null;
-async function smartLinkRows(ctx) {
-  if (linkCache && Date.now() - linkCache.at < 20000) return linkCache.rows;
-  const links = ctx.workbook.worksheets.getItemOrNullObject('Smart Links'); await ctx.sync();
-  if (links.isNullObject) { linkCache = { at: Date.now(), rows: null }; return null; }
-  const used = links.getUsedRangeOrNullObject(true); used.load('values'); await ctx.sync();
-  linkCache = { at: Date.now(), rows: used.isNullObject ? null : used.values.slice(4) };
-  return linkCache.rows;
-}
-export function forgetSmartLinks() { linkCache = null; }
-export async function onExcelSelect(ev) {
-  if (!S.data || Date.now() - S.quiet < 800) return;
-  try {
-    await Excel.run(async (ctx) => {
-      const sh = ctx.workbook.worksheets.getItem(ev.worksheetId);
-      sh.load('name'); const rng = sh.getRange(ev.address); rng.load('rowIndex,rowCount'); await ctx.sync();
-      const first = rng.rowIndex + 1, last = Math.min(rng.rowIndex + rng.rowCount, first + 5000);
-      if (sh.name !== SHEET) {
-        const rows = await smartLinkRows(ctx); if (!rows) return;
-        const ids = new Set(rows.filter(row => row[4] === sh.name && row[5] >= first && row[5] <= last && String(row[3]) === String(S.versionId || '') && row[1] === elementKey(S.byId.get(row[2]) || {}, { projectId: App.currentProjectId?.() || '', modelId: S.versionId || S.label || 'quick-open' })).map(row => row[2]).filter(id => S.byId.has(id)));
-        if (ids.size) { S.ticked = ids; update(); App.viewer?.()?.fit([...ids].filter(id => App.viewer().hasGeometry(id))); status(`${ids.size} elements highlighted from the linked schedule/BOQ.`); }
-        return;
-      }
-      const v = sh.getRange(`A${first}:B${last}`); v.load('values'); await ctx.sync();
-      const ids = new Set();
-      v.values.forEach(([, b]) => { if (typeof b === 'number' && S.byId.has(b)) ids.add(b); });
-      if (!ids.size && /^G\d+$/.test(String(v.values[0][0]))) {
-        const blk = sh.getRange(`A${first}:B${first + 5000}`); blk.load('values'); await ctx.sync();
-        for (const [a, b] of blk.values.slice(1)) {
-          if (/^G\d+$/.test(String(a))) break;
-          if (typeof b === 'number' && S.byId.has(b)) ids.add(b);
-        }
-      }
-      if (!ids.size) return;
-      S.ticked = ids; update(); App.viewer?.()?.fit([...ids].filter(id => App.viewer().hasGeometry(id)));
-      status(`${ids.size} element${ids.size > 1 ? 's' : ''} highlighted from Excel.`);
-    });
-  } catch { /* other sheets are ignored */ }
-}
-export async function selectFromExcel() {
-  if (!S.data) { status('Open a model first.', 'bad'); return; }
+/** Revit IDs of the Take-off rows in a selection (a click on a table title takes the whole table). */
+export async function idsFromSelection(ev) {
+  if (Date.now() - S.quiet < 800) return [];
+  const ids = new Set();
   await Excel.run(async (ctx) => {
-    const r = ctx.workbook.getSelectedRange(); r.load('address'); const sh = ctx.workbook.worksheets.getActiveWorksheet(); sh.load('id');
-    await ctx.sync();
-    S.quiet = 0; await onExcelSelect({ worksheetId: sh.id, address: r.address.split('!').pop() });
-  });
+    const sh = ctx.workbook.worksheets.getItem(ev.worksheetId);
+    sh.load('name'); const rng = sh.getRange(ev.address); rng.load('rowIndex,rowCount'); await ctx.sync();
+    if (sh.name !== SHEET) return;
+    const first = rng.rowIndex + 1, last = Math.min(rng.rowIndex + rng.rowCount, first + 5000);
+    const v = sh.getRange(`A${first}:B${last}`); v.load('values'); await ctx.sync();
+    v.values.forEach(([, b]) => { if (typeof b === 'number') ids.add(b); });
+    if (!ids.size && /^G\d+$/.test(String(v.values[0][0]))) {
+      const blk = sh.getRange(`A${first}:B${first + 5000}`); blk.load('values'); await ctx.sync();
+      for (const [a, b] of blk.values.slice(1)) {
+        if (/^G\d+$/.test(String(a))) break;
+        if (typeof b === 'number') ids.add(b);
+      }
+    }
+  }).catch(() => {});
+  return [...ids];
 }
-
 // ================================================================== summary sheets (all formulas)
 /** Write a layout from summaries.js with the formatting standard. The sheet is replaced; yellow inputs are kept by the caller. */
 export async function writeLayout(L, { activate = true, after = SHEET } = {}) {
@@ -527,26 +418,14 @@ export async function writeLayout(L, { activate = true, after = SHEET } = {}) {
     }
   });
 }
-/** Values of the yellow cells of a summary sheet, by row code (column A), so a rebuild keeps rates and allowances. */
-async function readKeep(name, pick) {
-  const keep = new Map();
-  await Excel.run(async (ctx) => {
-    const sh = ctx.workbook.worksheets.getItemOrNullObject(name); await ctx.sync();
-    if (sh.isNullObject) return;
-    const u = sh.getUsedRangeOrNullObject(true); u.load('values'); await ctx.sync();
-    if (u.isNullObject) return;
-    u.values.forEach(v => { const k = String(v[0] || ''); if (!k) return; const x = pick(k, v); if (typeof x === 'number') keep.set(k, x); });
-  });
-  return keep;
-}
 async function sheetExists(name) {
   return Excel.run(async (ctx) => { const s = ctx.workbook.worksheets.getItemOrNullObject(name); await ctx.sync(); return !s.isNullObject; });
 }
 /**
- * Build summary sheets. kinds: any of 'register', 'summary', 'NRM2', 'POMI', 'NRM1'. by: 'level' | 'zone' | 'none'.
- * The Quantities register is always rebuilt first (every summary reads it).
+ * Build the summary sheets: the Quantities register (always, every summary reads it) and, when kinds has 'summary',
+ * the pivot Summary. by: 'level' | 'zone' | 'none'.
  */
-export async function buildSummaries({ kinds = ['summary'], by = 'level', gifa = null, quiet = false } = {}) {
+export async function buildSummaries({ kinds = ['summary'], by = 'level', quiet = false } = {}) {
   if (!S.inExcel) throw new Error('Open the add-in in Excel to build summary sheets.');
   const groups = await readGroups();
   if (!groups.length) throw new Error(`Add take-off tables to the ${SHEET} sheet first.`);
@@ -555,15 +434,6 @@ export async function buildSummaries({ kinds = ['summary'], by = 'level', gifa =
   const order = (S.levelZ || []).map(l => l.name);
   const made = [QSHEET];
   if (kinds.includes('summary')) { await writeLayout(buildSummary(reg.entries, { by, order }), { activate: false, after: QSHEET }); made.push(SUMMARY); }
-  for (const set of ['NRM2', 'POMI']) {
-    if (!kinds.includes(set)) continue;
-    const keep = await readKeep(setSheet(set), (k, v) => v[6]);
-    await writeLayout(buildRuleSummary(reg.entries, set, { keep }), { activate: false, after: QSHEET }); made.push(setSheet(set));
-  }
-  if (kinds.includes('NRM1')) {
-    const keep = await readKeep(NRM1SHEET, (k, v) => (k === 'GIFA' ? v[4] : k.startsWith('ALLOW@') ? v[6] : v[5]));
-    await writeLayout(buildNrm1(reg.entries, { keep, gifa }), { activate: false, after: QSHEET }); made.push(NRM1SHEET);
-  }
   await Excel.run(async (ctx) => { const sh = ctx.workbook.worksheets.getItem(made[made.length - 1]); sh.activate(); await ctx.sync(); }).catch(() => {});
   if (!quiet) status(`Built ${made.join(', ')} from ${reg.entries.length} quantity rows${reg.skipped.length ? ` (${reg.skipped.join(', ')} not linked to a method, left out)` : ''}.`, 'ok');
   return { sheets: made, rows: reg.entries.length, skipped: reg.skipped, by };
@@ -573,8 +443,6 @@ export async function refreshSummaries() {
   if (!S.inExcel || !(await sheetExists(QSHEET))) return null;
   const kinds = [];
   if (await sheetExists(SUMMARY)) kinds.push('summary');
-  for (const k of ['NRM2', 'POMI']) if (await sheetExists(setSheet(k))) kinds.push(k);
-  if (await sheetExists(NRM1SHEET)) kinds.push('NRM1');
   return buildSummaries({ kinds, by: S.summaryBy || 'level', quiet: true });
 }
 /** A sheet the user asked for (through the AI), from a definition; formulas are checked first. */
@@ -601,5 +469,5 @@ export async function workbookState() {
 }
 
 export function initExcel() {
-  Object.assign(App, { addToExcel, addToList, saveTakeoff, goToRows, loadMeasured, readGroups, selectFromExcel, buildSummaries, refreshSummaries, buildCustomSheet, deleteSheet, workbookState });
+  Object.assign(App, { addToExcel, addToList, saveTakeoff, goToRows, idsFromSelection, loadMeasured, readGroups, buildSummaries, refreshSummaries, buildCustomSheet, deleteSheet, workbookState });
 }

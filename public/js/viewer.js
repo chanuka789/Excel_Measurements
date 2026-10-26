@@ -58,6 +58,7 @@ export class Viewer {
     this.host = host; this.cb = cb;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.display = 'shaded'; this.ghostView = false;
     this.renderer.localClippingEnabled = true;
     this.renderer.autoClear = false;
     host.prepend(this.renderer.domElement);
@@ -79,9 +80,18 @@ export class Viewer {
     this.bindEvents();
     new ResizeObserver(() => this.resize()).observe(host);
     this.resize();
+    const full = Math.min(window.devicePixelRatio || 1, 2);
+    let still = 0;
     const loop = () => {
       const moving = this.controls.update();
-      if ((this.dirty || moving) && host.offsetParent !== null) this.render();
+      if (host.offsetParent !== null) {
+        if (moving) {
+          still = 0;
+          const low = (this.visibleTris || 0) > 300000 ? 1 : full;          // big models: plain resolution while orbiting
+          if (this.renderer.getPixelRatio() !== low) { this.renderer.setPixelRatio(low); this.resize(); }
+        } else if (++still === 8 && this.renderer.getPixelRatio() !== full) { this.renderer.setPixelRatio(full); this.resize(); }
+        if (this.dirty || moving) this.render();
+      }
       requestAnimationFrame(loop);
     };
     loop();
@@ -194,7 +204,8 @@ export class Viewer {
     const tmp = new THREE.Color();
     for (let k = 0; k < this.n; k++) {
       const id = this.E.id[k];
-      if (id === -1 || !isVisible(id)) continue;
+      if (id === -1) continue;
+      if (!isVisible(id)) { if (this.ghostView) ghostK.push(k); continue; }        // Ghost View: hidden objects stay as faint ghosts
       const sel = selected.has(id);
       if (sel || (!anySel && !xray) || state.solid?.(id)) solidK.push(k); else ghostK.push(k);   // solid(): e.g. the current dimension group
       tmp.set(sel ? PICK : colorOf(id) || '#8a9aa6');
@@ -226,6 +237,7 @@ export class Viewer {
   updateEdgeVisibility() {
     if (!this.edges) return;
     // edges on demand: big models only show outlines once zoomed in
+    if (this.display === 'wire') { this.edges.visible = true; return; }          // wireframe: the outlines are the view
     let show = this.edgesWanted && !this.imagesHidden;
     if (show && this.visibleTris > 400000 && this.bounds) {
       const r = this.bounds.getSize(new THREE.Vector3()).length() / 2;
@@ -235,6 +247,18 @@ export class Viewer {
     this.edges.visible = show;
   }
   setXray(on) { this.state.xray = on; this.paint(this.state); }
+  /** Ghost View (CostX): hidden objects are drawn faintly instead of not at all. */
+  setGhostView(on) { this.ghostView = Boolean(on); this.paint(this.state); }
+  /** Display: 'shaded' (default), 'wire' (outlines only) or 'transparent' (see-through shaded objects). */
+  setDisplay(mode) {
+    this.display = mode;
+    if (this.solidMat) {
+      const t = mode === 'transparent';
+      this.solidMat.transparent = t; this.solidMat.opacity = t ? 0.45 : 1; this.solidMat.depthWrite = !t; this.solidMat.needsUpdate = true;
+      this.solid.visible = mode !== 'wire';
+    }
+    this.updateEdgeVisibility(); this.dirty = true;
+  }
 
   // ------------------------------------------------------------------ camera, views
   dirOf(name) {
