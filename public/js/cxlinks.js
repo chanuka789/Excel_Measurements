@@ -286,11 +286,11 @@ export async function onSelection(ev) {
 export const SHARED = '_cxshared';
 const CX_FN = /\bCX\.(QTY|VALUE|NAME|UNIT)\s*\(/i;
 /** A real CX function call, not the same letters inside a text in quotes ("..." with "" for a quote). */
-const callsCx = (f) => CX_FN.test(String(f).replace(/"(?:[^"]|"")*"/g, '""'));
+const callsCx = (f) => CX_FN.test(String(f).replace(/"(?:[^"]|"")*"/g, '""').replace(/'(?:[^']|'')*'!/g, "''!"));   // not inside "text" or 'Sheet name'!
 /** Does a formula use other cells (A1, $B$7, Sheet!C3, names of ranges are not counted), apart from its CX calls? */
 const usesCells = (f) => /(^|[^A-Za-z0-9_.])\$?[A-Z]{1,3}\$?\d{1,7}(?![A-Za-z0-9_(])/.test(String(f).replace(/"(?:[^"]|"")*"/g, '""').replace(/CX\.\w+\s*\([^)]*\)/gi, ''));
 /** A text result that starts like a formula is written with Excel's apostrophe, so it stays text. */
-const literal = (v) => (typeof v === 'string' && /^[=+\-@]/.test(v) ? "'" + v : v);
+const literal = (v) => (typeof v === 'string' && /^[=+\-@']/.test(v) ? "'" + v : v);
 const isError = (v) => typeof v === 'string' && /^#[A-Z0-9/!?]+[!?]?$/i.test(v.trim());
 
 /** Turn the live links into values. Returns { cells, sheets, notReady }.

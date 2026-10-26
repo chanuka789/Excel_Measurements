@@ -204,3 +204,14 @@ test('text that only looks like a CX formula is not frozen', async () => {
   assert.equal((await CX.freezeLinks()).cells, 0);
   assert.equal(await CX.sharedCount(), 0);
 });
+
+test('text starting with an apostrophe keeps it, and a sheet named like a CX call is not a link', async () => {
+  const X = fakeExcel();
+  const CX = await import('../public/js/cxlinks.js');
+  const a = X.add('S');
+  a.put('A1', '=IF(CX.QTY("aaaaaaaa")>0,"\'pending","")', "'pending");
+  a.put('A2', "='CX.QTY('!A1", 3);
+  assert.equal((await CX.freezeLinks()).cells, 1);
+  assert.deepEqual(a.get('A1'), { f: "'pending", v: "'pending" });
+  assert.equal(a.get('A2').f, "='CX.QTY('!A1");
+});
