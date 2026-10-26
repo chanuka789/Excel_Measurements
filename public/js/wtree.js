@@ -1,4 +1,5 @@
-// 3D window, left panel: Drawings / Model / Views tree on top, Dimension Groups / Dimensions below.
+// Measurement window, left pane (CostX): Drawings / Layers / Model / Views on top, Dimension Groups / Dimensions /
+// Auto Count below.
 // Folders can be created by the user for drawings and models, and for dimension groups. "Import Objects In" adds
 // BIM dimensions to the current dimension group. Groups go to Excel as schedules (through the task pane).
 import { $, esc, api, status, fmtDate } from './core.js';
@@ -42,15 +43,19 @@ function tree(host, nodes, columns) {
   const walk = (list, depth) => list.forEach(n => { rows.push([n, depth]); if (n.children?.length && n.open) walk(n.children, depth + 1); });
   walk(nodes, 0);
   host.innerHTML = `<div class="tr-head"><span>Name</span>${columns.map(c => `<span class="tr-c">${esc(c)}</span>`).join('')}</div>
-    <div class="tr-body" role="tree">${rows.map(([n, d], i) => `<div class="tr-row ${n.sel ? 'sel' : ''} ${n.cur ? 'cur' : ''} ${n.muted ? 'muted' : ''}" role="treeitem" tabindex="${i === 0 ? 0 : -1}" data-i="${i}"
+    <div class="tr-body" role="tree">${rows.map(([n, d], i) => `<div class="tr-row ${n.sel ? 'sel' : ''} ${n.cur ? 'cur' : ''} ${n.muted ? 'muted' : ''} ${n.linked ? 'linked' : ''}" role="treeitem" tabindex="${i === 0 ? 0 : -1}" data-i="${i}"
       ${n.children?.length ? `aria-expanded="${Boolean(n.open)}"` : ''} ${n.drag ? 'draggable="true"' : ''} style="--d:${d}">
-      <span class="tr-tw">${n.children?.length ? (n.open ? '▾' : '▸') : ''}</span><span class="tr-ic tr-${n.icon || 'item'}" aria-hidden="true"></span>
+      <span class="tr-tw">${n.children?.length ? (n.open ? '▾' : '▸') : ''}</span>${n.check != null ? `<input type="checkbox" class="tr-chk" ${n.check ? 'checked' : ''} aria-label="Show ${esc(n.label)}">` : ''}<span class="tr-ic tr-${n.icon || 'item'}" aria-hidden="true"></span>
       <span class="tr-l" title="${esc(n.title || n.label)}">${esc(n.label)}</span>${columns.map((c, k) => `<span class="tr-c">${esc(n.cols?.[k] ?? '')}</span>`).join('')}</div>`).join('') || '<div class="hint tr-empty">Nothing here yet. Right-click for options.</div>'}</div>`;
   const body = host.querySelector('.tr-body');
   const rowOf = (el) => rows[+el.closest('.tr-row').dataset.i][0];
   body.querySelectorAll('.tr-row').forEach(el => {
     const n = rowOf(el);
-    el.onclick = (e) => { if (e.target.classList.contains('tr-tw') && n.children?.length) { n.toggle?.(); return; } n.onClick?.(e); };
+    el.onclick = (e) => {
+      if (e.target.classList.contains('tr-tw') && n.children?.length) { n.toggle?.(); return; }
+      if (e.target.classList.contains('tr-chk')) { n.onCheck?.(e.target.checked); return; }
+      n.onClick?.(e);
+    };
     el.ondblclick = () => (n.onOpen ? n.onOpen() : n.toggle?.());
     el.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); n.onClick?.(e, true); n.onMenu?.(e.clientX, e.clientY); };
     el.onkeydown = (e) => {
@@ -62,7 +67,10 @@ function tree(host, nodes, columns) {
       else if (e.key === 'Enter') { e.preventDefault(); n.onOpen ? n.onOpen() : n.onClick?.(e); }
       else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); const r = el.getBoundingClientRect(); n.onMenu?.(r.left + 40, r.bottom); }
     };
-    if (n.drag) el.ondragstart = (e) => { e.dataTransfer.setData('text/plain', JSON.stringify(n.drag)); e.dataTransfer.effectAllowed = 'move'; };
+    if (n.drag) {
+      el.ondragstart = (e) => { e.dataTransfer.setData('text/plain', JSON.stringify(n.drag)); e.dataTransfer.effectAllowed = 'copyMove'; C.onDragStart?.(n.drag); };
+      el.ondragend = () => C.onDragEnd?.();
+    }
     if (n.drop) {
       el.ondragover = (e) => { e.preventDefault(); el.classList.add('drop'); };
       el.ondragleave = () => el.classList.remove('drop');
@@ -83,7 +91,8 @@ function renderTop() {
   const host = $('topTree');
   if (T.top === 'model') return renderModelTab(host);
   if (T.top === 'views') return renderViewsTab(host);
-  const p = C.W.project; if (!p) { host.innerHTML = '<p class="hint tr-empty">Open the model from a project to see its drawings.</p>'; return; }
+  if (T.top === 'layers') return renderLayersTab(host);
+  const p = C.W.project; if (!p) { host.innerHTML = '<p class="hint tr-empty">Open a project in the Excel task pane to see its drawings.</p>'; return; }
   const folders = T.folders.filter(f => f.kind === 'drawing');
   const modelNode = (m) => ({ key: 'm' + m.id, label: m.name, icon: 'model', cols: ['3D'], open: T.open.has('m' + m.id), toggle: toggler('m' + m.id),
     drag: { type: 'model', id: m.id }, title: `${m.name} · ${m.versions.length} version(s)`,
@@ -96,7 +105,7 @@ function renderTop() {
       children: (v.stats?.sheets || []).map(sh => ({ key: `s${v.id}.${sh.index}`, label: 'Sheet: ' + sh.name, icon: 'sheet', cols: ['sheet'],
         onOpen: () => C.openDrawing({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }),
         onClick: () => C.openDrawing({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }) })) })) });
-  const drawingNode = (d) => ({ key: 'd' + d.id, label: d.name, icon: canMeasure(d.name) ? 'drawing' : 'file', cols: [(d.name.split('.').pop() || '').toUpperCase()],
+  const drawingNode = (d) => ({ key: 'd' + d.id, label: d.name, icon: canMeasure(d.name) ? 'drawing' : 'file', cols: [C.uomOf?.(d) ?? (d.name.split('.').pop() || '').toUpperCase()],
     drag: { type: 'drawing', id: d.id }, muted: !canMeasure(d.name),
     onClick: () => canMeasure(d.name) && C.openDrawing(d), onOpen: () => (canMeasure(d.name) ? C.openDrawing(d) : status('This file type opens outside the add-in. Download it from the task pane.')),
     onMenu: (x, y) => menu([{ label: 'Open and Measure', disabled: !canMeasure(d.name), run: () => C.openDrawing(d) },
@@ -119,7 +128,19 @@ function renderTop() {
     { label: 'Add Drawings...', disabled: !canEdit(), run: () => uploadTo(null) }, '-',
     { label: 'Expand All', run: () => expandAll('drawing', true) }, { label: 'Collapse All', run: () => expandAll('drawing', false) }, '-', { label: 'Close Menu' }], x, y);
   host.onRootDrop = (d) => dropOn(null, d, 'drawing');
-  tree(host, nodes, ['Type']);
+  tree(host, nodes, ['UOM']);
+}
+/** Layers of the open drawing (CAD layers, PDF layers), or the categories of the 3D model. */
+function renderLayersTab(host) {
+  const src = C.layerSource?.();
+  host.onEmptyMenu = null; host.onRootDrop = null;
+  if (!src || !src.list.length) { host.innerHTML = `<p class="hint tr-empty">${esc(src?.empty || 'Open a drawing or the 3D model to see its layers.')}</p>`; return; }
+  tree(host, src.list.map(l => ({ key: 'L' + l.id, label: l.name, icon: 'layer', check: l.on, cols: [l.count != null ? String(l.count) : ''],
+    onCheck: (on) => { src.set(l.id, on); renderLayersTab(host); },
+    onOpen: () => { src.only?.(l.id); renderLayersTab(host); },
+    onMenu: (x, y) => menu([{ label: 'Show Only This Layer', run: () => { src.only?.(l.id); renderLayersTab(host); } },
+      { label: 'Show All Layers', run: () => { src.all(true); renderLayersTab(host); } }, { label: 'Hide All Layers', run: () => { src.all(false); renderLayersTab(host); } },
+      { label: 'Invert Layers', run: () => { src.invert(); renderLayersTab(host); } }, '-', { label: 'Close Menu' }], x, y) })), [src.countLabel || '']);
 }
 function renderModelTab(host) {
   const W = C.W;
@@ -136,10 +157,17 @@ function renderModelTab(host) {
   tree(host, nodes, ['Objects']);
 }
 async function renderViewsTab(host) {
+  const v2 = C.views2d?.();
+  host.onEmptyMenu = null; host.onRootDrop = null;
+  if (v2) {                // a drawing is on screen: its saved zoom positions (on this computer)
+    tree(host, v2.list.map(v => ({ key: 'z' + v.name, label: v.name, icon: 'view', cols: [`page ${v.page}`], onOpen: () => v2.apply(v), onClick: () => v2.apply(v),
+      onMenu: (x, y) => menu([{ label: 'Apply View', run: () => v2.apply(v) }, { label: 'Delete View', run: () => { v2.remove(v); renderViewsTab(host); } }, '-', { label: 'Close Menu' }], x, y) })), ['Page']);
+    if (!v2.list.length) host.querySelector('.tr-body').innerHTML = '<div class="hint tr-empty">No saved views of this drawing yet. Drawings ribbon > Save View keeps the zoom and position.</div>';
+    return;
+  }
   host.innerHTML = '<p class="hint tr-empty">Loading saved views…</p>';
   try {
     const views = await C.host.views();
-    host.onEmptyMenu = null; host.onRootDrop = null;
     tree(host, views.map(v => ({ key: 'w' + v.id, label: v.name, icon: 'view', cols: [v.created_by || ''], onOpen: () => C.host.applyView(v), onClick: () => C.host.applyView(v),
       onMenu: (x, y) => menu([{ label: 'Apply View', run: () => C.host.applyView(v) }, '-', { label: 'Close Menu' }], x, y) })), ['By']);
   } catch (err) { host.innerHTML = `<p class="msg bad">${esc(err.message)}</p>`; }
@@ -169,12 +197,13 @@ function groupNode(g) {
     children: subs.map((c, i) => ({ key: qk + '-' + i, label: c.label, icon: 'qty', muted: true, title: `${c.label}${c.rule ? ' · ' + c.rule : ''} (custom quantity of "${g.name}")`, cols: [nice(c.total, c.unit), c.unit],
       onClick: () => selectGroup(g.id), onOpen: () => editGroup(g, undefined, 'custom'), onMenu: (x, y) => groupMenu(g, x, y) })),
     title: `${g.name} · ${g.mtype}${t.absent ? ` · ${t.absent} not in this model` : ''}${t.missing ? ` · ${t.missing} without a ${g.mtype.toLowerCase()}` : ''}`,
-    drag: { type: 'group', id: g.id }, onClick: () => selectGroup(g.id), onOpen: () => editGroup(g), onMenu: (x, y) => groupMenu(g, x, y) };
+    drag: { type: 'group', id: g.id }, linked: C.isLinked?.(g.id), onClick: () => selectGroup(g.id), onOpen: () => editGroup(g), onMenu: (x, y) => groupMenu(g, x, y) };
 }
 function renderBottom() {
   document.querySelectorAll('[data-bt]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.bt === T.bottom)));
   $('curGroup').innerHTML = `<option value="">&lt;none&gt;</option>${T.groups.map(g => `<option value="${g.id}" ${g.id === T.cur ? 'selected' : ''}>${esc([folderPath(g.folder_id), g.name].filter(Boolean).join('\\'))}</option>`).join('')}`;
   if (T.bottom === 'dims') return renderDims();
+  if (T.bottom === 'auto') { const h = $('dgTree'); if (!C.autoCount?.(h)) h.innerHTML = '<div class="dock-body"><p class="hint">Auto Count finds every copy of a symbol on a drawing. Open a drawing, make a Count group current, then press <strong>Auto Count</strong> on the Dimensions ribbon.</p></div>'; return; }
   const host = $('dgTree'), q = T.filter.toLowerCase();
   const folders = T.folders.filter(f => f.kind === 'dim');
   const match = (g) => !q || g.name.toLowerCase().includes(q);
@@ -228,11 +257,14 @@ function groupMenu(g, x, y) {
     { label: 'Isolate Dimension Group', disabled: !g.items.length, run: () => C.isolate(ids(g)) }, '-',
     { label: 'Delete Dimension Group', disabled: ed, run: () => deleteGroup(g) }, '-',
     { label: 'Add to Standard Dimension Groups...', disabled: ed, run: () => toStandard(g) },
-    { label: 'Add to Excel as Schedule...', disabled: !g.items.length && !(g.props.measured || []).length, run: () => scheduleDialog([g.id]) }, '-',
+    { label: 'Add to Excel as Schedule...', disabled: !g.items.length && !(g.props.measured || []).length, run: () => scheduleDialog([g.id]) },
+    { label: 'Link to Selected Excel Cell', title: 'Select a cell in Excel first. The cell gets a live formula with this group\'s total.', run: () => C.linkCell?.({ type: 'group', id: g.id }) },
+    { label: 'Show Linked Cells in Excel', disabled: !C.isLinked?.(g.id), run: () => C.showLinks?.(g.id) }, '-',
     { label: 'Exit Menu' }], x, y);
 }
 export function selectGroup(id, { current = true } = {}) {
   T.sel = id; if (current) T.cur = id; T.dimSel.clear();
+  if (id) C.onGroupSelected?.(id);
   const g = G(id);
   for (let f = T.folders.find(x => x.id === g?.folder_id); f; f = T.folders.find(x => x.id === f.parent_id)) T.open.add('f' + f.id);   // show it in the tree
   if (g && g.items.length) C.setGroupColors(g); else C.setGroupColors(null);
@@ -253,7 +285,7 @@ function renderDims() {
   host.innerHTML = `<div class="dims-bar"><strong>${esc(g.name)}</strong> <span class="hint">${dims.length} dimension(s)</span>
       <button class="btn small" id="dimAddM" ${canEdit() ? '' : 'disabled'} title="Add the last distance or face area measured in 3D, or type a value">Add measured…</button></div>
     <table class="q dims"><thead><tr><th>#</th><th>Dimension</th><th>Level / kind</th><th style="text-align:right">${esc(g.mtype)}</th><th style="text-align:right">Qty (${esc(u)})</th></tr></thead>
-    <tbody>${rows.slice(0, 2000).map(r => `<tr data-k="${esc(r.key)}" class="${T.dimSel.has(r.key) ? 'sel' : ''} ${r.d.qty != null && r.d.qty < 0 ? 'neg' : ''} ${r.d.missing ? 'muted' : ''}" tabindex="-1">
+    <tbody>${rows.slice(0, 2000).map(r => `<tr data-k="${esc(r.key)}" draggable="true" class="${T.dimSel.has(r.key) ? 'sel' : ''} ${r.d.qty != null && r.d.qty < 0 ? 'neg' : ''} ${r.d.missing ? 'muted' : ''}" tabindex="-1">
       <td>${r.i + 1}</td><td title="${esc(r.label)}">${esc(r.label)}${r.d.item.multiplier !== 1 && r.d.item.multiplier != null ? ` <span class="hint">×${r.d.item.multiplier}</span>` : ''}</td><td title="${esc(r.level || '')}">${esc(r.level || '')}</td>
       <td class="v">${r.d.missing ? `<span class="hint">${esc(r.d.missing)}</span>` : esc(nice(r.d.base, UNIT[g.mtype]))}</td><td class="v">${esc(nice(r.d.qty, u))}</td></tr>`).join('')}</tbody></table>
     ${rows.length > 2000 ? `<p class="hint">Showing 2,000 of ${rows.length}.</p>` : ''}`;
@@ -269,6 +301,10 @@ function renderDims() {
       renderDims();
     };
     tr.oncontextmenu = (e) => { e.preventDefault(); if (!T.dimSel.has(r.key)) { T.dimSel.clear(); T.dimSel.add(r.key); renderDims(); } dimMenu(g, e.clientX, e.clientY); };
+    const drag = r.d.kind === 'measured' ? { type: 'dim', gid: g.id, mid: r.d.item.id } : { type: 'dim', gid: g.id, eid: r.d.item.element_id };
+    tr.ondragstart = (e) => { e.dataTransfer.setData('text/plain', JSON.stringify(drag)); e.dataTransfer.effectAllowed = 'copy'; C.onDragStart?.(drag); };
+    tr.ondragend = () => C.onDragEnd?.();
+    tr.ondblclick = () => C.linkCell?.(drag);
   });
   $('dimAddM').onclick = () => addMeasured(g);
 }
@@ -285,7 +321,9 @@ function dimMenu(g, x, y) {
       render(); C.setGroupColors(G(g.id));
     } catch (err) { status(err.message, 'bad'); }
   };
+  const one = keys.length === 1 ? (man[0] ? { type: 'dim', gid: g.id, mid: man[0] } : { type: 'dim', gid: g.id, eid: bim[0] }) : null;
   menu([{ label: `Select in 3D (${bim.length})`, disabled: !bim.length, run: () => C.setIds(bim, true) },
+    { label: 'Link to Selected Excel Cell', disabled: !one, title: 'Select a cell in Excel first: it gets a live formula with this dimension\'s quantity.', run: () => C.linkCell?.(one) },
     { label: 'Delete Dimension' + (keys.length > 1 ? 's' : ''), disabled: ed, run: async () => {
       try {
         if (bim.length) { const r = await api('POST', `/dimgroups/${g.id}/items/remove`, { ids: bim }); replaceGroup(r.group); }
@@ -316,7 +354,7 @@ let r0 = null;
 
 // ================================================================== status bar (current group, GFA)
 function renderStatusBar() {
-  const el = $('wstat'); if (!el) return;
+  const el = $('stMain') || $('wstat'); if (!el) return;
   const g = G(T.cur), parts = [];
   if (g) { const t = groupTotal(g, C.W.byId); parts.push(`${g.mtype === 'Count' ? 'Count' : conversionName(g)} = ${nice(t.total, t.unit)} ${t.unit}  (${esc(g.name)})`); }
   const gfa = T.groups.filter(x => x.props.gfa).map(x => groupTotal(x, C.W.byId)).filter(t => t.unit === 'm2').reduce((s, t) => s + t.total, 0);
@@ -627,6 +665,18 @@ export function objectActions(list, label) {
     { label: 'Create Dimension Group...', disabled: !canEdit(), run: () => createGroupFor(list) }, '-', { label: 'Close Menu' }];
 }
 export const currentGroup = () => G(T.cur);
+export const groupById = (id) => G(id);
+export const allGroups = () => T.groups;
+export const selectedDims = () => [...T.dimSel];
+/** For the ribbon: the same actions as the right-click menus. */
+export const treeActions = {
+  addDrawings: (folderId = null) => uploadTo(folderId), newFolder: (kind) => newFolder(kind, null),
+  addGroup: () => editGroup(null, null), groupProps: (g = G(T.cur)) => g && editGroup(g), copyGroup: (g = G(T.cur)) => g && copyGroup(g),
+  exportGroups: (list = T.sel ? [T.sel] : T.cur ? [T.cur] : []) => list.length && scheduleDialog(list), fromStandard: () => fromStandard(),
+  addMeasured: (g = G(T.cur)) => g && addMeasured(g), deleteGroup: (g = G(T.cur)) => g && deleteGroup(g),
+  setTop: (t) => { T.top = t; renderTop(); }, setBottom: (b) => { T.bottom = b; renderBottom(); }, top: () => T.top, bottom: () => T.bottom,
+  canEdit: () => canEdit(), changeProp: (key, label, hint, g = G(T.cur)) => g && changeProp(g, key, label, hint),
+};
 /** The tree's dimension groups as the source of the on-screen take-off store (one copy of the data). */
 export const tkSource = {
   groups: () => T.groups, current: () => T.cur, setCurrent: (id) => selectGroup(id),

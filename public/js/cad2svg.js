@@ -80,11 +80,11 @@ export function normalise(db, src) {
   else for (const [name, b] of Object.entries(db.blocks || {})) blocks.set(name, { ents: b.entities || [], base: P(b.position) || [0, 0] });
   const layerOf = (e, parent) => (e.layer && e.layer !== '0' ? String(e.layer) : parent || String(e.layer || '0'));
   const deg = src === 'dxf';                        // dxf-parser gives INSERT / TEXT rotations in degrees, LibreDWG in radians
-  const path = (layer, col, m, pts, closed = false) => {
+  const path = (layer, col, m, pts, closed = false, hatch = false) => {
     if (!pts || pts.length < 2 || out.segs > MAX_SEGS) return;
     const q = pts.map(p => app(m, p)).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]));
     if (q.length < 2) return;
-    out.segs += q.length; out.paths.push({ layer, colour: col, pts: q, closed });
+    out.segs += q.length; out.paths.push({ layer, colour: col, pts: q, closed, ...(hatch ? { hatch: true } : {}) });
   };
   const walk = (ents, m, depth, parentLayer) => {
     for (const e of ents) {
@@ -115,13 +115,13 @@ export function normalise(db, src) {
       } else if (t === 'SOLID' || t === '3DFACE' || t === 'TRACE') {
         const cs = [e.corner1, e.corner2, e.corner4 || e.corner3, e.corner3].map(P).filter(Boolean);
         const pts = (e.points || []).map(P).filter(Boolean);
-        path(layer, col, m, pts.length ? pts : cs, true);
+        path(layer, col, m, pts.length ? pts : cs, true, true);
       } else if (t === 'HATCH') {
         for (const b of e.boundaryPaths || []) {
-          if (b.vertices?.length) path(layer, col, m, bulgePts(b.vertices, true), true);
+          if (b.vertices?.length) path(layer, col, m, bulgePts(b.vertices, true), true, true);
           for (const ed of b.edges || []) {
-            if (ed.start && ed.end) path(layer, col, m, [P(ed.start), P(ed.end)]);
-            else if (ed.center && ed.radius) path(layer, col, m, arcPts(P(ed.center), ed.radius, ed.startAngle || 0, ed.endAngle || 2 * Math.PI));
+            if (ed.start && ed.end) path(layer, col, m, [P(ed.start), P(ed.end)], false, true);
+            else if (ed.center && ed.radius) path(layer, col, m, arcPts(P(ed.center), ed.radius, ed.startAngle || 0, ed.endAngle || 2 * Math.PI), false, true);
           }
         }
       } else if (t === 'POINT') { const p = P(e.position); if (p) path(layer, col, m, [[p[0] - 0.5, p[1]], [p[0] + 0.5, p[1]]]); }
@@ -180,7 +180,7 @@ export function toSvg(n) {
   for (const [name] of n.layers) byLayer.set(name, []);
   for (const p of n.paths) {
     const d = 'M' + p.pts.map(q => X(q[0]) + ',' + Y(q[1])).join('L') + (p.closed ? 'Z' : '');
-    byLayer.get(p.layer).push(`<path d="${d}" stroke="${p.colour}"/>`);
+    byLayer.get(p.layer).push(`<path d="${d}" stroke="${p.colour}"${p.hatch ? ' class="h"' : ''}/>`);
   }
   for (const t of n.texts) {
     const rot = -t.rot * 180 / Math.PI;

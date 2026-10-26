@@ -37,6 +37,9 @@ const put = (store, rec) => run(store, 'readwrite', s => s.put(rec));
 const del = (store, key) => run(store, 'readwrite', s => s.delete(key));
 const all = (store) => run(store, 'readonly', s => s.getAll()).then(r => r || []);
 
+/** Every converted CAD drawing kept for a file (one per reader version: key, key:v2, ...). */
+async function delCad(key) { for (const c of await all('cad')) if (c.key === key || c.key.startsWith(key + ':v')) await del('cad', c.key); }
+
 let persisted = false;
 /** Ask the browser not to clear the library when disk space runs low (best effort). */
 async function persist() {
@@ -87,15 +90,15 @@ export const library = {
   async list() {
     const [files, models, cad] = await Promise.all([all('files'), all('models'), all('cad')]);
     const msize = new Map(models.map(m => [m.key, (m.payload?.size || 0) + (m.geometry?.size || 0) + (m.sheets || []).reduce((s, x) => s + (x.svg?.size || 0), 0)]));
-    const csize = new Map(cad.map(c => [c.key, c.svg?.size || 0]));
+    const csize = new Map(); cad.forEach(c => { const k = c.key.replace(/:v\d+$/, ''); csize.set(k, (csize.get(k) || 0) + (c.svg?.size || 0)); });     // CAD output is kept per reader version
     const out = files.map(({ blob, ...f }) => ({ ...f, model: msize.get(f.key) || 0, cad: csize.get(f.key) || 0 }));
     for (const m of models) if (!files.some(f => f.key === m.key)) out.push({ key: m.key, name: m.payload ? 'Processed model' : '', size: 0, model: msize.get(m.key), cad: 0, added: m.at });
     return out.sort((a, b) => (b.added || 0) - (a.added || 0));
   },
   /** Remove a file and everything made from it. */
-  async remove(key) { await Promise.all(STORES.map(s => del(s, key))); },
+  async remove(key) { await Promise.all([...STORES.map(s => del(s, key)), delCad(key)]); },
   /** Remove only what was made from the file (it is made again when needed). */
-  async removeDerived(key) { await Promise.all([del('models', key), del('cad', key)]); },
+  async removeDerived(key) { await Promise.all([del('models', key), delCad(key)]); },
   /** { used, quota } in bytes, when the browser says. */
   async usage() { try { const e = await navigator.storage.estimate(); return { used: e.usage || 0, quota: e.quota || 0 }; } catch { return { used: 0, quota: 0 }; } },
 };

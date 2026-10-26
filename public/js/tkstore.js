@@ -97,6 +97,8 @@ export class TakeoffStore {
   // ---------------------------------------------------------------- drawing settings
   drawing(dkey) { const s = this.settings[dkey] || {}; return { multiplier: 1, pages: {}, markups: [], ...s }; }
   scaleOf(dkey, page) { return this.drawing(dkey).pages[page]?.scale || 0; }
+  /** Y stretch of a page calibrated separately in X and Y (1 = the same scale both ways). */
+  kyOf(dkey, page) { return this.drawing(dkey).pages[page]?.ky || 1; }
   /** Working area of a page (CostX "Set Working Area"): { x0, y0, x1, y1 } in drawing units, or null. */
   areaOf(dkey, page) { return this.drawing(dkey).pages[page]?.area || null; }
   async setArea(dkey, page, area) {
@@ -113,11 +115,15 @@ export class TakeoffStore {
   /** New scale for one page: saves it and recalculates every dimension already measured on that page. */
   async setScale(dkey, page, scale, extra = {}) {
     const s = this.drawing(dkey);
-    s.pages = { ...s.pages, [page]: { ...(s.pages[page]?.area ? { area: s.pages[page].area } : {}), scale, ...extra } };
+    const old = s.pages[page] || {};
+    s.pages = { ...s.pages, [page]: { ...(old.area ? { area: old.area } : {}), ...(old.ky && extra.ky === undefined && !extra.resetY ? { ky: old.ky } : {}), scale, ...extra } };
+    delete s.pages[page].resetY;
+    if (!s.pages[page].scale) s.pages[page] = old.area ? { area: old.area } : {};          // reset calibration
     await this.saveDrawing(dkey, s);
+    const ky = s.pages[page].ky || 1;
     const n = await this.updateDims((m) => {
-      if (m.src?.t === '3d' || m.src?.key !== dkey || (m.src.page || 1) !== page || !m.pts) return undefined;
-      const q = measure2d(m.shape, m.pts, scale, m); if (!q) return undefined;
+      if (m.src?.t === '3d' || m.src?.key !== dkey || (m.src.page || 1) !== page || !m.pts || !scale) return undefined;
+      const q = measure2d(m.shape, m.pts, scale, { ...m, ky }); if (!q) return undefined;
       return { ...m, value: q.value, ...(q.len != null ? { len: q.len } : {}), ...(q.bars != null ? { rebar: { ...m.rebar, bars: q.bars } } : {}) };
     });
     if (n) status(`Scale changed: ${n} dimension group(s) recalculated.`, 'ok');

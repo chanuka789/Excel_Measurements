@@ -174,6 +174,7 @@ async function cadSvg(blob, name) {
   if (!res.ok) { let msg = `The drawing could not be read (${res.status}).`; try { msg = (await res.json()).error || msg; } catch { /* not json */ } throw new Error(msg); }
   return res.text();
 }
+const CAD_V = ':v2';               // version of the CAD reader output kept here (v2 marks hatch lines)
 const svgResponse = (blob) => new Response(blob, { headers: { 'content-type': 'image/svg+xml' } });
 
 /**
@@ -192,12 +193,13 @@ export async function drawingResponse(d, { cad = true } = {}) {
   }
   const local = isLocal(d), key = local ? d.sha256 : `cloud:d:${d.id}`;
   if (cad && isCad(d.name)) {
-    const hit = await library.getCad(key).catch(() => null);
+    const ckey = key + CAD_V;
+    const hit = await library.getCad(ckey).catch(() => null);
     if (hit) return svgResponse(hit);
     let text;
     if (local) text = await cadSvg(await fileFor(d), d.name);
     else text = await (await api('GET', `/drawings/${d.id}/cad`, null, { raw: true })).text();
-    library.putCad(key, text).catch(() => {});
+    library.putCad(ckey, text).catch(() => {});
     return svgResponse(new Blob([text], { type: 'image/svg+xml' }));
   }
   const type = d.content_type || (/\.pdf$/i.test(d.name) ? 'application/pdf' : '');
@@ -234,8 +236,8 @@ export async function keepDrawingHere(d) {
   if (isLocal(d)) return;
   const blob = await (await api('GET', `/drawings/${d.id}/file?inline=1`, null, { raw: true })).blob();
   const sha = await library.putFile(blob, { name: d.name, type: d.content_type });
-  const cad = await library.getCad(`cloud:d:${d.id}`).catch(() => null);
-  if (cad) await library.putCad(sha, await cad.text());
+  const cad = await library.getCad(`cloud:d:${d.id}${CAD_V}`).catch(() => null);
+  if (cad) await library.putCad(sha + CAD_V, await cad.text());
   await api('POST', `/drawings/${d.id}/keep-local`, { sha256: sha });
 }
 

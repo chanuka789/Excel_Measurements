@@ -35,6 +35,8 @@ export class DrawingTakeoff {
     this.host = host; this.store = store; this.o = opts;
     this.tool = 'select'; this.sign = 1; this.angle = false; this.snapOn = true; this.labels = true; this.legend = true;
     this.markupsOn = true; this.mono = false; this.showAll = true;
+    this.signShow = 0;                       // 0 both, 1 only positive, -1 only negative dimensions (ribbon Positive / Negative / Both)
+    this.disp = { text: true, hatch: true, weight: true, white: false, lineStyles: true };   // drawing display (ribbon Display group)
     this.sel = new Set(); this.draft = null; this.hover = null; this.pending = [];
     this.z = 1; this.tx = 0; this.ty = 0; this.rot = 0; this.page = 1; this.pages = 1;
     this.unsub = store.on((w) => { if (w !== 'current') this.drawDims(); this.syncBar(); });
@@ -73,6 +75,11 @@ export class DrawingTakeoff {
   get paperMm() { return G2.PAPER_MM[this.kind] || 0; }
   /** Metres per drawing unit: the scale set for the page, or for CAD drawings the file's own units (1:1). */
   get scale() { return this.store.scaleOf(this.dkey, this.page) || this.cadUnit || 0; }
+  /** Y stretch of this page when it was calibrated separately in X and Y. */
+  get ky() { return this.store.kyOf?.(this.dkey, this.page) || 1; }
+  kyFor(m) { return this.store.kyOf?.(m.src?.key || this.dkey, m.src?.page || this.page) || 1; }
+  /** Tell the window (ribbon, status bar) that the tool, the page or the view changed. */
+  changed() { this.o.onState?.(this); }
   get settings() { return this.store.drawing(this.dkey); }
   src() { return { t: this.d.kind === 'sheet' ? 's' : 'd', key: this.dkey, page: this.page, name: this.d.name + (this.pages > 1 ? ` (page ${this.page})` : '') }; }
 
@@ -244,7 +251,14 @@ export class DrawingTakeoff {
       this.say('Layers updated: the cursor snaps only to visible layers.', 'ok');
     }
   }
-  applyMono() { this.el.base.classList.toggle('mono', this.mono); }
+  applyMono() {
+    const b = this.el.base; b.classList.toggle('mono', this.mono);
+    b.classList.toggle('no-text', !this.disp.text); b.classList.toggle('no-hatch', !this.disp.hatch); b.classList.toggle('thin', !this.disp.weight);
+    this.el.page.classList.toggle('white', this.disp.white);
+  }
+  /** Drawing display options (ribbon Display group). Text, hatching and line weight apply to CAD and SVG drawings. */
+  setDisplay(key, on) { this.disp[key] = on ?? !this.disp[key]; this.applyMono(); this.changed(); }
+  get vector() { return ['cad', 'svg', 'sheet'].includes(this.kind); }
 
   // ================================================================== toolbar
   renderBar() {
@@ -278,6 +292,7 @@ export class DrawingTakeoff {
     this.el.bar.querySelector('#tkScale').onchange = (e) => this.scaleChoice(e.target.value);
     this.el.bar.querySelectorAll('[data-k]').forEach(x => x.onclick = () => this.act(x.dataset.k));
     this.syncBar();
+    this.changed();
   }
   syncBar() {
     if (!this.el?.bar) return;
@@ -352,6 +367,8 @@ export class DrawingTakeoff {
     if (t === 'calibrate') this.say('Calibrate: click the two ends of a length you know (for example a dimension line).');
     if (t === 'rebar') this.say('Rebar: click the two ends of the spacing line (the distance the bars cover).');
     if (t === 'warea') this.say('Working area: drag a box around the part of the drawing to keep.');
+    if (t === 'zarea') this.say('Zoom area: drag a box around the part to zoom to.');
+    if (t === 'selarea') this.say('Select in area: drag a box; the dimensions fully inside are selected (Ctrl adds).');
   }
   /** Is everything in place to measure into the current group? Explains what is missing. */
   ready() {
@@ -374,7 +391,7 @@ export class DrawingTakeoff {
     let ratio = Number(v);
     if (v === 'custom') { ratio = await ask('Custom scale', 'Scale 1 :', '100', { type: 'number', hint: 'For a 1:75 drawing, enter 75.' }); if (!ratio || ratio <= 0) { this.renderBar(); return; } }
     const all = this.pages > 1 && await dialog({ title: 'Scale', body: `<p>Use 1:${ratio} for every page of this drawing, or only page ${this.page}?</p>`, buttons: [{ label: 'This page', value: null }, { label: 'All pages', value: 'all', primary: true }] }) === 'all';
-    await this.saveScale(G2.scaleFromRatio(ratio, this.paperMm), { ratio }, all);
+    await this.saveScale(G2.scaleFromRatio(ratio, this.paperMm), { ratio, resetY: true }, all);
   }
   async saveScale(scale, extra, allPages = false) {
     try {
@@ -411,7 +428,7 @@ export class DrawingTakeoff {
       const p = this.evPage(e);
       down = { x: e.clientX, y: e.clientY, tx: this.tx, ty: this.ty, p, btn: e.button, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey };
       panning = e.button === 1 || (e.button === 0 && this.keys.has(' '));
-      if (e.button === 0 && !panning && (this.tool === 'warea' || this.tool === 'capture')) { down.box = true; down.rectTool = this.tool; }
+      if (e.button === 0 && !panning && ['warea', 'capture', 'zarea', 'selarea'].includes(this.tool)) { down.box = true; down.rectTool = this.tool; }
       else if (e.button === 0 && !panning && this.cmp?.align) down.cmp = { dx: this.cmp.dx, dy: this.cmp.dy };
       if (e.button === 0 && !panning && this.tool === 'select') {
         const mk = this.hitMarkup(p);
@@ -434,6 +451,7 @@ export class DrawingTakeoff {
     v.addEventListener('pointermove', (e) => {
       const p = this.evPage(e);
       this.cursor = p; this.cursorScreen = [e.clientX, e.clientY];
+      this.o.onCursor?.(p, this);
       if (down) {
         const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
         if (down.cmp) { this.cmp.dx = down.cmp.dx + (p[0] - down.p[0]) / this.cmp.k; this.cmp.dy = down.cmp.dy + (p[1] - down.p[1]) / this.cmp.k; this.moveCompare(); return; }
@@ -456,6 +474,8 @@ export class DrawingTakeoff {
         const q = this.evPage(e); this.boxRect = null; this.drawDraft();
         if (d.rectTool === 'warea') return this.setWorkingArea(d.p, q);
         if (d.rectTool === 'capture') return this.acCapture(d.p, q);
+        if (d.rectTool === 'zarea') { this.setTool('select'); return this.fit({ x0: Math.min(d.p[0], q[0]), y0: Math.min(d.p[1], q[1]), x1: Math.max(d.p[0], q[0]), y1: Math.max(d.p[1], q[1]) }); }
+        if (d.rectTool === 'selarea') { this.setTool('select'); return this.boxSelect(d.p, q, d.ctrl); }
         this.boxSelect(d.p, q, d.ctrl); return;
       }
       if ((d.move || d.handle || d.markup) && moved > 3) { this.dragEnd(d); return; }
@@ -540,13 +560,13 @@ export class DrawingTakeoff {
     const d = this.draft; if (!d) return;
     d.pts = d.pts.filter((p, i) => !i || Math.hypot(p[0] - d.pts[i - 1][0], p[1] - d.pts[i - 1][1]) > 1e-9);   // a double-click adds the last point twice
     if (this.tool === 'distance') {
-      const q = G2.measure2d('distance', G2.flat(d.pts), this.scale);
+      const q = G2.measure2d('distance', G2.flat(d.pts), this.scale, { ky: this.ky });
       this.say(q ? `Distance: ${q.value.toFixed(3)} m` : 'Set the scale to read distances in metres.', q ? 'ok' : 'warn');
       this.draft = null; this.drawDraft(); return;
     }
     if (this.tool !== 'measure') return;
     const g = this.store.current(), pts = G2.flat(d.pts);
-    const q = G2.measure2d(d.shape, pts, this.scale);
+    const q = G2.measure2d(d.shape, pts, this.scale, { ky: this.ky });
     if (!q) { this.say(d.shape === 'area' ? 'An area needs at least 3 points.' : 'A length needs at least 2 points.', 'warn'); return; }
     this.draft = null; this.drawDraft();
     const dim = makeDim(g, { shape: d.shape, pts, value: q.value, len: q.len, src: this.src(), sign: this.sign, dmult: this.settings.multiplier || 1 });
@@ -554,6 +574,7 @@ export class DrawingTakeoff {
       await this.store.addMeasured(g.id, [dim]);
       const u = UNIT[g.mtype];
       this.say(`${dim.label} added to "${g.name}": ${nice(q.value, u)} ${uLabel(u)}${q.len != null ? ` · perimeter ${nice(q.len, 'm')} m` : ''}${this.sign < 0 ? ' (negative)' : ''}.`, 'ok');
+      if (this.o.propsOnAdd?.()) { const x = this.dimsHere().find(y => y.m.id === dim.id); if (x) this.editDim(x); }      // Properties on Add
     } catch (err) { this.say(err.message, 'bad'); }
   }
   addCount(g, p) {
@@ -570,9 +591,22 @@ export class DrawingTakeoff {
     try { for (const [gid, ms] of by) await this.store.addMeasured(gid, ms); } catch (err) { this.say(err.message, 'bad'); }
     this.drawDims();
   }
+  /** Calibrate X or Y separately (scanned drawings stretched more one way): Y keeps the X scale and stores the stretch. */
+  calibrateAxis(axis) {
+    if (axis === 'y' && !this.store.scaleOf(this.dkey, this.page)) return this.say('Calibrate X (or set the scale) first, then calibrate Y.', 'warn');
+    this.calAxis = axis; this.setTool('calibrate');
+    this.say(`Calibrate ${axis.toUpperCase()}: click the two ends of a ${axis === 'x' ? 'horizontal' : 'vertical'} length you know.`);
+  }
+  async resetCalibration() {
+    if (!this.store.scaleOf(this.dkey, this.page)) return this.say('This page has no scale to reset.');
+    if (!await confirmIt('Reset calibration', 'Remove the scale of this page? Dimensions already measured keep their values until you set a new scale.')) return;
+    try { await this.store.setScale(this.dkey, this.page, 0, { resetY: true }); this.say('Calibration reset. Set the scale again before measuring.', 'ok'); } catch (err) { this.say(err.message, 'bad'); }
+    this.renderBar(); this.drawDims();
+  }
   async calibrate() {
     const [a, b] = this.draft.pts; this.draft = null; this.drawDraft();
-    const units = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const axis = this.calAxis; this.calAxis = null;
+    const units = axis === 'x' ? Math.abs(b[0] - a[0]) || Math.hypot(b[0] - a[0], b[1] - a[1]) : axis === 'y' ? Math.abs(b[1] - a[1]) || Math.hypot(b[0] - a[0], b[1] - a[1]) : Math.hypot(b[0] - a[0], b[1] - a[1]);
     let metres = null, all = false;
     const r = await dialog({ title: 'Calibrate', body: `<label class="field">Real length between the two points (m)<input class="input" id="clV" type="number" step="any" min="0" autofocus placeholder="e.g. 4.5"></label>
       ${this.pages > 1 ? '<label class="check"><input type="checkbox" id="clAll"> Use for every page</label>' : ''}
@@ -581,12 +615,13 @@ export class DrawingTakeoff {
     this.setTool('select');
     if (!r) return;
     const scale = metres / units;
-    await this.saveScale(scale, { calibrated: true, ...(this.paperMm ? { ratio: Math.round(G2.ratioFromScale(scale, this.paperMm) * 100) / 100 } : {}) }, all);
+    if (axis === 'y') { const sx = this.store.scaleOf(this.dkey, this.page); return this.saveScale(sx, { calibrated: true, ky: scale / sx }, all); }
+    await this.saveScale(scale, { calibrated: true, ...(axis === 'x' ? {} : { resetY: true }), ...(this.paperMm ? { ratio: Math.round(G2.ratioFromScale(scale, this.paperMm) * 100) / 100 } : {}) }, all);
   }
 
   // ================================================================== dimensions on this page
   dimsHere() { return this.store.dimsOn(this.d.kind === 'sheet' ? 's' : 'd', this.dkey, this.page); }
-  visibleDims() { const cur = this.store.currentId(); return this.dimsHere().filter(x => this.showAll || x.g.id === cur); }
+  visibleDims() { const cur = this.store.currentId(); return this.dimsHere().filter(x => (this.showAll || x.g.id === cur) && (!this.signShow || (x.m.sign < 0 ? -1 : 1) === this.signShow)); }
   hitDim(p) {
     const tol = 6 / this.z; let best = null, bestD = tol, bestA = Infinity;
     for (const x of this.visibleDims()) {
@@ -639,6 +674,20 @@ export class DrawingTakeoff {
     return true;
   }
 
+  /** Select and zoom to several dimensions of this drawing (a whole group linked to an Excel cell). */
+  async focusDims(ids) {
+    const want = new Set(ids);
+    const list = this.store.groups().flatMap(g => (g.props.measured || []).map(m => ({ g, m }))).filter(y => want.has(y.m.id) && y.m.src?.key === this.dkey);
+    if (!list.length) return false;
+    const pages = new Map(); list.forEach(y => pages.set(y.m.src.page || 1, (pages.get(y.m.src.page || 1) || 0) + 1));
+    const page = [...pages].sort((a, b) => b[1] - a[1])[0][0];
+    if (page !== this.page) await this.showPage(page);
+    const here = list.filter(y => (y.m.src.page || 1) === page);
+    this.sel = new Set(here.map(y => y.m.id));
+    this.fit(G2.bbox(here.flatMap(y => y.m.pts || []))); this.drawDims();
+    return true;
+  }
+
   // ================================================================== editing selected dimensions
   selected() { return this.dimsHere().filter(x => this.sel.has(x.m.id)); }
   async updateSel(fn, msg) {
@@ -652,7 +701,7 @@ export class DrawingTakeoff {
     return this.store.scaleOf(key, page) || (key === this.dkey ? this.cadUnit || 0 : 0);
   }
   recalc(m, pts) {
-    const q = G2.measure2d(m.shape, pts, this.scaleFor(m), m);
+    const q = G2.measure2d(m.shape, pts, this.scaleFor(m), { ...m, ky: this.kyFor(m) });
     return q ? { ...m, pts, value: q.value, ...(q.len != null ? { len: q.len } : {}), ...(q.bars != null ? { rebar: { ...m.rebar, bars: q.bars } } : {}) } : { ...m, pts };
   }
   /** Apply a point transform to a dimension (its cutout holes too) and recalculate it. */
@@ -701,7 +750,7 @@ export class DrawingTakeoff {
     for (const it of clip.items) {
       const g = this.store.group(it.gid) || this.store.current(); if (!g) continue;
       const holes = it.m.holes?.map(h => G2.movePts(h, dx, dy));
-      const pts = G2.movePts(it.m.pts, dx, dy), q = G2.measure2d(it.m.shape, pts, this.scale, { ...it.m, holes }) || { value: it.m.value };
+      const pts = G2.movePts(it.m.pts, dx, dy), q = G2.measure2d(it.m.shape, pts, this.scale, { ...it.m, holes, ky: this.ky }) || { value: it.m.value };
       const m = { ...it.m, id: newId(), pts, ...(holes ? { holes } : {}), value: q.value, ...(q.len != null ? { len: q.len } : {}), src: this.src(), dmult: this.settings.multiplier || 1, at: new Date().toISOString() };
       if (m.dmult === 1) delete m.dmult;
       if (!by.has(g.id)) by.set(g.id, []); by.get(g.id).push(m); ids.push(m.id);
@@ -889,7 +938,7 @@ export class DrawingTakeoff {
       } else if (d.shape === 'area' && pts.length >= 3) out.push(`<polygon points="${P}" fill="${col}" fill-opacity=".2" stroke="${col}" ${sw(2)} ${dash}/>`);
       else out.push(`<polyline points="${P}" fill="none" stroke="${col}" ${sw(2)} ${dash}/>`);
       pts.forEach(q => out.push(`<circle cx="${q[0]}" cy="${q[1]}" r="${3 / z}" fill="${col}"/>`));
-      const q = G2.measure2d(d.shape, G2.flat(pts), this.scale || 0);
+      const q = G2.measure2d(d.shape, G2.flat(pts), this.scale || 0, { ky: this.ky });
       if (d.shape === 'rebar' && this.scale && pts.length >= 2) { const last = pts.length >= 4 ? [pts[2], pts[3]] : pts.length === 3 ? [pts[2], pts[2]] : [pts[0], pts[1]]; tipText = `${pts.length <= 2 ? 'Spacing line' : 'Bar'} ${(Math.hypot(last[1][0] - last[0][0], last[1][1] - last[0][1]) * this.scale).toFixed(3)} m`; }
       else if (q) tipText = d.shape === 'area' ? `Area ${q.value.toFixed(3)} m² · perimeter ${q.len.toFixed(3)} m` : `${d.shape === 'distance' ? 'Distance' : 'Length'} ${q.value.toFixed(3)} m`;
       if (pts.length >= 2) {

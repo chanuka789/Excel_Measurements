@@ -28,7 +28,7 @@ export function registerCad(api) {
     const d = await one(`SELECT * FROM drawings WHERE id=$1`, [req.params.id]); if (!d) fail(404, 'Drawing not found.');
     await need(req, d.project_id, 'viewer'); cloudOnly(d);
     const kind = cadKind(d.name); if (!kind) fail(400, 'This drawing is not a DWG or DXF file.');
-    const key = `${d.storage_key}.v1.svg.gz`;
+    const key = `${d.storage_key}.v2.svg.gz`;            // v2: hatch lines are marked, so the drawing can hide them
     if (!(await store.exists(key))) {
       if (!running.has(key)) running.set(key, (async () => {
         const r = await convertCad(await store.getBuffer(d.storage_key), kind);
