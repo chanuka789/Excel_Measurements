@@ -195,3 +195,12 @@ test('a moved cell whose formula also uses other cells is not put back automatic
   assert.equal(a.get('A2').f, 20);                                        // also uses B1: left as the number
   assert.equal(await CX.sharedCount(), 1);
 });
+
+test('text that only looks like a CX formula is not frozen', async () => {
+  const X = fakeExcel();
+  const CX = await import('../public/js/cxlinks.js');
+  const a = X.add('S');
+  a.put('A1', '=CX.QTY("aaaaaaaa")', '=CX.QTY("aaaaaaaa")');               // typed as text with an apostrophe
+  assert.equal((await CX.freezeLinks()).cells, 0);
+  assert.equal(await CX.sharedCount(), 0);
+});

@@ -309,8 +309,8 @@ export async function freezeLinks() {
       const u = sh.getUsedRangeOrNullObject(true); u.load('formulas,values,rowIndex,columnIndex,cellCount'); await ctx.sync();
       if (u.isNullObject || u.cellCount > 2000000) continue;
       u.formulas.forEach((row, i) => row.forEach((f, j) => {
-        if (typeof f !== 'string' || !callsCx(f)) return;
         const v = u.values[i][j];
+        if (typeof f !== 'string' || f === String(v) || !callsCx(f)) return;   // f === v: text such as '=CX.QTY(...), not a formula
         if (isError(v)) { res.notReady++; return; }                      // not calculated yet: keep the formula
         const addr = colName(u.columnIndex + j) + (u.rowIndex + i + 1);
         have.set(`${sh.id}!${addr}`, [sh.name, addr, f, v, sh.id, null, `${sh.id}!${addr}`]);
