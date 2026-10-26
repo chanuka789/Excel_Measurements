@@ -279,3 +279,92 @@ export async function onSelection(ev) {
   if (X.follow) send('measure', { type: 'focusDim', ...first, ids: found.slice(0, 50) });
   return true;
 }
+
+// ================================================================== sharing a workbook with people who do not have the add-in
+// Share copy: every CX formula in the workbook becomes its current value (a plain number that anyone can see); the
+// formulas are kept in a very hidden sheet, _cxshared. Restore links puts them back (cells changed by hand are left).
+export const SHARED = '_cxshared';
+const CX_FN = /\bCX\.(QTY|VALUE|NAME|UNIT)\s*\(/i;
+const isError = (v) => typeof v === 'string' && /^#[A-Z0-9/!?]+[!?]?$/i.test(v.trim());
+
+/** Turn the live links into values. Returns { cells, sheets, notReady }. */
+export async function freezeLinks() {
+  if (!App.inExcel?.()) throw new Error('Open the add-in in Excel first.');
+  pushValues();
+  const res = { cells: 0, sheets: 0, notReady: 0 };
+  await Excel.run(async (ctx) => {
+    const ws = ctx.workbook.worksheets; ws.load('items/name'); await ctx.sync();
+    const kept = await readShared(ctx);
+    const have = new Map(kept.map(r => [`${r[0]}!${r[1]}`, r]));
+    for (const sh of ws.items) {
+      if (sh.name === LINKS || sh.name === SHARED) continue;
+      const u = sh.getUsedRangeOrNullObject(true); u.load('formulas,values,rowIndex,columnIndex,cellCount'); await ctx.sync();
+      if (u.isNullObject || u.cellCount > 2000000) continue;
+      let hit = 0;
+      u.formulas.forEach((row, i) => row.forEach((f, j) => {
+        if (typeof f !== 'string' || !CX_FN.test(f)) return;
+        const v = u.values[i][j];
+        if (isError(v)) { res.notReady++; return; }                      // not calculated yet: keep the formula
+        const addr = colName(u.columnIndex + j) + (u.rowIndex + i + 1);
+        have.set(`${sh.name}!${addr}`, [sh.name, addr, f, v]);
+        sh.getRange(addr).values = [[v]]; hit++;
+      }));
+      if (hit) { res.cells += hit; res.sheets++; await ctx.sync(); }
+    }
+    await writeShared(ctx, [...have.values()]);
+    X.quietUntil = Date.now() + 1500;
+    await ctx.sync();
+  });
+  return res;
+}
+/** Put the live formulas back. Returns { restored, changed }. */
+export async function restoreLinks() {
+  if (!App.inExcel?.()) throw new Error('Open the add-in in Excel first.');
+  const res = { restored: 0, changed: 0 };
+  await Excel.run(async (ctx) => {
+    const rows = await readShared(ctx);
+    if (!rows.length) return;
+    const cells = rows.map(r => { const sh = ctx.workbook.worksheets.getItemOrNullObject(r[0]); return { r, sh }; });
+    await ctx.sync();
+    const live = cells.filter(x => !x.sh.isNullObject).map(x => { const c = x.sh.getRange(x.r[1]); c.load('formulas,values'); return { ...x, c }; });
+    await ctx.sync();
+    const left = [];
+    for (const x of live) {
+      const f = x.c.formulas[0][0], v = x.c.values[0][0];
+      if (typeof f === 'string' && f.startsWith('=')) continue;                                 // already a formula
+      if (String(v) !== String(x.r[3])) { res.changed++; left.push(x.r); continue; }            // typed over by hand: leave it
+      x.c.formulas = [[x.r[2]]]; res.restored++;
+    }
+    await writeShared(ctx, left);
+    X.quietUntil = Date.now() + 1500;
+    await ctx.sync();
+  });
+  pushValues();
+  await broadcastLinks().catch(() => {});
+  return res;
+}
+export async function sharedCount() {
+  if (!App.inExcel?.()) return 0;
+  let n = 0;
+  await Excel.run(async (ctx) => { n = (await readShared(ctx)).length; }).catch(() => {});
+  return n;
+}
+async function readShared(ctx) {
+  const sh = ctx.workbook.worksheets.getItemOrNullObject(SHARED); await ctx.sync();
+  if (sh.isNullObject) return [];
+  const u = sh.getUsedRangeOrNullObject(true); u.load('values,formulas'); await ctx.sync();
+  if (u.isNullObject) return [];
+  // formulas are stored as text with a marker, so they never calculate in the hidden sheet
+  return u.values.slice(1).map(v => [String(v[0]), String(v[1]), String(v[2]).replace(/^CXF:/, ''), v[3]]).filter(r => r[0] && r[1] && r[2].startsWith('='));
+}
+async function writeShared(ctx, rows) {
+  let sh = ctx.workbook.worksheets.getItemOrNullObject(SHARED); await ctx.sync();
+  if (sh.isNullObject) {
+    if (!rows.length) return;
+    sh = ctx.workbook.worksheets.add(SHARED);
+    sh.visibility = Excel.SheetVisibility.veryHidden;
+  }
+  sh.getRange('A:D').clear();
+  sh.getRange('A1:D1').values = [['Sheet', 'Cell', 'Formula', 'Value when shared']];
+  if (rows.length) sh.getRange(`A2:D${rows.length + 1}`).values = rows.map(r => [r[0], r[1], 'CXF:' + r[2], r[3]]);
+}

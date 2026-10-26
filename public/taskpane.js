@@ -121,6 +121,27 @@ const needProject = () => { if (App.currentProjectId()) return true; selectTab('
 function openMeasureWindow(init = {}) { if (needProject()) openWindow('measure', 'normal', init); }
 function openSchedulesWindow(init = {}) { if (needProject()) openWindow('schedules', 'normal', { versionId: init.versionId || windowInit('measure')?.versionId || null, label: init.label || '' }); }
 
+// ================================================================== sharing with people who do not have the add-in
+async function shareCopy() {
+  if (!S.inExcel) { status('Open the add-in in Excel first.', 'bad'); return; }
+  if (!await confirmBox({ title: 'Share a copy?', confirmLabel: 'Make plain numbers',
+    body: `<p>People without the DWFx Measure add-in cannot calculate the live links (<code>=CX.QTY</code>), so they would see <code>#NAME?</code>.</p>
+      <ol><li>This turns every linked cell in <strong>this workbook</strong> into its current number. The formulas are kept inside the workbook.</li>
+      <li>Then save a copy (<strong>File › Save a Copy</strong>) and send that copy.</li>
+      <li>Then press <strong>Restore links</strong> to make your links live again.</li></ol>` })) return;
+  try {
+    const r = await CX.freezeLinks();
+    status(r.cells ? `${r.cells} linked cell${r.cells === 1 ? '' : 's'} on ${r.sheets} sheet${r.sheets === 1 ? '' : 's'} are now plain numbers${r.notReady ? ` (${r.notReady} not calculated yet, left as formulas)` : ''}. Save a copy now (File › Save a Copy), then press Restore links.` : 'There are no linked cells in this workbook.', r.cells ? 'ok' : 'info');
+  } catch (err) { status(err.message, 'bad'); }
+}
+async function restoreLinks() {
+  if (!S.inExcel) { status('Open the add-in in Excel first.', 'bad'); return; }
+  try {
+    const r = await CX.restoreLinks();
+    status(r.restored || r.changed ? `${r.restored} link${r.restored === 1 ? '' : 's'} restored${r.changed ? `; ${r.changed} cell${r.changed === 1 ? ' was' : 's were'} changed by hand and left as is` : ''}.` : 'Nothing to restore: the links are already live.', 'ok');
+  } catch (err) { status(err.message, 'bad'); }
+}
+
 // ================================================================== App registry (used by the modules and the ribbon)
 Object.assign(App, {
   selectTab, addToExcel, refreshProject,
@@ -134,7 +155,7 @@ Object.assign(App, {
     CX.loadTree(project?.id || null).then(() => { if (S.inExcel && project) CX.broadcastLinks().catch(() => {}); });
     if (!project) closeAll();
   },
-  openMeasureWindow, openSchedulesWindow,
+  openMeasureWindow, openSchedulesWindow, shareCopy, restoreLinks,
   useVersion: (vid) => ensureVersion(vid),
   sendToWindow: sendTo,
   focusInWindow: (m) => { openWindowIfClosed(); sendTo('measure', { type: 'focusDim', ...m }); },
@@ -153,6 +174,7 @@ const RIBBON = {
   linkToCell: () => { selectTab('meas'); status('Choose a group or a dimension in the list (or in the measurement window), then press Link to selected cell.'); },
   followExcel: () => { CX.setFollow(!CX.following()); sendTo('measure', { type: 'paneEvent', what: 'follow', on: CX.following() }); status(`Follow Excel is ${CX.following() ? 'on' : 'off'}.`, 'ok'); },
   refreshLinks: async () => { await CX.loadTree(); await CX.broadcastLinks({ rescan: true }); status('Linked cells read again.', 'ok'); },
+  shareCopy: () => shareCopy(), restoreLinks: () => restoreLinks(),
   openAdmin: () => { if (session.get()?.user?.role !== 'admin') status('Admin is for administrators only.', 'bad'); else selectTab('admin'); },
   openHelp: () => openHelp(),
 };

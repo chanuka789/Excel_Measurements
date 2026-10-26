@@ -14,7 +14,7 @@ Excel shows a **DWFx Measure** tab on the ribbon:
 | Group | Buttons |
 |---|---|
 | Measure | Measurements (task pane list), Measurement Window, Projects |
-| Excel links | Link to Cell, Follow Excel (on/off), Refresh Links |
+| Excel links | Link to Cell, Follow Excel (on/off), Refresh Links, Share Copy, Restore Links |
 | DWFx schedules | DWFx Schedules (separate window) |
 
 **Version 0.7 changes the manifest** (new buttons and the CX custom functions). Run `npm run manifest` and **add the
@@ -53,6 +53,10 @@ model version, Open & measure on each drawing).
 - **Excel → drawing**: with **Follow Excel** on, a click on a linked cell opens the drawing (or the 3D model) and
   highlights where it was measured. **Drawing → Excel**: selecting a group or a dimension selects its linked cells.
 - Follow Excel can be switched off; the links always stay. They are listed in a very hidden `_cxlinks` sheet.
+- **Sending the workbook to someone without the add-in**: people without it see `#NAME?` in linked cells. Press
+  **Share Copy**: every CX formula becomes its current number (other formulas are not touched) and the formulas are
+  kept in a very hidden `_cxshared` sheet. Then File › Save a Copy and send that copy, and press **Restore Links** to
+  make the links live again (cells someone typed over are left as they are).
 
 ### 4. DWFx Schedules window (separate from measuring)
 Choose a model version, select elements (tree, 3D, search, zones), pick the **data columns** (category, family,

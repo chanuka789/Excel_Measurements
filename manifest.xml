@@ -8,13 +8,13 @@
            xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
            xsi:type="TaskPaneApp">
   <Id>6f1c2a4e-8d3b-4f7a-9c51-2b7e0d4a9f13</Id>
-  <Version>0.7.0.0</Version>
+  <Version>0.7.1.0</Version>
   <ProviderName>QSGS</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="DWFx Measure"/>
   <Description DefaultValue="Measure drawings (PDF, DWG, DXF, DWFx) and 3D models in a CostX-style window, linked to Excel cells with live formulas, and make DWFx quantity schedules."/>
-  <IconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-32.png?v=0.7.0.0"/>
-  <HighResolutionIconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-64.png?v=0.7.0.0"/>
+  <IconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-32.png?v=0.7.1.0"/>
+  <HighResolutionIconUrl DefaultValue="https://dwfx-addin-production.up.railway.app/assets/icon-64.png?v=0.7.1.0"/>
   <SupportUrl DefaultValue="https://dwfx-addin-production.up.railway.app/"/>
   <AppDomains>
     <AppDomain>https://dwfx-addin-production.up.railway.app</AppDomain>
@@ -126,6 +126,26 @@
                   </Icon>
                   <Action xsi:type="ExecuteFunction"><FunctionName>refreshLinks</FunctionName></Action>
                 </Control>
+                <Control xsi:type="Button" id="DWFx.Share">
+                  <Label resid="L.Share"/>
+                  <Supertip><Title resid="L.Share"/><Description resid="T.Share"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.update.16"/>
+                    <bt:Image size="32" resid="I.update.32"/>
+                    <bt:Image size="80" resid="I.update.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>shareCopy</FunctionName></Action>
+                </Control>
+                <Control xsi:type="Button" id="DWFx.Restore">
+                  <Label resid="L.Restore"/>
+                  <Supertip><Title resid="L.Restore"/><Description resid="T.Restore"/></Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="I.compare.16"/>
+                    <bt:Image size="32" resid="I.compare.32"/>
+                    <bt:Image size="80" resid="I.compare.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction"><FunctionName>restoreLinks</FunctionName></Action>
+                </Control>
               </Group>
               <Group id="DWFx.G.Schedules">
                 <Label resid="G.Schedules"/>
@@ -161,30 +181,36 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="I.boq.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-16.png?v=0.7.0.0"/>
-        <bt:Image id="I.boq.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-32.png?v=0.7.0.0"/>
-        <bt:Image id="I.boq.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-80.png?v=0.7.0.0"/>
-        <bt:Image id="I.fromexcel.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-16.png?v=0.7.0.0"/>
-        <bt:Image id="I.fromexcel.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-32.png?v=0.7.0.0"/>
-        <bt:Image id="I.fromexcel.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-80.png?v=0.7.0.0"/>
-        <bt:Image id="I.group.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-16.png?v=0.7.0.0"/>
-        <bt:Image id="I.group.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-32.png?v=0.7.0.0"/>
-        <bt:Image id="I.group.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-80.png?v=0.7.0.0"/>
-        <bt:Image id="I.measure.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-16.png?v=0.7.0.0"/>
-        <bt:Image id="I.measure.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-32.png?v=0.7.0.0"/>
-        <bt:Image id="I.measure.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-80.png?v=0.7.0.0"/>
-        <bt:Image id="I.projects.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-16.png?v=0.7.0.0"/>
-        <bt:Image id="I.projects.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-32.png?v=0.7.0.0"/>
-        <bt:Image id="I.projects.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-80.png?v=0.7.0.0"/>
-        <bt:Image id="I.refresh.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-16.png?v=0.7.0.0"/>
-        <bt:Image id="I.refresh.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-32.png?v=0.7.0.0"/>
-        <bt:Image id="I.refresh.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-80.png?v=0.7.0.0"/>
-        <bt:Image id="I.status.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-16.png?v=0.7.0.0"/>
-        <bt:Image id="I.status.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-32.png?v=0.7.0.0"/>
-        <bt:Image id="I.status.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-80.png?v=0.7.0.0"/>
-        <bt:Image id="I.window.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-16.png?v=0.7.0.0"/>
-        <bt:Image id="I.window.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-32.png?v=0.7.0.0"/>
-        <bt:Image id="I.window.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-80.png?v=0.7.0.0"/>
+        <bt:Image id="I.boq.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-16.png?v=0.7.1.0"/>
+        <bt:Image id="I.boq.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-32.png?v=0.7.1.0"/>
+        <bt:Image id="I.boq.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/boq-80.png?v=0.7.1.0"/>
+        <bt:Image id="I.compare.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/compare-16.png?v=0.7.1.0"/>
+        <bt:Image id="I.compare.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/compare-32.png?v=0.7.1.0"/>
+        <bt:Image id="I.compare.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/compare-80.png?v=0.7.1.0"/>
+        <bt:Image id="I.fromexcel.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-16.png?v=0.7.1.0"/>
+        <bt:Image id="I.fromexcel.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-32.png?v=0.7.1.0"/>
+        <bt:Image id="I.fromexcel.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/fromexcel-80.png?v=0.7.1.0"/>
+        <bt:Image id="I.group.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-16.png?v=0.7.1.0"/>
+        <bt:Image id="I.group.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-32.png?v=0.7.1.0"/>
+        <bt:Image id="I.group.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/group-80.png?v=0.7.1.0"/>
+        <bt:Image id="I.measure.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-16.png?v=0.7.1.0"/>
+        <bt:Image id="I.measure.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-32.png?v=0.7.1.0"/>
+        <bt:Image id="I.measure.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/measure-80.png?v=0.7.1.0"/>
+        <bt:Image id="I.projects.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-16.png?v=0.7.1.0"/>
+        <bt:Image id="I.projects.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-32.png?v=0.7.1.0"/>
+        <bt:Image id="I.projects.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/projects-80.png?v=0.7.1.0"/>
+        <bt:Image id="I.refresh.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-16.png?v=0.7.1.0"/>
+        <bt:Image id="I.refresh.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-32.png?v=0.7.1.0"/>
+        <bt:Image id="I.refresh.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/refresh-80.png?v=0.7.1.0"/>
+        <bt:Image id="I.status.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-16.png?v=0.7.1.0"/>
+        <bt:Image id="I.status.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-32.png?v=0.7.1.0"/>
+        <bt:Image id="I.status.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/status-80.png?v=0.7.1.0"/>
+        <bt:Image id="I.update.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/update-16.png?v=0.7.1.0"/>
+        <bt:Image id="I.update.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/update-32.png?v=0.7.1.0"/>
+        <bt:Image id="I.update.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/update-80.png?v=0.7.1.0"/>
+        <bt:Image id="I.window.16" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-16.png?v=0.7.1.0"/>
+        <bt:Image id="I.window.32" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-32.png?v=0.7.1.0"/>
+        <bt:Image id="I.window.80" DefaultValue="https://dwfx-addin-production.up.railway.app/assets/ribbon/window-80.png?v=0.7.1.0"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="PaneUrl" DefaultValue="https://dwfx-addin-production.up.railway.app/taskpane.html"/>
@@ -201,6 +227,8 @@
         <bt:String id="L.Link" DefaultValue="Link to Cell"/>
         <bt:String id="L.Follow" DefaultValue="Follow Excel"/>
         <bt:String id="L.Refresh" DefaultValue="Refresh Links"/>
+        <bt:String id="L.Share" DefaultValue="Share Copy"/>
+        <bt:String id="L.Restore" DefaultValue="Restore Links"/>
         <bt:String id="L.Sched" DefaultValue="DWFx Schedules"/>
         <bt:String id="TabLabel" DefaultValue="DWFx Measure"/>
         <bt:String id="FnNs" DefaultValue="CX"/>
@@ -213,6 +241,8 @@
         <bt:String id="T.Link" DefaultValue="Link a dimension group or a dimension to the selected cell with a live formula (=CX.QTY)."/>
         <bt:String id="T.Follow" DefaultValue="On: a click on a linked cell shows where it was measured. The links always stay."/>
         <bt:String id="T.Refresh" DefaultValue="Read the linked cells and the measurements again."/>
+        <bt:String id="T.Share" DefaultValue="For people without the add-in: linked cells become plain numbers (the formulas are kept). Then Save a Copy and Restore Links."/>
+        <bt:String id="T.Restore" DefaultValue="Make the links live again after sharing a copy."/>
         <bt:String id="T.Sched" DefaultValue="Open the DWFx Schedules window: schedules from the model data, with the AI."/>
         <bt:String id="GetStarted.Description" DefaultValue="Open the DWFx Measure tab on the ribbon and choose Projects to sign in."/>
       </bt:LongStrings>

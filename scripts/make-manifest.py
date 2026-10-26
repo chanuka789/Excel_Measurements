@@ -2,7 +2,7 @@
 import sys, os
 from xml.sax.saxutils import escape
 BASE = (sys.argv[1] if len(sys.argv) > 1 else 'https://dwfx-addin-production.up.railway.app').rstrip('/')
-VERSION = '0.7.0.0'
+VERSION = '0.7.1.0'
 G = [
  ('Measure', 'Measure', 'measure', [
    ('Meas', 'Measurements', 'group', 'openMeasurements', 'Show the dimension groups and their totals in the task pane.'),
@@ -11,7 +11,9 @@ G = [
  ('Links', 'Excel links', 'fromexcel', [
    ('Link', 'Link to Cell', 'fromexcel', 'linkToCell', 'Link a dimension group or a dimension to the selected cell with a live formula (=CX.QTY).'),
    ('Follow', 'Follow Excel', 'status', 'followExcel', 'On: a click on a linked cell shows where it was measured. The links always stay.'),
-   ('Refresh', 'Refresh Links', 'refresh', 'refreshLinks', 'Read the linked cells and the measurements again.')]),
+   ('Refresh', 'Refresh Links', 'refresh', 'refreshLinks', 'Read the linked cells and the measurements again.'),
+   ('Share', 'Share Copy', 'update', 'shareCopy', 'For people without the add-in: linked cells become plain numbers (the formulas are kept). Then Save a Copy and Restore Links.'),
+   ('Restore', 'Restore Links', 'compare', 'restoreLinks', 'Make the links live again after sharing a copy.')]),
  ('Schedules', 'DWFx schedules', 'boq', [
    ('Sched', 'DWFx Schedules', 'boq', 'openSchedules', 'Open the DWFx Schedules window: schedules from the model data, with the AI.')]),
 ]
