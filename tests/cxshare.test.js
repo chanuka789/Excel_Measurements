@@ -97,3 +97,22 @@ test('the formulas are saved before any cell is replaced', async () => {
   assert.equal(r.restored, 1);                                // A1 on sheet A had been replaced; it comes back
   assert.equal(a.get('A1').f, '=CX.QTY("1a2b3c4d")');
 });
+
+test('a new sheet with the old name is not used to restore, and restored cells go back into the link list', async () => {
+  const X = fakeExcel();
+  const CX = await import('../public/js/cxlinks.js');
+  const a = X.add('Take-off');
+  a.put('B2', '=CX.QTY("1a2b3c4d")', 10);
+  await CX.freezeLinks();
+  X.sheets.delete('Take-off');
+  const b = X.add('Take-off'); b.id = '{other-id}'; b.put('B2', 10, 10);     // same name, same cell value, different sheet
+  const r = await CX.restoreLinks();
+  assert.deepEqual(r, { restored: 0, changed: 0, missing: 1 });
+  assert.equal(b.get('B2').f, 10);
+  // restore on the right sheet rescans the workbook, so the link list is rebuilt
+  CX.setTree({ folders: [], groups: [{ id: '1a2b3c4d-1111-2222-3333-444455556666', name: 'G', mtype: 'Area', items: [], props: { measured: [] } }] }, 'p1');
+  const c = X.add('Sheet2'); c.put('C3', '=CX.QTY("1a2b3c4d")', 7);
+  await CX.freezeLinks();
+  assert.equal((await CX.restoreLinks()).restored, 1);
+  assert.ok(X.sheets.get(CX.LINKS).get('B2').f === 'C3');                    // _cxlinks row 2: Sheet2!C3
+});

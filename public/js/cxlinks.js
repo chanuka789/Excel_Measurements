@@ -328,7 +328,7 @@ export async function freezeLinks() {
   return res;
 }
 /** Put the live formulas back. Returns { restored, changed, missing }. A sheet is found by its id, so a renamed sheet
- * still works; records whose sheet cannot be found (deleted, or not in this file) are kept, never thrown away. */
+ * still works and a different sheet with the old name is never used; records whose sheet cannot be found (deleted, or not in this file) are kept, never thrown away. */
 export async function restoreLinks() {
   if (!App.inExcel?.()) throw new Error('Open the add-in in Excel first.');
   const res = { restored: 0, changed: 0, missing: 0 };
@@ -338,7 +338,8 @@ export async function restoreLinks() {
     const ws = ctx.workbook.worksheets; ws.load('items/name,items/id'); await ctx.sync();
     const left = [], live = [];
     for (const r of rows) {
-      const sh = ws.items.find(x => r[4] && x.id === r[4]) || ws.items.find(x => x.name === r[0]);
+      // by the sheet id; the name only for records saved without an id (a new sheet with the old name is not the same sheet)
+      const sh = r[4] ? ws.items.find(x => x.id === r[4]) : ws.items.find(x => x.name === r[0]);
       if (!sh) { res.missing++; left.push(r); continue; }
       const c = sh.getRange(r[1]); c.load('formulas,values'); live.push({ r: [sh.name, r[1], r[2], r[3], sh.id], c });
     }
@@ -354,7 +355,7 @@ export async function restoreLinks() {
     await ctx.sync();
   });
   pushValues();
-  await broadcastLinks().catch(() => {});
+  await broadcastLinks({ rescan: true }).catch(() => {});      // the restored cells go back into the link list
   return res;
 }
 export async function sharedCount() {
