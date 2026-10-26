@@ -41,7 +41,7 @@ export class DrawingTakeoff {
     this.z = 1; this.tx = 0; this.ty = 0; this.rot = 0; this.page = 1; this.pages = 1;
     this.unsub = store.on((w) => { if (w !== 'current') this.drawDims(); this.syncBar(); });
   }
-  destroy() { this.closeCompare?.(); this.unsub?.(); this.renderTask?.cancel?.(); this.doc?.destroy?.(); this.host.innerHTML = ''; document.removeEventListener('keyup', this.keyUp); }
+  destroy() { this.closeCompare?.(); this.unsub?.(); this.renderTask?.cancel?.(); this.doc?.destroy?.(); this.pageCache?.forEach(b => b.close?.()); this.host.innerHTML = ''; document.removeEventListener('keyup', this.keyUp); }
 
   // ================================================================== open a drawing
   async open(d) {
@@ -94,7 +94,25 @@ export class DrawingTakeoff {
       const v2 = this.pdfPage.getViewport({ scale: this.baseScale }); c.width = Math.ceil(v2.width); c.height = Math.ceil(v2.height);
       base.append(c); this.baseCanvas = c;
       this.detail = document.createElement('canvas'); this.detail.className = 'tk-detail'; this.detail.hidden = true; base.append(this.detail);
-      await this.pdfPage.render({ canvasContext: c.getContext('2d'), viewport: v2, ...this.layerOpt() }).promise.catch(() => {});
+      // pages seen before come from memory at once; a new page shows a quick low-resolution picture first,
+      // and the sharp one is drawn while the user already works
+      this.pageCache ||= new Map();
+      const hit = this.pageCache.get(n), x = c.getContext('2d');
+      if (hit) { x.drawImage(hit, 0, 0); this.pageCache.delete(n); this.pageCache.set(n, hit); }
+      else {
+        const ps = Math.min(0.75, this.baseScale / 3), pv = this.pdfPage.getViewport({ scale: ps });
+        const pc = document.createElement('canvas'); pc.width = Math.ceil(pv.width); pc.height = Math.ceil(pv.height);
+        await this.pdfPage.render({ canvasContext: pc.getContext('2d'), viewport: pv, ...this.layerOpt() }).promise.catch(() => {});
+        x.drawImage(pc, 0, 0, c.width, c.height);
+        const page = this.pdfPage;
+        this.basePaint = (async () => {
+          const full = document.createElement('canvas'); full.width = c.width; full.height = c.height;
+          await page.render({ canvasContext: full.getContext('2d'), viewport: v2, ...this.layerOpt() }).promise;
+          if (this.pdfPage !== page) return;
+          x.drawImage(full, 0, 0);
+          if (typeof createImageBitmap === 'function') { this.pageCache.set(n, await createImageBitmap(full)); while (this.pageCache.size > 6) { const [k, b] = this.pageCache.entries().next().value; b.close?.(); this.pageCache.delete(k); } }
+        })().catch(() => {});
+      }
       this.pdfVectors().catch(() => {});
     } else if (this.kind === 'sheet' || this.kind === 'svg' || this.kind === 'cad') {
       const holder = document.createElement('div'); holder.innerHTML = this.svgText;
@@ -233,6 +251,7 @@ export class DrawingTakeoff {
   }
   async rerender() {
     if (this.kind !== 'pdf') return;
+    this.pageCache?.forEach(b => b.close?.()); this.pageCache?.clear();             // layers changed: the kept pictures are out of date
     const c = this.baseCanvas, x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height);
     await this.pdfPage.render({ canvasContext: x, viewport: this.pdfPage.getViewport({ scale: this.baseScale }), ...this.layerOpt() }).promise.catch(() => {});
     this.renderDetail();
