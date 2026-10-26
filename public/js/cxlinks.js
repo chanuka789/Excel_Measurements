@@ -351,7 +351,9 @@ export async function restoreLinks() {
     await ctx.sync();
     for (const x of live) {
       const f = x.c.formulas[0][0], v = x.c.values[0][0];
-      if (typeof f === 'string' && f.startsWith('=') && callsCx(f)) continue;                  // the link is already live
+      const isFormula = typeof f === 'string' && f.startsWith('=') && f !== String(v);          // text such as '=pending' shows itself
+      if (isFormula && callsCx(f)) continue;                                                    // the link is already live
+      if (isFormula) { res.changed++; left.push(x.r); continue; }                               // someone wrote their own formula: keep it
       if (String(v) !== String(x.r[3])) { res.changed++; left.push(x.r); continue; }            // typed over by hand: leave it
       x.c.formulas = [[x.r[2]]]; res.restored++;
     }

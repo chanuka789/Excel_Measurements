@@ -168,3 +168,14 @@ test('a text result that looks like a formula stays text when frozen, and restor
   assert.deepEqual(await CX.restoreLinks(), { restored: 1, changed: 0, missing: 0 });
   assert.equal(a.get('A1').f, '=IF(CX.QTY("aaaaaaaa")>0,"=pending","")');
 });
+
+test('a formula typed over a frozen cell is kept, even when it gives the same value', async () => {
+  const X = fakeExcel();
+  const CX = await import('../public/js/cxlinks.js');
+  const a = X.add('S');
+  a.put('A1', '=CX.QTY("aaaaaaaa")', 10);
+  await CX.freezeLinks();
+  a.put('A1', '=5+5', 10);
+  assert.deepEqual(await CX.restoreLinks(), { restored: 0, changed: 1, missing: 0 });
+  assert.equal(a.get('A1').f, '=5+5');
+});
