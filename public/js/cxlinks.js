@@ -374,8 +374,12 @@ async function readShared(ctx) {
   if (u.isNullObject) return [];
   // formulas are stored as text with a marker, so they never calculate in the hidden sheet; column F is a live reference
   // to the frozen cell (='Sheet'!$B$7), which Excel moves with inserted rows and columns and renames with the sheet
-  return u.values.slice(1).map((v, i) => [String(v[0]), String(v[1]), String(v[2]).replace(/^CXF:/, ''), v[3], String(v[4] || ''), parseRef(u.formulas[i + 1]?.[5])])
-    .filter(r => r[0] && r[1] && r[2].startsWith('='));
+  return u.values.slice(1).map((v, i) => {
+    const ref = parseRef(u.formulas[i + 1]?.[5]);
+    // where the cell is now: the live reference wins over the address saved as text (rows and columns may have moved)
+    const name = ref && ref !== 'gone' ? ref.sheet : String(v[0]), addr = ref && ref !== 'gone' ? ref.address : String(v[1]);
+    return [name, addr, String(v[2]).replace(/^CXF:/, ''), v[3], String(v[4] || ''), ref];
+  }).filter(r => r[0] && r[1] && r[2].startsWith('='));
 }
 /** ='Sheet name'!$B$7 -> { sheet, address }; #REF! (cell or sheet deleted) -> 'gone'; nothing -> null (older records). */
 function parseRef(f) {

@@ -134,3 +134,20 @@ test('restore follows the live reference when rows were inserted above the froze
   assert.equal(a.get('A3').f, '=CX.QTY("bbbbbbbb")');
   assert.equal(a.get('A1').f, '');
 });
+
+test('a second Share Copy keeps the moved position of cells frozen before', async () => {
+  const X = fakeExcel();
+  const CX = await import('../public/js/cxlinks.js');
+  const a = X.add('BOQ');
+  a.put('A1', '=CX.QTY("aaaaaaaa")', 10);
+  await CX.freezeLinks();
+  const kept = X.sheets.get(CX.SHARED);
+  a.cells.set('1,0', a.cells.get('0,0')); a.cells.delete('0,0');          // a row inserted above: A1 -> A2
+  kept.put('F2', "='BOQ'!$A$2", '');
+  a.put('B5', '=CX.QTY("bbbbbbbb")', 4);                                  // a new link, then Share Copy again
+  await CX.freezeLinks();
+  const refs = [kept.get('F2').f, kept.get('F3').f].sort();
+  assert.deepEqual(refs, ["='BOQ'!$A$2", "='BOQ'!$B$5"]);
+  assert.deepEqual(await CX.restoreLinks(), { restored: 2, changed: 0, missing: 0 });
+  assert.equal(a.get('A2').f, '=CX.QTY("aaaaaaaa")');
+});
