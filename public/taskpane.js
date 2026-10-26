@@ -1,36 +1,24 @@
-// DWFx Measure task pane: start-up, sign-in, tabs, theme and the ribbon commands.
-// The work is done in the modules under js/.
+// DWFx Measure task pane: start-up, sign-in, tabs, theme and the ribbon commands. The pane shows the measurements
+// and links them to the workbook; measuring is done in the measurement window, DWFx schedules in their own window.
 import { $, esc, App, api, session, status, confirmBox } from './js/core.js';
 import { S } from './js/state.js';
 import { showProjects, openProject, refreshProject, currentProject, resetProjects } from './js/project.js';
 import { showAdmin } from './js/admin.js';
-import { initModel, viewer, toolbar, update, openVersion, quickOpen, closeModel, setColorMode, selectIds } from './js/model.js';
-import { initMeasure, renderTemplates } from './js/measure.js';
-import { initExcel, onExcelSelect, addToExcel } from './js/excel.js';
-import { initAI, refreshAIStatus } from './js/aiclient.js';
-import { initReview, renderReview } from './js/review.js';
-import { initPaneHost } from './js/panehost.js';
-import { initSmartTakeoff, renderSmart } from './js/smartTakeoff.js';
+import { initExcel, addToExcel } from './js/excel.js';
+import { initPaneHost, onExcelSelect } from './js/panehost.js';
+import { initWinHost, openWindow, closeAll, sendTo, windowInit } from './js/winhost.js';
+import { ensureVersion, closeVersion } from './js/panemodel.js';
+import { renderMeasurements, initMeasurements } from './js/panemeasure.js';
+import * as CX from './js/cxlinks.js';
 
 // ================================================================== tabs
-const MODEL_TABS = ['smart', 'elements', 'measure', 'ai', 'review'];
-let currentTab = 'project';
+let currentTab = 'meas';
 function selectTab(name) {
-  if (name === 'admin' && session.get()?.user?.role !== 'admin') name = 'project';
+  if (name === 'admin' && session.get()?.user?.role !== 'admin') name = 'meas';
   currentTab = name;
   document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x.dataset.tab === name)));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === 'tab-' + name));
-  const showViewer = Boolean(S.data) && MODEL_TABS.includes(name);
-  const was = !$('viewer').hidden;
-  $('viewer').hidden = !showViewer;
-  if (showViewer && !was) viewer()?.resize();
-  document.querySelectorAll('.nomodel').forEach(el => { el.hidden = Boolean(S.data); });
-  document.querySelectorAll('.withmodel').forEach(el => { el.hidden = !S.data; });
-  if (name === 'measure' && S.data) App.renderMeasure();
-  if (name === 'smart') renderSmart();
-  $('viewer').classList.toggle('smart-view', name === 'smart');
-  if (name === 'ai') refreshAIStatus();
-  if (name === 'review') renderReview();
+  if (name === 'meas') renderMeasurements();
   if (name === 'admin') showAdmin();
   if (name === 'project' && currentProject()) refreshProject();
 }
@@ -50,14 +38,13 @@ function showSignedIn(user) {
   $('userBtn').textContent = initials(user.name); $('userBtn').title = `${user.name} (${user.email})`;
   $('umName').textContent = user.name; $('umEmail').textContent = user.email;
   $('adminTab').hidden = user.role !== 'admin';
-  viewer()?.resize();
 }
 function showSignIn(msg) {
   $('shell').hidden = true; $('signin').hidden = false; $('userMenu').hidden = true;
   $('siErr').hidden = !msg; $('siErr').textContent = msg || '';
   setTimeout(() => ($('siEmail').value ? $('siPw') : $('siEmail')).focus(), 0);
 }
-App.onSignedOut = () => { resetProjects(); closeModel(); showSignIn('Your session has ended. Please sign in again.'); };
+App.onSignedOut = () => { resetProjects(); closeAll(); closeVersion(); showSignIn('Your session has ended. Please sign in again.'); };
 $('signinForm').onsubmit = async (e) => {
   e.preventDefault();
   const email = $('siEmail').value.trim(), password = $('siPw').value;
@@ -77,7 +64,7 @@ $('userMenu').addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('
 $('umOut').onclick = async () => {
   if (!await confirmBox({ title: 'Sign out?', body: '<p>Your projects stay saved on the server. Your workbook is not changed.</p>', confirmLabel: 'Sign out' })) return;
   try { await api('POST', '/auth/logout'); } catch { /* already signed out */ }
-  session.set(null); resetProjects(); closeModel(); showSignIn();
+  session.set(null); resetProjects(); closeAll(); closeVersion(); showSignIn();
 };
 /** Help opens in an Office dialog inside Excel, or a new browser tab elsewhere. */
 function openHelp(anchor = '') {
@@ -90,11 +77,14 @@ App.openHelp = openHelp;
 $('umHelp').onclick = () => { $('userMenu').hidden = true; openHelp(); };
 $('siHelp').onclick = () => openHelp();
 $('umKeys').onclick = () => confirmBox({ title: 'Keyboard shortcuts', confirmLabel: 'Close', body: `<table class="tbl"><tbody>
+  <tr><td colspan="2"><strong>Measurement window</strong></td></tr>
+  <tr><td>Ctrl+F1 / double-click a tab</td><td>Collapse or show the ribbon</td></tr>
   <tr><td>1 – 7</td><td>Top, front, right, back, left, bottom, isometric (3D view focused)</td></tr>
-  <tr><td>F</td><td>Fit the view</td></tr><tr><td>Arrows, + and −</td><td>Orbit and zoom</td></tr>
-  <tr><td>Click / Ctrl+click</td><td>Select / add to the selection</td></tr><tr><td>Double-click</td><td>Zoom to an element</td></tr>
-  <tr><td>Right-click</td><td>Element properties</td></tr><tr><td>Ctrl+Z / Ctrl+Y</td><td>Undo / redo selection, isolate and hide</td></tr>
-  <tr><td>Esc</td><td>Stop measuring or box select, close panels</td></tr><tr><td>Ctrl+Enter</td><td>Send the AI request</td></tr></tbody></table>` });
+  <tr><td>F</td><td>Fit the view</td></tr><tr><td>Click / Ctrl+click</td><td>Select / add to the selection</td></tr>
+  <tr><td>Double-click a dimension</td><td>Link it to the selected Excel cell</td></tr>
+  <tr><td>Esc</td><td>Stop measuring, close menus</td></tr><tr><td>Ctrl+Z / Ctrl+Y</td><td>Undo / redo</td></tr>
+  <tr><td colspan="2"><strong>Task pane</strong></td></tr>
+  <tr><td>Double-click a group</td><td>Link it to the selected Excel cell</td></tr></tbody></table>` });
 
 const THEMES = ['office', 'light', 'dark'];
 const THEME_LABEL = { office: 'Theme: follow Office', light: 'Theme: light', dark: 'Theme: dark' };
@@ -113,7 +103,6 @@ function applyTheme() {
   const dark = themePref === 'dark' ? true : themePref === 'light' ? false : officeIsDark();
   if (dark == null) d.removeAttribute('data-theme'); else d.dataset.theme = dark ? 'dark' : 'light';
   $('umTheme').textContent = THEME_LABEL[themePref];
-  viewer()?.setTheme();
 }
 $('umTheme').onclick = () => {
   themePref = THEMES[(THEMES.indexOf(themePref) + 1) % THEMES.length];
@@ -122,45 +111,50 @@ $('umTheme').onclick = () => {
 };
 
 async function startProjects() {
-  selectTab('project');
   let last = null; try { last = localStorage.getItem('dwfxLastProject:' + (session.get()?.user?.id || '')); } catch { /* storage blocked */ }
   if (last) await openProject(last, false, true); else await showProjects();
+  selectTab(currentProject() ? 'meas' : 'project');
 }
+
+// ================================================================== the windows
+const needProject = () => { if (App.currentProjectId()) return true; selectTab('project'); status('Open a project first.', 'bad'); return false; };
+function openMeasureWindow(init = {}) { if (needProject()) openWindow('measure', 'normal', init); }
+function openSchedulesWindow(init = {}) { if (needProject()) openWindow('schedules', 'normal', { versionId: init.versionId || windowInit('measure')?.versionId || null, label: init.label || '' }); }
 
 // ================================================================== App registry (used by the modules and the ribbon)
 Object.assign(App, {
-  selectTab, openVersion, quickOpen, closeModel, addToExcel, setColorMode, viewer, update, refreshProject,
+  selectTab, addToExcel, refreshProject,
   currentTab: () => currentTab,
-  currentVersionId: () => S.versionId,
+  currentVersionId: () => windowInit('measure')?.versionId || null,
   currentProject, currentProjectId: () => currentProject()?.project?.id || null,
+  inExcel: () => S.inExcel,
   isAdmin: () => session.get()?.user?.role === 'admin',
-  setContext: (project) => { $('ctxProject').textContent = project ? project.name : 'DWFx Measure'; },
+  setContext: (project) => {
+    $('ctxProject').textContent = project ? project.name : 'DWFx Measure';
+    CX.loadTree(project?.id || null).then(() => { if (S.inExcel && project) CX.broadcastLinks().catch(() => {}); });
+    if (!project) closeAll();
+  },
+  openMeasureWindow, openSchedulesWindow,
+  useVersion: (vid) => ensureVersion(vid),
+  sendToWindow: sendTo,
+  focusInWindow: (m) => { openWindowIfClosed(); sendTo('measure', { type: 'focusDim', ...m }); },
+  onTakeoffChanged: () => sendTo('schedules', { type: 'paneEvent', what: 'takeoff' }),
+  onLinkedCell: () => {},
+  windowExtra: () => ({ follow: CX.following() }),
 });
+function openWindowIfClosed() { if (!windowInit('measure')) openMeasureWindow(); }
 
 // ================================================================== ribbon commands (shared runtime)
-const needModel = () => { if (!S.data) { selectTab('project'); status('Open a model from the Project tab first.', 'bad'); return false; } return true; };
-const tool = (t) => () => { if (!needModel()) return; selectTab(MODEL_TABS.includes(currentTab) ? currentTab : 'elements'); const b = $('vbar').querySelector(`[data-t=${t}]`); b?.click(); };
-const reviewSection = (key) => () => { if (!needModel()) return; selectTab('review'); setTimeout(() => { const b = document.querySelector(`[data-rsec=${key}]`); if (b && b.getAttribute('aria-expanded') !== 'true') b.click(); document.querySelector(`#rs-${key}`)?.scrollIntoView({ block: 'start' }); }, 50); };
 const RIBBON = {
-  openSmartTakeoff: () => { if (needModel()) App.openSmartTakeoff(); },
-  openSmartOutput: () => { if (needModel()) App.openSmartOutput(); },
+  openMeasurements: () => selectTab('meas'),
+  openMeasureWindow: () => openMeasureWindow(),
+  openSchedules: () => openSchedulesWindow(),
   openProjects: () => selectTab('project'), refreshProject: () => refreshProject(),
-  openElements: () => { if (needModel()) selectTab('elements'); },
-  openMeasure: () => { if (needModel()) selectTab('measure'); },
-  openTemplates: () => { if (!needModel()) return; selectTab('measure'); $('tplBox').open = true; renderTemplates(); $('tplBox').scrollIntoView(); },
-  openZones: () => { if (!needModel()) return; selectTab('elements'); $('zonesBox').open = true; $('zonesBox').scrollIntoView(); },
-  openAI: () => { if (!needModel()) return; selectTab('ai'); $('aiAsk')?.focus(); },
-  openReview: () => { if (needModel()) selectTab('review'); },
+  linkToCell: () => { selectTab('meas'); status('Choose a group or a dimension in the list (or in the measurement window), then press Link to selected cell.'); },
+  followExcel: () => { CX.setFollow(!CX.following()); sendTo('measure', { type: 'paneEvent', what: 'follow', on: CX.following() }); status(`Follow Excel is ${CX.following() ? 'on' : 'off'}.`, 'ok'); },
+  refreshLinks: async () => { await CX.loadTree(); await CX.broadcastLinks({ rescan: true }); status('Linked cells read again.', 'ok'); },
   openAdmin: () => { if (session.get()?.user?.role !== 'admin') status('Admin is for administrators only.', 'bad'); else selectTab('admin'); },
-  viewFit: tool('fit'), viewShowAll: tool('showall'), viewIsolate: tool('isolate'), viewHide: tool('hide'),
-  viewClear: () => { if (!needModel()) return; selectIds([], { fit: false }); },
-  viewSection: tool('section'), viewPlan: tool('plan'), viewBoxSelect: tool('box'), viewMeasure: tool('measure'),
-  viewColour: tool('color'), viewSaved: tool('saved'), view3DWindow: tool('window'), viewViews: tool('views'),
-  selectFromExcel: () => App.selectFromExcel(),
   openHelp: () => openHelp(),
-  measuredStatus: async () => { if (!needModel()) return; await setColorMode('measured'); selectTab('review'); },
-  compareRevisions: reviewSection('revisions'), updateTakeoff: reviewSection('revisions'),
-  aiCheck: reviewSection('aicheck'), buildBOQ: reviewSection('output'), auditPdf: reviewSection('output'), modelChecks: reviewSection('checks'),
 };
 function registerRibbon() {
   if (typeof Office === 'undefined' || !Office.actions?.associate) return;
@@ -176,10 +170,13 @@ function registerRibbon() {
 window.__ribbon = RIBBON;
 
 // ================================================================== start
-initModel(); initMeasure(); initExcel(); initAI(); initReview(); initPaneHost(); initSmartTakeoff();
+CX.registerFunctions();
+initExcel(); initMeasurements();
+initWinHost({ inExcel: false });
 const officeReady = (typeof Office !== 'undefined') ? Office.onReady().catch(() => ({ host: null })) : Promise.resolve({ host: null });
 officeReady.then(async (info) => {
   S.inExcel = typeof Office !== 'undefined' && info?.host === Office.HostType.Excel;
+  initPaneHost({ inExcel: S.inExcel });
   if (S.inExcel) {
     Excel.run(async (ctx) => { ctx.workbook.worksheets.onSelectionChanged.add(onExcelSelect); await ctx.sync(); }).catch(() => {});
     registerRibbon();
@@ -195,4 +192,4 @@ officeReady.then(async (info) => {
   } catch (err) { if (err.status !== 401) showSignIn(err.message); }
 });
 
-window.__dwfx = { S, App, viewer, toolbar, esc };
+window.__dwfx = { S, App, esc, CX, onExcelSelect };

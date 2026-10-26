@@ -1,7 +1,7 @@
-// Unit tests: summary sheet builders (register, pivot summary, NRM2/POMI summary, NRM1 elemental, custom sheets).
+// Unit tests: summary sheet builders (register, pivot summary, custom sheets).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRegister, buildSummary, buildRuleSummary, buildNrm1, buildCustom, registerColumns, itemCode, crit } from '../public/js/summaries.js';
+import { buildRegister, buildSummary, buildCustom, registerColumns, itemCode, crit } from '../public/js/summaries.js';
 
 const rule = (key, title, unit, extra = {}) => ({ set: 'NRM2', key, ref: 'NRM2 11.2', group: 'Concrete', title, nrm1: '2.2', ...extra });
 const G = [{
@@ -31,26 +31,17 @@ test('register: one SUMIFS row per item, group and level; helper inputs left out
 test('summary pivot: levels across, total column, items under work sections', () => {
   const { entries } = buildRegister(G, { by: 'level' });
   const L = buildSummary(entries, { by: 'level', order: ['L1', 'L2'] });
-  assert.deepEqual(L.rows[3], ['Code', 'Description', 'Rule ref', 'Unit', 'L1', 'L2', '(all levels)', 'Total']);
+  assert.deepEqual(L.rows[3], ['Code', 'Description', 'Ref', 'Unit', 'L1', 'L2', '(all levels)', 'Total']);
   const r = L.rows.findIndex(x => x[0] === itemCode(G[0].meta.method.formulas[0])) + 1;
   assert.equal(L.rows[r - 1][4], `=SUMIFS('Quantities'!$K:$K,'Quantities'!$A:$A,$A${r},'Quantities'!$H:$H,E$4)`);
   assert.equal(L.rows[r - 1][7], `=SUMIFS('Quantities'!$K:$K,'Quantities'!$A:$A,$A${r})`);
   assert.ok(L.kinds.includes('section'));
 });
 
-test('NRM2 summary keeps rates; NRM1 summary has GIFA, allowances and cost per m2', () => {
-  const { entries } = buildRegister(G, { by: 'level' });
-  const code = itemCode(G[0].meta.method.formulas[0]);
-  const N = buildRuleSummary(entries, 'NRM2', { keep: new Map([[code, 120]]) });
-  const row = N.rows.find(x => x[0] === code);
-  assert.equal(row[6], 120); assert.equal(row[3], 'NRM2 11.2');
-  assert.match(N.rows.at(-1)[7], /^=H\d+(\+H\d+)*$/);
-  const E = buildNrm1(entries, { gifa: 500 });
-  assert.equal(E.rows[3][4], 500);
-  const it = E.rows.find(x => String(x[0]).startsWith(code + '@2.2'));
-  assert.ok(it); assert.match(it[4], /\$F:\$F,"=2\.2"\)$/);
-  assert.ok(E.rows.some(x => x[0] === 'ALLOW@2.2'));
-  assert.match(E.rows.at(-1)[6], /^=G\d+/);
+test('no measurement-standard sheets: only the register and the summary are built', async () => {
+  const mod = await import('../public/js/summaries.js');
+  assert.equal(mod.buildRuleSummary, undefined); assert.equal(mod.buildNrm1, undefined);
+  assert.throws(() => buildCustom({ name: 'Summary', columns: [{ head: 'A' }], rows: [] }), /manages/);
 });
 
 test('custom sheets: helper functions, blocked formulas, reserved names', () => {

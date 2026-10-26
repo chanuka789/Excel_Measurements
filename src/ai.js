@@ -6,10 +6,8 @@
 import { q, one, audit } from './db.js';
 import { evaluate, dimsOf, keyOf } from '../public/js/engine.js';
 import { applyFilter, overview } from './modeldata.js';
-import { ITEMS, itemIds, itemSpecs, LIMITS_TEXT } from '../public/js/qsitems.js';
-import { RULES as RULE_ITEMS, RULE_SETS, qsSetup, QS_KNOWLEDGE, NRM1 } from '../public/js/rules.js';
+import { QS_KNOWLEDGE } from '../public/js/rules.js';
 import { ACTIONS_TEXT, cleanActions } from '../public/js/actdefs.js';
-import { POMI_SECTIONS } from '../public/js/qsgroups.js';
 
 // ------------------------------------------------------------------ providers
 export function providers() {
@@ -109,10 +107,9 @@ export async function searchRules(text, projectId, limit = 6) {
 // ------------------------------------------------------------------ prompts
 const PLAN_SCHEMA = `{"message": "short plain-English summary of what you measured and the key assumptions",
  "question": "only when the request is unclear or data is missing: ONE short question for the QS (then no groups and no write actions)",
- "rules_used": [{"ref": "e.g. NRM2 WS11 / item 16", "use": "what this rule decided in the plan"}],
- "actions": [{"do": "action name", "...": "arguments", "why": "short reason", "rule": "rule ref when a measurement rule applies"}],
+ "actions": [{"do": "action name", "...": "arguments", "why": "short reason"}],
  "groups": [{
-   "name": "take-off group name, e.g. 'Formwork to RC beams - First floor'",
+   "name": "schedule name, e.g. 'RC beams - First floor'",
    "filter": {"category": [], "family": [], "type": [], "type_contains": [], "type_excludes": [], "level": [], "use_ticked": false},
    "group_by": "type" | "level" | "zone" | "",
    "inputs": [ {"key": "L", "label": "Cut length", "unit": "m", "source": "property", "name": "Cut Length", "sum": true},
@@ -137,39 +134,28 @@ const RULES = `Rules:
 - Use only category, family, type, level and quantity names that exist in the model.
 - If the request is unclear or the model lacks the data, return no groups and put ONE short question in "question".`;
 
-const ITEMS_TEXT = ITEMS.map(i => `${i.id}: ${i.name} (${i.discipline})${i.description ? ' - ' + i.description : ''}`).join('\n');
-const AGENT_SYSTEM = `You are a senior quantity surveyor working inside an Excel add-in that measures Revit DWFx models. You can also
-run the app for the user: rules, the 3D view, folders, dimension groups, zones, measuring, Excel take-off, summary sheets and checks.
-Plan like an experienced QS using the measurement rules the project uses (NRM2, POMI or NRM1; the project state tells you which).
-Work in steps with the tools: find the right elements, look at the quantities they really have, test before you answer:
-test_item for library measure items (they apply the rules: concrete, formwork, reinforcement and waterproofing in one table),
-test_plan for custom groups. Fix the plan if something is wrong (zero elements, many missing values, unit mistakes, double counting).
-Prefer the measure items for structural work: they already follow the rules. Use custom "groups" only for what the items do not cover.
+const AGENT_SYSTEM = `You are a senior quantity surveyor working in the DWFx Schedules window of an Excel add-in that reads Revit
+DWFx models. You select elements and build quantity SCHEDULES from the data each element really has (no measurement-standard
+formats such as NRM or POMI). You can also run the app for the user: the 3D view, folders, dimension groups, zones, Excel and checks.
+Work in steps with the tools: find the right elements, look at the quantities they really have, test before you answer (test_plan).
+Fix the plan if something is wrong (zero elements, many missing values, unit mistakes, double counting).
 Prefer exact "Geo" and "FW ..." geometry quantities. The add-in evaluates every formula per element and writes live Excel formulas;
 you never invent numbers.
+A schedule is one entry in "groups": the elements (filter), the quantities (inputs), assumptions (constants) and calculated
+columns (formulas). Volume, formwork and reinforcement of the same elements go in ONE schedule as columns of the same table
+(e.g. inputs Net volume and FW quantities; constant "Reinforcement rate" kg/m3; formulas Formwork = sum of the FW faces,
+Reinforcement = {Net_volume} * {Rate}). NEVER make separate schedules for formwork or reinforcement of the same elements.
+Export: when the user asks to export or add to Excel, add the action add_groups after the groups.
 Actions (the user sees them as a checklist; view and read actions run at once, write and delete actions only after the user's OK):
 ${ACTIONS_TEXT}
 Filters (in actions and groups): {"category": [], "family": [], "type": [], "type_contains": [], "type_excludes": [], "level": [],
 "material": ["insitu|precast|steel|timber|masonry"], "qsKind": ["pile|pilecap|footing|raft|groundbeam|beam|column|slab|groundslab|roofslab|wall|stair"], "zone": [], "use_ticked": bool}.
-Measure items (use the id in measure_item):
-${ITEMS_TEXT}
 Rules for actions:
 - Only plan actions the user asked for, or that are needed for what they asked (e.g. a folder before the groups inside it).
 - Refer to things created earlier in the same plan by name (folders, groups, zones); actions run in order.
 - Never plan a delete unless the user clearly asked to delete or remove that thing.
-- When a quantity depends on a measurement rule, say which in "rules_used" (ref and what it decided), and put the ref in the action's "rule".
-- When data is missing (ground level for waterproofing below ground, a rate, which rules to use when the request depends on it,
-  which elements are meant), ask ONE question in "question" and plan no write actions.
-- Measuring structure (concrete, formwork, reinforcement, waterproofing, piles, steel): plan create_structure_groups. It makes ONE
-  dimension group per element type (slabs and walls per thickness, named "<thickness> mm <element>") holding volume, formwork,
-  reinforcement and waterproofing together. NEVER make separate dimension groups or tables for formwork, reinforcement or
-  waterproofing of the same elements. If the user wants the result in Excel, follow it with groups_to_excel (one table per group).
-  Use measure_item only when the user asks for Excel tables without dimension groups.
-- Folders follow the POMI sections, then the element group: "${POMI_SECTIONS.join('", "')}";
-  under a section: Substructure, Frame, Superstructure, Roof (e.g. "Section C - Concrete works" > "Frame"). When you create
-  folders or dimension groups for other trades, use the same sections (doors in Section H, finishes in Section J, ...).
-- When the user asks to measure, put the actions in the plan so the result reaches the dimension groups and/or Excel.
-- Summaries, NRM1/NRM2 sheets and new sheets are built by formulas from the take-off; use build_summaries / new_sheet.
+- When data is missing (a rate, which elements are meant), ask ONE question in "question" and plan no write actions.
+- Summary sheets and new sheets are built by formulas from the Take-off sheet; use build_summaries / new_sheet.
 ${QS_KNOWLEDGE}
 When you are done, answer with ONLY this JSON (no tool call):
 ${PLAN_SCHEMA}
@@ -182,11 +168,7 @@ const TOOLS = [
     parameters: { type: 'object', properties: { category: { type: 'string' }, type: { type: 'string' } } } } },
   { type: 'function', function: { name: 'test_plan', description: 'Evaluate one take-off group on the real elements. Returns element count, totals per column, missing values and the first rows.',
     parameters: { type: 'object', properties: { group: { type: 'object', description: 'one group in the plan format' } }, required: ['group'] } } },
-  { type: 'function', function: { name: 'test_item', description: 'Evaluate a library measure item on the real elements by the project rules. Returns tables (one per element kind) with columns, rule refs, totals, missing values and "to confirm" flags.',
-    parameters: { type: 'object', properties: { item: { type: 'string', description: 'measure item id' }, filter: { type: 'object', description: 'optional filter to narrow the item' }, rule_set: { type: 'string', description: 'NRM2, POMI or NRM1 (default: the project rules)' } }, required: ['item'] } } },
-  { type: 'function', function: { name: 'rule_info', description: 'Rule items of a rule set (reference, unit, what is measured), the thresholds of the set, and NRM1 elements.',
-    parameters: { type: 'object', properties: { rule_set: { type: 'string' }, topic: { type: 'string', description: 'e.g. formwork, waterproofing, concrete' } }, required: ['rule_set'] } } },
-  { type: 'function', function: { name: 'project_state', description: 'The project: rule set, QS setup (ground level, upturns, rates), dimension-group folders and groups, zones, and the Excel workbook (sheets, take-off tables).',
+  { type: 'function', function: { name: 'project_state', description: 'The project: assumptions (ground level, reinforcement rates), dimension-group folders and groups, zones, and the Excel workbook (sheets, take-off tables).',
     parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'search_rules', description: 'Search the QS knowledge base (house measurement rules) for a topic.',
     parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
@@ -209,30 +191,6 @@ export function specFromGroup(g, els) {
 function toolRunner({ data, ticked, projectId, templates, state = {} }) {
   const r3 = (v) => Math.round(v * 1000) / 1000;
   return {
-    test_item({ item, filter, rule_set }) {
-      const it = ITEMS.find(x => x.id === item); if (!it) return { error: 'No measure item with that id. Use one from the list.' };
-      try {
-        const setup = qsSetup({ qs: state.setup || {} });
-        const set = RULE_SETS[rule_set] ? rule_set : setup.ruleSet;
-        let ids = itemIds(it, data.elements, (f) => applyFilter(data.elements, f, ticked).map(e => e.id));
-        if (filter) { const keep = new Set(applyFilter(data.elements, filter, ticked).map(e => e.id)); ids = ids.filter(id => keep.has(id)); }
-        if (!ids.length) return { elements: 0, note: 'No elements for this item (with this filter).' };
-        const specs = itemSpecs(it, ids, data.byId, { set, setup: state.setup || {}, elements: data.elements });
-        return { rule_set: set, elements: ids.length, tables: specs.slice(0, 8).map(spec => {
-          const { tot, missing } = evaluate(spec, data.byId);
-          const cols = spec.formulas.length ? spec.formulas : spec.inputs;
-          return { name: spec.name, elements: spec.ids.length, assumptions: spec.constants.map(c => `${c.label} = ${c.value} ${c.unit}`),
-            columns: cols.map(c => ({ label: c.label, unit: c.unit, total: tot[c.key] != null ? r3(tot[c.key]) : null, missing: missing[c.key] || 0,
-              rule: c.rule?.ref || '', to_confirm: Boolean(c.rule?.confirm), allowance: Boolean(c.rule?.allowance) })) };
-        }) };
-      } catch (err) { return { error: err.message }; }
-    },
-    rule_info({ rule_set, topic }) {
-      const set = RULE_SETS[rule_set] ? rule_set : 'NRM2';
-      const words = String(topic || '').toLowerCase().match(/[a-z]{3,}/g) || [];
-      const items = Object.entries(RULE_ITEMS[set] || {}).map(([key, r]) => ({ key, ...r })).filter(r => !words.length || words.some(w => `${r.group} ${r.title} ${r.key}`.toLowerCase().includes(w)));
-      return { rule_set: RULE_SETS[set].full, thresholds: LIMITS_TEXT(set), items: items.slice(0, 40), nrm1_elements: set === 'NRM1' || /nrm1|element|cost/i.test(topic || '') ? NRM1 : undefined };
-    },
     project_state() { return state; },
     find_elements({ filter }) {
       const els = applyFilter(data.elements, filter || {}, ticked);
@@ -282,7 +240,7 @@ export async function runAgent({ user, projectId, request, data, ticked = [], te
   const ov = overview(data, { maxTypes: 250 });
   const messages = [
     { role: 'system', content: AGENT_SYSTEM + (rules.length ? '\n\nHouse rules that may apply:\n' + rules.map(r => `- ${r.title}: ${r.body}`).join('\n') : '') },
-    { role: 'user', content: `MODEL OVERVIEW:\n${JSON.stringify(ov)}\n\nPROJECT: rules ${state.ruleSet || 'NRM2'}; ground level ${state.setup?.groundLevel ?? 'not set'}; ${(state.groups || []).length} dimension groups; ${(state.zones || []).length} zones; Excel: ${state.workbook?.inExcel ? `${(state.workbook.groups || []).length} take-off tables, sheets ${(state.workbook.sheets || []).join(', ')}` : 'not open'}\n\nSELECTED ELEMENTS: ${ticked.length}\n\nREQUEST:\n${String(request).slice(0, 2000)}` },
+    { role: 'user', content: `MODEL OVERVIEW:\n${JSON.stringify(ov)}\n\nPROJECT: ground level ${state.setup?.groundLevel ?? 'not set'}; ${(state.groups || []).length} dimension groups; ${(state.zones || []).length} zones; Excel: ${state.workbook?.inExcel ? `${(state.workbook.groups || []).length} take-off tables, sheets ${(state.workbook.sheets || []).join(', ')}` : 'not open'}\n\nSELECTED ELEMENTS: ${ticked.length}\n\nREQUEST:\n${String(request).slice(0, 2000)}` },
   ];
   const tools = toolRunner({ data, ticked, projectId, templates, state });
   const steps = [];
@@ -321,7 +279,7 @@ export function normalizePlan(p) {
   const { actions, dropped } = cleanActions(p.actions);
   p.actions = actions; if (dropped.length) p.dropped = dropped;
   if (p.question) p.actions = p.actions.filter(a => !['write', 'delete'].includes(ACTION_KIND(a)));      // ask first, act after the answer
-  p.rules_used = Array.isArray(p.rules_used) ? p.rules_used.filter(r => r && r.ref).slice(0, 20).map(r => ({ ref: String(r.ref).slice(0, 60), use: String(r.use || '').slice(0, 300) })) : [];
+  delete p.rules_used;
   if (p.question && !p.groups.length && !p.message) p.message = p.question;
   return p;
 }
@@ -331,9 +289,7 @@ const summarizeResult = (r) => {
   if (r?.error) return 'Error: ' + r.error;
   if ('elements' in (r || {}) && r.totals) return `${r.elements} elements; ` + Object.entries(r.totals).slice(0, 4).map(([k, v]) => `${k} ${v ?? '-'}`).join(', ');
   if ('count' in (r || {})) return `${r.count} elements in ${r.types?.length || 0} types`;
-  if (r?.tables) return `${r.elements} elements, ${r.rule_set}: ` + r.tables.slice(0, 2).map(t => `${t.name} (${t.columns.filter(c => c.total).slice(0, 3).map(c => `${c.label.slice(0, 30)} ${c.total} ${c.unit}`).join(', ')})`).join('; ');
-  if (r?.thresholds) return `${r.items?.length || 0} rule items`;
-  if (r && 'ruleSet' in r) return `rules ${r.ruleSet}, ${(r.groups || []).length} groups, ${(r.zones || []).length} zones`;
+  if (r && 'setup' in r) return `${(r.groups || []).length} groups, ${(r.zones || []).length} zones`;
   if (r?.rules) return `${r.rules.length} rule(s)`;
   if (r?.templates) return `${r.templates.length} template(s)`;
   return JSON.stringify(r).slice(0, 160);
@@ -374,7 +330,7 @@ Answer with ONLY JSON: {"summary": "one or two sentences", "findings": [{"severi
 export async function runDescribe({ user, projectId, items, style }) {
   const cfg = await guard(user, projectId);
   const res = await chat(cfg, [
-    { role: 'system', content: `You write bill of quantities item descriptions for a quantity surveyor (NRM2 / POMI style).
+    { role: 'system', content: `You write bill of quantities item descriptions for a quantity surveyor.
 For each item write a clear, complete description: work section heading, item description with material, size or thickness,
 location and the unit of measurement. Keep to the house style if given. Do not invent specifications that are not in the data:
 write "[specification]" where the QS must fill in a detail.

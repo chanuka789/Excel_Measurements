@@ -154,3 +154,15 @@ table.links td.v { text-align: right; }
   .sch-grid { grid-template-columns: 1fr; }
   .dlg.side-actions .dlg-main { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------------------------- DWFx Schedules window */
+body.sched { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+body.sched .titlebar select { max-width: 340px; margin-left: auto; }
+.smain { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 420px) 1fr; }
+.sleft { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--stroke-2, #d1d1d1); background: var(--bg, #fff); }
+.sleft .panel { flex: 1; min-height: 0; overflow: auto; padding: 8px 10px; }
+.sleft #tree { max-height: none; }
+.sview { position: relative; display: flex; flex-direction: column; min-height: 0; height: auto !important; }
+.sview .vstage { flex: 1; min-height: 0; }
+body.sched #props { position: fixed; right: 8px; top: 56px; bottom: 8px; width: min(360px, 90vw); overflow: auto; z-index: 20; }
+@media (max-width: 760px) { .smain { grid-template-columns: 1fr; grid-template-rows: 55% 45%; } .sleft { border-right: 0; } }

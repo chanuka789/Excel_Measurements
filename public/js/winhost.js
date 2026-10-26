@@ -26,6 +26,8 @@ export const setInExcel = (v) => { inExcel = Boolean(v); };
 /** Register a handler for a message type from the windows: fn(kind, message). */
 export function onWindow(type, fn) { handlers[type] = fn; }
 export const windowOpen = (kind) => Boolean(wins[kind]);
+/** The data a window was opened with (and the model version it reported since). */
+export const windowInit = (kind) => wins[kind]?.init || null;
 
 /** Open (or re-open) a window. init: data for its first message (projectId, versionId, drawing, view, ...). */
 export async function openWindow(kind, mode = 'normal', init = {}) {
@@ -106,7 +108,7 @@ function onMessage(kind, m) {
   if (m.type === 'ready') {
     const w = wins[kind];
     sendTo(kind, { type: 'init', token: session.get()?.token, projectId: App.currentProjectId?.(), inExcel,
-      mode: w?.link ? 'app' : w?.office ? w.size : 'browser', ...(w?.init || {}) });
+      mode: w?.link ? 'app' : w?.office ? w.size : 'browser', ...(App.windowExtra?.(kind) || {}), ...(w?.init || {}) });
     if (w) w.init = { ...w.init, view: null, drawing: null };       // a carried view is used once
     return;
   }

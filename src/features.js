@@ -57,7 +57,7 @@ async function projectState(pid, workbook) {
   const fname = new Map(folders.map(f => [f.id, f.name]));
   const wb = workbook && typeof workbook === 'object' ? { inExcel: Boolean(workbook.inExcel), sheets: (workbook.sheets || []).slice(0, 60).map(String),
     groups: (workbook.groups || []).slice(0, 200).map(g => ({ ref: String(g.ref || ''), name: String(g.name || '').slice(0, 200), elements: Number(g.elements) || 0, keys: (g.keys || []).slice(0, 40), columns: (g.columns || []).slice(0, 40) })) } : null;
-  return { ruleSet: setup.ruleSet, setup, folders: folders.map(f => ({ name: f.name, parent: fname.get(f.parent_id) || '' })),
+  return { setup, folders: folders.map(f => ({ name: f.name, parent: fname.get(f.parent_id) || '' })),
     groups: groups.map(g => ({ name: g.name, type: g.mtype, folder: fname.get(g.folder_id) || '', elements: g.items })), zones, workbook: wb };
 }
 
@@ -165,14 +165,14 @@ export function registerFeatures(api) {
     res.json({ project: p });
   }));
 
-  // ---------------------------------------------------------------- QS setup: rule set and measuring assumptions (editors)
+  // ---------------------------------------------------------------- QS setup: measuring assumptions (editors)
   api.patch('/projects/:pid/qs', json, wrap(async (req, res) => {
     await need(req, req.params.pid, 'editor');
     const b = req.body || {};
     const cur = await one(`SELECT settings FROM projects WHERE id=$1`, [req.params.pid]);
     const qs = { ...(cur.settings?.qs || {}) };
     const num = (k, lo, hi) => { if (b[k] === undefined) return; if (b[k] === null && k === 'groundLevel') { qs[k] = null; return; } const v = Number(b[k]); if (!Number.isFinite(v) || v < lo || v > hi) fail(400, `${k} must be between ${lo} and ${hi}.`); qs[k] = v; };
-    if (b.ruleSet !== undefined) { if (!['NRM2', 'POMI', 'NRM1'].includes(b.ruleSet)) fail(400, 'Rule set must be NRM2, POMI or NRM1.'); qs.ruleSet = b.ruleSet; }
+    delete qs.ruleSet;                                   // measurement-standard formats are not used any more
     num('groundLevel', -1000, 10000); num('wpUpturn', 0, 5); num('roofUpturn', 0, 5);
     for (const k of ['wpUnderGround', 'wpFoundationSides', 'wpRoof', 'earthFaced']) if (b[k] !== undefined) qs[k] = Boolean(b[k]);
     if (b.rates && typeof b.rates === 'object') {

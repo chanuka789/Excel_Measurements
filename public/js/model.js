@@ -1,18 +1,13 @@
-// The open model: 3D viewer, element browser, selection (with undo), hide/isolate, colour by,
-// zones, level plans, properties, saved views and the large 3D window.
-import { $, esc, App, api, session, status } from './core.js';
-import { LinkChannel } from './link.js';
+// DWFx Schedules window: the open model, its 3D view, element browser, selection (with undo), hide/isolate,
+// colour by, zones, level plans, properties and saved views. Schedules are built from the selected elements' data.
+import { $, esc, App, api, status } from './core.js';
 import { Viewer, parseBin, fromLegacy } from './viewer.js';
 import { Toolbar } from './vtools.js';
 import { dimsOf, fmt, uLabel } from './engine.js';
-import { groupToSpec, groupTotal } from './dims.js';
-import { PointTakeoff } from './takeoff3d.js';
-import { newGroupDialog } from './takeoff2d.js';
 import { loadVersion } from './localfiles.js';
-import { runEngine, canProcessLocally } from './localproc.js';
 import { S, PALETTE, STATUS_COLORS, REV_COLORS, idsOf, count, isVisible, snapshot, undo, redo } from './state.js';
 
-let V = null, TB = null, win = null, PT = null;
+let V = null, TB = null;
 
 // ================================================================== setup
 export function initModel() {
@@ -34,7 +29,6 @@ export function initModel() {
   });
   TB = new Toolbar($('vbar'), $('vstage'), V, HOST);
   window.__viewer = V;
-  if (App.tkStore) PT = new PointTakeoff(V, App.tkStore, { versionId: () => S.versionId, label: () => S.label, status });
 
   $('search').oninput = (e) => { S.search = e.target.value.trim().toLowerCase(); renderTree(); };
   $('level').onchange = (e) => { S.level = e.target.value; update(); };
@@ -60,16 +54,12 @@ export function initModel() {
     const d = e.key === 'ArrowUp' ? -30 : e.key === 'ArrowDown' ? 30 : 0; if (!d) return;
     $('viewer').style.height = Math.max(180, $('viewer').offsetHeight + d) + 'px'; e.preventDefault();
   };
-  window.addEventListener('message', onWindowMessage);
-  window.addEventListener('pagehide', () => { if (win?.link) win.link.close(true); });
 }
 export const viewer = () => V;
 export const toolbar = () => TB;
 
 // ================================================================== host interface for the toolbar
 const HOST = {
-  /** 3D point take-off into the project's dimension groups (only for a model opened from a project). */
-  takeoff: () => (PT && S.versionId && App.tkStore?.projectId ? { store: App.tkStore, pt: PT, newGroup: () => newGroupDialog(App.tkStore, status) } : null),
   selectedIds: () => [...S.ticked],
   isIsolated: () => S.isolated,
   toggleIsolate() {
@@ -114,17 +104,9 @@ const HOST = {
   },
   async deleteView(v) { try { await api('DELETE', `/views/${v.id}`); status('View deleted.', 'ok'); } catch (err) { status(err.message, 'bad'); } },
   status,
-  openWindow: () => openWindow(),
-  openAppWindow: () => openWindow('app'),
   async insertPicture(dataUrl) {
-    if (!S.inExcel) throw new Error('not in Excel');
-    await Excel.run(async (ctx) => {
-      const sh = ctx.workbook.worksheets.getActiveWorksheet();
-      const img = sh.shapes.addImage(dataUrl.split(',')[1]);
-      img.name = 'DWFx view ' + new Date().toLocaleString();
-      img.lockAspectRatio = true; img.width = Math.min(img.width, 640);
-      await ctx.sync();
-    });
+    if (!App.insertPicture) throw new Error('not in Excel');
+    await App.insertPicture(dataUrl);
     status('Picture of the 3D view added to the active sheet.', 'ok');
   },
 };
@@ -136,7 +118,7 @@ export async function loadModelData(data, { versionId = null, label = '', geomet
   S.ticked.clear(); S.hidden.clear(); S.isolated = false; S.search = ''; S.level = ''; S.open.clear();
   S.rowsById = null; S.catColor.clear(); S.history = []; S.future = []; S.measured = null; S.compare = null;
   S.colorBy = 'category'; S.colorMap = null;
-  $('search').value = ''; $('aiOut').innerHTML = ''; $('props').hidden = true; $('pickInfo').hidden = true;
+  $('search').value = ''; if ($('aiOut')) $('aiOut').innerHTML = ''; $('props').hidden = true; $('pickInfo').hidden = true;
   buildTree();
   App.computeDerived?.();                                    // openings, etc. (measure module)
   $('ctxModel').textContent = S.label;
@@ -153,13 +135,11 @@ export async function loadModelData(data, { versionId = null, label = '', geomet
   update();
   const shown = S.E.filter(e => V.hasGeometry(e.id)).length;
   status(`${S.E.length} elements in ${S.tree.size} categories, ${shown} shown in 3D.` + (data.geoNote ? ' ' + data.geoNote : ''), data.geoNote ? 'warn' : 'ok');
-  if (App.tkStore?.projectId) App.tkStore.load().then(() => PT?.refresh()).catch(() => {});
-  App.renderQs?.();
-  sendToWindow({ type: 'model', versionId: S.versionId, label: S.label });
+  App.onModelLoaded?.();
 }
 export function closeModel() {
   S.data = null; S.E = []; S.byId = new Map(); S.versionId = null; S.ticked.clear(); S.hidden.clear();
-  V?.clear(); $('ctxModel').textContent = 'No model open'; App.selectTab?.(App.currentTab?.() || 'project');
+  V?.clear(); $('ctxModel').textContent = 'No model open'; App.selectTab?.(App.currentTab?.() || 'elements');
 }
 async function withViewerBusy(msg, fn) {
   $('viewer').hidden = false; V.resize();
@@ -176,24 +156,6 @@ export async function openVersion(vid, label = '') {
     try { localStorage.setItem('dwfxLastVersion', vid); } catch { /* storage blocked */ }
   } catch (err) { status('Could not open the model: ' + err.message, 'bad'); if (!S.data) App.selectTab('project'); }
 }
-export async function quickOpen(file) {
-  try {
-    let data, geometry = null;
-    if (canProcessLocally()) {
-      // read on this computer: the file is not sent anywhere
-      const r = await withViewerBusy(`Reading ${file.name} on this computer. Large models can take a minute…`,
-        () => runEngine(file, (text, pct) => { $('vload').textContent = `${text}${pct ? ` (${Math.round(pct)}%)` : ''}`; }));
-      data = { ...r.payload, fileName: file.name, geometryFormat: r.geometry ? 'bin2' : 'none' };
-      if (r.geometry) geometry = r.geometry.buffer.slice(r.geometry.byteOffset, r.geometry.byteOffset + r.geometry.byteLength);
-    } else {
-      const fd = new FormData(); fd.append('model', file, file.name);
-      data = await withViewerBusy(`Reading ${file.name}. Large models can take a minute…`, () => api('POST', '/model', fd));
-      if (data.geometryB64) { const bin = Uint8Array.from(atob(data.geometryB64), c => c.charCodeAt(0)); geometry = bin.buffer; delete data.geometryB64; }
-    }
-    await loadModelData(data, { label: `${file.name} (not saved)`, geometry });
-  } catch (err) { status('Could not open this file: ' + err.message, 'bad'); if (!S.data) App.selectTab('project'); }
-}
-
 /** Elevation of each level (world metres) from the elements on it, for level plans. */
 function computeLevels(g) {
   S.levelZ = [];
@@ -219,12 +181,10 @@ export function paint() {
   V.paint({ selected: S.ticked, isVisible, colorOf, xray: V.state.xray });
   TB.sync();
   $('selCount').textContent = S.ticked.size ? `(${S.ticked.size})` : '';
-  sendToWindow({ type: 'state', ticked: [...S.ticked].slice(0, 50000), hidden: [...S.hidden].slice(0, 50000), isolated: S.isolated, level: S.level });
 }
 export function update() {
   paint(); renderTree();
   if ($('tab-measure').classList.contains('on')) App.renderMeasure?.();
-  if ($('tab-smart')?.classList.contains('on')) App.renderSmart?.();
 }
 function colorOf(id) {
   if (S.colorMap) return S.colorMap.get(id) || '#c8ccd0';
@@ -246,7 +206,6 @@ export async function setColorMode(mode) {
   S.colorBy = mode;
   if (mode === 'measured') { try { await App.loadMeasured?.(); } catch (err) { status(err.message, 'bad'); } }
   legendFor(); paint();
-  sendToWindow({ type: 'colors', mode, map: S.colorMap ? [...S.colorMap] : null });
 }
 function legendFor() {
   const mode = S.colorBy;
@@ -424,12 +383,11 @@ export function showProps(id) {
       <p class="hint">Geo values are exact from the model faces. Volume shows only when the element is a closed solid.</p>` : ''}
     <h4>All properties</h4><input type="search" id="pFind" placeholder="Filter properties" style="width:100%;margin-bottom:4px" aria-label="Filter properties">
     <table class="q" id="pAll"><tbody>${all.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="v" style="white-space:normal">${esc(v)}</td></tr>`).join('')}</tbody></table>
-    <div class="row"><button id="pSmart">Smart Takeoff</button><button id="pOnly">Show only this element</button><button id="pAllVisible">Show all</button><button id="pFitAll">Fit view</button></div>`;
+    <div class="row"><button id="pOnly">Show only this element</button><button id="pAllVisible">Show all</button><button id="pFitAll">Fit view</button></div>`;
   $('pClose').onclick = () => { p.hidden = true; };
   $('pTick').onclick = () => { snapshot(); S.ticked.has(id) ? S.ticked.delete(id) : S.ticked.add(id); update(); showProps(id); };
   $('pZoom').onclick = () => V.fit([id]);
   $('pHide').onclick = () => { snapshot(); S.hidden.add(id); S.ticked.delete(id); update(); p.hidden = true; };
-  $('pSmart').onclick = () => { selectIds([id]); p.hidden = true; App.openSmartTakeoff?.(); };
   $('pOnly').onclick = () => { selectIds([id]); S.isolated = true; update(); p.hidden = true; };
   $('pAllVisible').onclick = () => { HOST.showAll(); p.hidden = true; };
   $('pFitAll').onclick = () => V.fit();
@@ -472,131 +430,4 @@ async function saveZone(name, color) {
     await loadZones(); if (S.colorBy === 'zone') setColorMode('zone');
     status(`Zone "${name}" saved with ${S.ticked.size} elements.`, 'ok');
   } catch (err) { status(err.message, 'bad'); }
-}
-
-// ================================================================== large 3D window
-// Three ways: an Office dialog (Excel), a browser pop-up (add-in opened in a browser), or the app window: a normal
-// browser window with real minimise / maximise, linked to this pane through the server (LinkChannel).
-const WIN_SIZES = { normal: { height: 85, width: 80 }, max: { height: 99.5, width: 99.5 } };
-let winCarry = null;                  // view state carried into the next window when it is re-opened (Maximise, Restore, App window)
-export async function openWindow(mode = 'normal', carry = null) {
-  if (!S.versionId) { status('The 3D window works with models in a project. Add the DWFx to a project first.', 'bad'); return; }
-  winCarry = carry;
-  closeWindow();
-  const base = new URL('viewer.html', location.href).href;
-  if (mode === 'app') return openAppWindow(base);
-  if (typeof Office !== 'undefined' && Office.context?.ui?.displayDialogAsync && S.inExcel) {
-    const size = mode === 'max' ? 'max' : 'normal';
-    Office.context.ui.displayDialogAsync(`${base}?dlg=${size}`, { ...WIN_SIZES[size], displayInIframe: false }, (r) => {
-      if (r.status !== Office.AsyncResultStatus.Succeeded) { status('Could not open the 3D window: ' + (r.error?.message || ''), 'bad'); return; }
-      const dlg = r.value;
-      win = { office: dlg, size };
-      dlg.addEventHandler(Office.EventType.DialogMessageReceived, (m) => { try { onWindowMessage({ data: JSON.parse(m.message), office: true }); } catch { /* ignore */ } });
-      dlg.addEventHandler(Office.EventType.DialogEventReceived, () => { if (win?.office === dlg) win = null; });
-    });
-  } else {
-    const w = window.open(base, 'dwfx3d', 'width=1400,height=900');
-    if (!w) { status('Your browser blocked the window. Allow pop-ups for this site.', 'bad'); return; }
-    win = { browser: w };
-  }
-  status('3D window opening. Selections stay linked with this pane and the sheet.');
-}
-async function openAppWindow(base) {
-  let link;
-  try { link = await api('POST', '/link'); } catch (err) { status('Could not open the app window: ' + err.message, 'bad'); return; }
-  const ch = new LinkChannel(link.id, 'pane', {
-    onMessage: (m) => {
-      if (m.type === 'peer') { if (m.side === 'win' && !m.online && win?.link === ch) status('The app window is closed or offline. It reconnects by itself when it comes back.'); return; }
-      onWindowMessage({ data: m, office: true });
-    },
-    onState: (st) => { if (st === 'ended' && win?.link === ch) win = null; },
-  });
-  ch.start();
-  win = { link: ch };
-  const url = `${base}?link=${encodeURIComponent(link.id)}&claim=${encodeURIComponent(link.claim)}`;
-  try {
-    if (typeof Office !== 'undefined' && Office.context?.ui?.openBrowserWindow && S.inExcel) Office.context.ui.openBrowserWindow(url);
-    else if (!window.open(url, '_blank')) throw new Error('blocked');
-    status('App window opening in your browser. You can minimise, maximise or move it to a second screen; it stays linked with Excel.', 'ok');
-  } catch {
-    status('Could not open the browser. Allow pop-ups for this site, then try again.', 'bad'); ch.close(true); win = null;
-  }
-}
-function closeWindow() {
-  if (!win) return;
-  try {
-    if (win.office) win.office.close();
-    else if (win.browser && !win.browser.closed) win.browser.close();
-    else if (win.link) win.link.close(true);
-  } catch { /* already closed */ }
-  win = null;
-}
-export const windowOpen = () => Boolean(win);
-function sendToWindow(msg) {
-  if (!win) return;
-  const text = JSON.stringify(msg);
-  try {
-    if (win.office) win.office.messageChild?.(text);
-    else if (win.link) win.link.send(msg);
-    else if (win.browser && !win.browser.closed) win.browser.postMessage(msg, location.origin);
-    else win = null;
-  } catch { /* window gone */ }
-}
-App.sendToWindow = sendToWindow;
-function onWindowMessage(ev) {
-  if (!ev.office && ev.origin && ev.origin !== location.origin) return;
-  const m = ev.data; if (!m || typeof m !== 'object' || !m.type) return;
-  if (m.type === 'ready') {
-    sendToWindow({ type: 'init', token: session.get()?.token, versionId: S.versionId, label: S.label, projectId: App.currentProjectId?.(),
-      ticked: [...S.ticked], hidden: [...S.hidden], isolated: S.isolated, level: S.level, colorMode: S.colorBy, colorMap: S.colorMap ? [...S.colorMap] : null,
-      view: winCarry, mode: win?.link ? 'app' : win?.office ? win.size : 'browser', inExcel: S.inExcel });
-    winCarry = null;
-  } else if (m.type === 'pick') {
-    snapshot(); if (!m.add) S.ticked.clear(); (m.ids || []).forEach(id => S.ticked.add(id));
-    if (m.ids?.length === 1) revealInTree(m.ids[0]);
-    update();
-    if (S.inExcel && m.ids?.length) App.goToRows?.([...S.ticked]);
-  } else if (m.type === 'windowState') {
-    snapshot();
-    S.ticked = new Set((m.ticked || []).filter(id => S.byId.has(id))); S.hidden = new Set((m.hidden || []).filter(id => S.byId.has(id)));
-    S.isolated = Boolean(m.isolated); S.level = m.level || ''; $('level').value = S.level;
-    update();
-  } else if (m.type === 'props' && S.byId.has(m.id)) showProps(m.id);
-  else if (m.type === 'openVersion' && m.versionId && m.versionId !== S.versionId) { followWindow = true; openVersion(m.versionId, m.label || '').finally(() => { followWindow = false; }); }
-  else if (m.type === 'addSchedule') addSchedules(m);
-  else if (m.type === 'reopen') openWindow(m.mode, m.view || null);
-  else if (m.type === 'closeMe') closeWindow();
-  else if (m.type === 'pane') App.onWindowRequest?.(m, sendToWindow);
-  else if (m.type === 'projectChanged') { Promise.resolve(App.refreshProject?.()).catch(() => {}).then(() => App.renderQs?.()); }
-  else if (m.type === 'zonesChanged') loadZones();
-}
-let followWindow = false;
-/** The 3D window asks for dimension groups as Excel schedules (only the task pane can write to the workbook). */
-async function addSchedules(m) {
-  const reply = (ok, message) => sendToWindow({ type: 'scheduleDone', ok, message });
-  try {
-    const pid = App.currentProjectId?.(); if (!pid) throw new Error('Open the project in the task pane first.');
-    if (m.versionId && m.versionId !== S.versionId) { followWindow = true; try { await openVersion(m.versionId, m.label || ''); } finally { followWindow = false; } }
-    if (m.versionId !== S.versionId) throw new Error('The task pane could not open the same model version.');
-    const tree = await api('GET', `/projects/${pid}/tree`);
-    const groups = (m.groupIds || []).map(id => tree.groups.find(g => g.id === id)).filter(Boolean);
-    if (!groups.length) throw new Error('Those dimension groups were not found.');
-    const refs = [];
-    for (const g of groups) {
-      const spec = groupToSpec(g, S.byId, m.opts || {});
-      if (!spec.ids.length && !spec.manual.length) continue;
-      if (S.inExcel) refs.push(await App.addToExcel(spec)); else { await App.addToList(spec); refs.push(spec.name); }
-    }
-    if (!refs.length) throw new Error('None of the groups has dimensions in this model.');
-    const tables = [...new Set(refs)];
-    const tot = groups.map(g => { const t = groupTotal(g, S.byId); return `${g.name} ${fmt(t.total, t.unit === 'nr' ? '' : t.unit)} ${t.unit}`; }).join('; ');
-    reply(true, S.inExcel ? `Added to Excel: ${tables.join(', ')} (${tot}).` : `Added to the take-off list (${tot}). Open the add-in in Excel to write the sheet.`);
-  } catch (err) { reply(false, err.message); }
-}
-/** Open the version the window works on (the pane follows the window), then resolve. */
-export async function followVersion(vid, label = '') {
-  if (!vid || vid === S.versionId) return;
-  followWindow = true;
-  try { await openVersion(vid, label); } finally { followWindow = false; }
-  if (vid !== S.versionId) throw new Error('The task pane could not open the same model version.');
 }

@@ -645,67 +645,6 @@
    }
   },
   {
-   "id": "q051",
-   "request": "Use POMI for this project",
-   "expect": {
-    "actions": [
-     {
-      "do": "set_rules",
-      "rule_set": "POMI"
-     }
-    ],
-    "max_actions": 2
-   }
-  },
-  {
-   "id": "q052",
-   "request": "Switch the measurement rules to NRM2",
-   "expect": {
-    "actions": [
-     {
-      "do": "set_rules",
-      "rule_set": "NRM2"
-     }
-    ],
-    "max_actions": 2
-   },
-   "state": {
-    "ruleSet": "POMI"
-   }
-  },
-  {
-   "id": "q053",
-   "request": "We are preparing a cost plan, use NRM1",
-   "expect": {
-    "actions": [
-     {
-      "do": "set_rules",
-      "rule_set": "NRM1"
-     }
-    ]
-   }
-  },
-  {
-   "id": "q054",
-   "request": "This is a Gulf project with a POMI bill: set the rules and measure the columns",
-   "expect": {
-    "actions": [
-     {
-      "do": "set_rules",
-      "rule_set": "POMI"
-     },
-     {
-      "do": "measure_item",
-      "item": "st-columns"
-     }
-    ],
-    "order": [
-     "set_rules",
-     "measure_item"
-    ]
-   }
-  },
-  {
    "id": "q055",
    "request": "Which measurement rules are we using? Do not change anything.",
    "expect": {
@@ -758,29 +697,6 @@
       "wp_roof": false
      }
     ]
-   }
-  },
-  {
-   "id": "q060",
-   "request": "Change the roof upturn to 450 mm and measure the roof slabs",
-   "expect": {
-    "actions": [
-     {
-      "do": "qs_setup",
-      "roof_upturn": 0.45
-     },
-     {
-      "do": "measure_item",
-      "item": "st-roofslabs"
-     }
-    ],
-    "order": [
-     "qs_setup",
-     "measure_item"
-    ]
-   },
-   "state": {
-    "groundLevel": 0
    }
   },
   {
@@ -991,18 +907,6 @@
    }
   },
   {
-   "id": "q075",
-   "request": "Measure the structure into dimension groups: volume, formwork, reinforcement and waterproofing for each element type",
-   "expect": {
-    "actions": [
-     {
-      "do": "create_structure_groups"
-     }
-    ],
-    "no_split_groups": true
-   }
-  },
-  {
    "id": "q076",
    "request": "Add the selected elements to the dimension group Beams",
    "expect": {
@@ -1101,40 +1005,6 @@
      "create_dim_group"
     ]
    }
-  },
-  {
-   "request": "Measure the beams and columns with formwork and rebar into dimension groups in the Frame folder",
-   "expect": {
-    "actions": [
-     {
-      "do": "create_structure_groups"
-     }
-    ],
-    "no_split_groups": true
-   },
-   "id": "q081"
-  },
-  {
-   "request": "Create dimension groups for the slabs by thickness with formwork and reinforcement, then add them to Excel",
-   "expect": {
-    "actions": [
-     {
-      "do": "create_structure_groups"
-     },
-     {
-      "do": "groups_to_excel"
-     }
-    ],
-    "order": [
-     "create_structure_groups",
-     "groups_to_excel"
-    ],
-    "no_split_groups": true
-   },
-   "state": {
-    "groundLevel": 0
-   },
-   "id": "q082"
   },
   {
    "id": "q083",
@@ -1254,187 +1124,6 @@
    }
   },
   {
-   "id": "q091",
-   "request": "Measure the columns by the rules",
-   "expect": {
-    "items_any": [
-     "st-columns",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q092",
-   "request": "Concrete, formwork and reinforcement to the beams",
-   "expect": {
-    "items_any": [
-     "st-beams",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q093",
-   "request": "Measure the suspended slabs with formwork by propping height",
-   "expect": {
-    "items_any": [
-     "st-slabs",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q094",
-   "request": "Measure the pile caps including waterproofing",
-   "expect": {
-    "items_any": [
-     "st-pilecaps",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q095",
-   "request": "Measure the piles",
-   "expect": {
-    "items_any": [
-     "st-piles",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q096",
-   "request": "Measure the ground beams",
-   "expect": {
-    "items_any": [
-     "st-groundbeams",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q097",
-   "request": "Measure the ground-bearing slabs",
-   "expect": {
-    "items_any": [
-     "st-groundslab",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q098",
-   "request": "Measure the roof slabs including roof waterproofing",
-   "expect": {
-    "items_any": [
-     "st-roofslabs",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q099",
-   "request": "Measure the RC walls",
-   "expect": {
-    "items_any": [
-     "st-walls",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q100",
-   "request": "Measure the stairs",
-   "expect": {
-    "items_any": [
-     "st-stairs",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q101",
-   "request": "Structural steel tonnage",
-   "expect": {
-    "items_any": [
-     "st-steel",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q102",
-   "request": "Count the precast units",
-   "expect": {
-    "items_any": [
-     "st-precast",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q103",
-   "request": "Measure the whole structure by NRM2 and add everything to Excel",
-   "expect": {
-    "items_any": [
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
    "id": "q104",
    "request": "Excavation for the foundations",
    "expect": {
@@ -1472,59 +1161,6 @@
    }
   },
   {
-   "id": "q107",
-   "request": "Measure the beams on the first floor only",
-   "expect": {
-    "actions": [
-     {
-      "do": "measure_item",
-      "item": "st-beams"
-     }
-    ]
-   }
-  },
-  {
-   "id": "q108",
-   "request": "Measure the selected elements by the rules",
-   "expect": {
-    "actions": [
-     {
-      "do": "measure_item"
-     }
-    ]
-   }
-  },
-  {
-   "id": "q109",
-   "request": "Reinforcement to the columns at 220 kg/m3",
-   "expect": {
-    "actions": [
-     {
-      "do": "measure_item",
-      "item": "st-columns"
-     }
-    ],
-    "cite": true
-   }
-  },
-  {
-   "id": "q110",
-   "request": "Measure the foundations by POMI",
-   "expect": {
-    "items_any": [
-     "st-pilecaps",
-     "st-piles",
-     "st-footings",
-     "st-all"
-    ],
-    "cite": true
-   },
-   "state": {
-    "ruleSet": "POMI",
-    "groundLevel": 0
-   }
-  },
-  {
    "id": "q111",
    "request": "Build a summary by level",
    "expect": {
@@ -1535,67 +1171,6 @@
        "summary"
       ],
       "by": "level"
-     }
-    ]
-   },
-   "state": {
-    "tables": [
-     {
-      "ref": "G1",
-      "name": "Beams",
-      "elements": 99,
-      "keys": [
-       "Conc_thin",
-       "FW"
-      ],
-      "columns": [
-       "Concrete (m3)"
-      ]
-     }
-    ]
-   }
-  },
-  {
-   "id": "q112",
-   "request": "Create the NRM1 elemental summary with GIFA 1250 m2",
-   "expect": {
-    "actions": [
-     {
-      "do": "build_summaries",
-      "kinds": [
-       "NRM1"
-      ],
-      "gifa": 1250
-     }
-    ]
-   },
-   "state": {
-    "tables": [
-     {
-      "ref": "G1",
-      "name": "Beams",
-      "elements": 99,
-      "keys": [
-       "Conc_thin",
-       "FW"
-      ],
-      "columns": [
-       "Concrete (m3)"
-      ]
-     }
-    ]
-   }
-  },
-  {
-   "id": "q113",
-   "request": "Make an NRM2 summary sheet",
-   "expect": {
-    "actions": [
-     {
-      "do": "build_summaries",
-      "kinds": [
-       "NRM2"
-      ]
      }
     ]
    },
@@ -1646,64 +1221,6 @@
      {
       "name": "Villa",
       "elements": 200
-     }
-    ]
-   }
-  },
-  {
-   "id": "q115",
-   "request": "POMI summary please",
-   "expect": {
-    "actions": [
-     {
-      "do": "build_summaries",
-      "kinds": [
-       "POMI"
-      ]
-     }
-    ]
-   },
-   "state": {
-    "ruleSet": "POMI",
-    "tables": [
-     {
-      "ref": "G1",
-      "name": "Beams",
-      "elements": 99,
-      "keys": [
-       "Conc_thin",
-       "FW"
-      ],
-      "columns": [
-       "Concrete (m3)"
-      ]
-     }
-    ]
-   }
-  },
-  {
-   "id": "q116",
-   "request": "Build all summaries: by level, NRM2 and NRM1",
-   "expect": {
-    "actions": [
-     {
-      "do": "build_summaries"
-     }
-    ]
-   },
-   "state": {
-    "tables": [
-     {
-      "ref": "G1",
-      "name": "Beams",
-      "elements": 99,
-      "keys": [
-       "Conc_thin",
-       "FW"
-      ],
-      "columns": [
-       "Concrete (m3)"
-      ]
      }
     ]
    }
@@ -1790,61 +1307,6 @@
    }
   },
   {
-   "id": "q120",
-   "request": "Build the BOQ sheet",
-   "expect": {
-    "actions": [
-     {
-      "do": "build_boq"
-     }
-    ]
-   },
-   "state": {
-    "tables": [
-     {
-      "ref": "G1",
-      "name": "Beams",
-      "elements": 99,
-      "keys": [
-       "Conc_thin",
-       "FW"
-      ],
-      "columns": [
-       "Concrete (m3)"
-      ]
-     }
-    ]
-   }
-  },
-  {
-   "id": "q121",
-   "request": "Build the BOQ with AI descriptions",
-   "expect": {
-    "actions": [
-     {
-      "do": "build_boq",
-      "ai_descriptions": true
-     }
-    ]
-   },
-   "state": {
-    "tables": [
-     {
-      "ref": "G1",
-      "name": "Beams",
-      "elements": 99,
-      "keys": [
-       "Conc_thin",
-       "FW"
-      ],
-      "columns": [
-       "Concrete (m3)"
-      ]
-     }
-    ]
-   }
-  },
-  {
    "id": "q122",
    "request": "Measure the slabs and then build the summary by level",
    "expect": {
@@ -1855,26 +1317,6 @@
     "actions": [
      {
       "do": "build_summaries"
-     }
-    ]
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q123",
-   "request": "Measure the whole structure and create the NRM1 elemental summary",
-   "expect": {
-    "items_any": [
-     "st-all"
-    ],
-    "actions": [
-     {
-      "do": "build_summaries",
-      "kinds": [
-       "NRM1"
-      ]
      }
     ]
    },
@@ -2217,14 +1659,6 @@
    }
   },
   {
-   "id": "q143",
-   "request": "How is formwork to slab soffits measured under NRM2? Explain, do not measure",
-   "expect": {
-    "no_writes": true,
-    "cite": true
-   }
-  },
-  {
    "id": "q144",
    "request": "How do you calculate the waterproofing to basement walls? Do not change anything",
    "expect": {
@@ -2236,55 +1670,6 @@
    "request": "What reinforcement rate are you using for beams? Just tell me",
    "expect": {
     "no_writes": true
-   }
-  },
-  {
-   "id": "q146",
-   "request": "Set POMI, create a folder Structure, measure the columns and beams, then build the POMI summary",
-   "expect": {
-    "actions": [
-     {
-      "do": "set_rules",
-      "rule_set": "POMI"
-     },
-     {
-      "do": "build_summaries",
-      "kinds": [
-       "POMI"
-      ]
-     }
-    ],
-    "items_any": [
-     "st-columns",
-     "st-beams",
-     "st-all"
-    ],
-    "order": [
-     "set_rules",
-     "build_summaries"
-    ]
-   },
-   "state": {
-    "groundLevel": 0
-   }
-  },
-  {
-   "id": "q147",
-   "request": "Ground level is 0.0. Measure the pile caps with waterproofing and build the NRM2 summary",
-   "expect": {
-    "items_any": [
-     "st-pilecaps",
-     "st-all"
-    ],
-    "actions": [
-     {
-      "do": "build_summaries",
-      "kinds": [
-       "NRM2"
-      ]
-     }
-    ],
-    "cite": true
    }
   },
   {

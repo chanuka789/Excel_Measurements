@@ -7,6 +7,7 @@ import { $, esc, api, session, status } from './core.js';
 import { Viewer, parseBin, fromLegacy } from './viewer.js';
 import { Toolbar } from './vtools.js';
 import { fmt, dimsOf, uLabel } from './engine.js';
+import { dimensions } from './dims.js';
 import { openDrawing, canView } from './drawings.js';
 import { menu, closeMenu, dialog, ask } from './wui.js';
 import { initTree, onProjectLoaded, refresh as refreshTree, loadTree, importObjects, createGroupFor, currentGroup, onScheduleDone, tkSource,
@@ -54,6 +55,8 @@ function receive(m) {
     if (m.what === 'tree') loadTree().catch(() => {});
     else if (m.what === 'zones') loadZones();
     else if (m.what === 'project' && W.projectId) reloadProject();
+    else if (m.what === 'follow') { follow = Boolean(m.on); setPref('dwfxFollowExcel', follow); setLinkStatus(); }
+    else if (m.what === 'noLinks') status('Not linked to any Excel cell yet. Select a cell in Excel, then use Link to Cell.');
   }
   else if (m.type === 'closed') ended('The task pane closed this window. You can close it.');
   RB?.refresh();
@@ -77,6 +80,7 @@ async function init(m) {
   if (m.token && !L.link) session.set({ ...(session.get() || {}), token: m.token });
   const newProject = m.projectId && m.projectId !== W.projectId;
   W.projectId = m.projectId || W.projectId; W.inExcel = m.inExcel !== false; W.winMode = m.mode || MODE;
+  if (typeof m.follow === 'boolean') { follow = m.follow; setPref('dwfxFollowExcel', follow); }
   if (W.projectId && (newProject || !W.project)) { try { W.project = await api('GET', `/projects/${W.projectId}`); } catch { W.project = null; } }
   setTitle();
   await onProjectLoaded();
@@ -242,6 +246,23 @@ function drawingOfSrc(s) {
 }
 
 // ------------------------------------------------------------------ Excel links (live formulas) and Follow Excel
+/** Tell the task pane the measurements changed, so linked cells update. Model-object quantities need the model, which
+ * only this window has open, so their totals go with the message. */
+let totalsTimer = null;
+function totalsSoon() { clearTimeout(totalsTimer); totalsTimer = setTimeout(sendTotals, 1200); }
+function sendTotals() {
+  let totals = null;
+  if (W.byId.size) {
+    totals = {};
+    for (const g of allGroups()) {
+      if (!(g.items || []).length) continue;
+      const dims = {}; let total = 0, n = 0;
+      for (const d of dimensions(g, W.byId)) if (d.kind === 'bim' && d.qty != null) { dims[d.item.element_id] = Math.round(d.qty * 1e6) / 1e6; total += d.qty; n++; }
+      totals[g.id] = { total, n, dims: n <= 5000 ? dims : {} };
+    }
+  }
+  send({ type: 'treeChanged', totals, versionId: W.versionId });
+}
 /** Link a group or a dimension to the selected Excel cell: the task pane writes a live formula there. */
 async function linkCell(item) {
   const g = item ? groupById(item.gid || item.id) : currentGroup();
@@ -653,7 +674,7 @@ function start() {
   V.setTheme();
   initTree({ W, V, send, host: HOST, paint, setIds, showOnly, hideIds, isolate, setGroupColors, openVersion,
     openDrawing: openDrawingCentre, openDrawingSide, focusMeasured, lastMeasure: () => W.measure,
-    onTreeChange: () => { STORE.emit('groups'); updateStatus(); RB?.refresh(); },
+    onTreeChange: () => { STORE.emit('groups'); updateStatus(); RB?.refresh(); totalsSoon(); },
     onGroupSelected: (gid) => { if (follow) send({ type: 'showLinks', gid }); },
     layerSource, autoCount, uomOf, views2d, linkCell, showLinks: (gid) => showLinks(gid), isLinked, onDragStart, onDragEnd });
   initPanel({ W, send, setIds, paint });
