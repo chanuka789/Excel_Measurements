@@ -287,6 +287,8 @@ export const SHARED = '_cxshared';
 const CX_FN = /\bCX\.(QTY|VALUE|NAME|UNIT)\s*\(/i;
 /** A real CX function call, not the same letters inside a text in quotes ("..." with "" for a quote). */
 const callsCx = (f) => CX_FN.test(String(f).replace(/"(?:[^"]|"")*"/g, '""'));
+/** A text result that starts like a formula is written with Excel's apostrophe, so it stays text. */
+const literal = (v) => (typeof v === 'string' && /^[=+\-@]/.test(v) ? "'" + v : v);
 const isError = (v) => typeof v === 'string' && /^#[A-Z0-9/!?]+[!?]?$/i.test(v.trim());
 
 /** Turn the live links into values. Returns { cells, sheets, notReady }.
@@ -318,7 +320,7 @@ export async function freezeLinks() {
     await ctx.sync();                                          // the formulas are safe before any cell changes
     const done = new Set();
     for (const t of todo) {
-      t.sh.getRange(t.addr).values = [[t.v]];
+      t.sh.getRange(t.addr).values = [[literal(t.v)]];
       res.cells++; done.add(t.sh.id);
     }
     res.sheets = done.size;
@@ -349,7 +351,7 @@ export async function restoreLinks() {
     await ctx.sync();
     for (const x of live) {
       const f = x.c.formulas[0][0], v = x.c.values[0][0];
-      if (typeof f === 'string' && f.startsWith('=')) continue;                                 // already a formula
+      if (typeof f === 'string' && f.startsWith('=') && callsCx(f)) continue;                  // the link is already live
       if (String(v) !== String(x.r[3])) { res.changed++; left.push(x.r); continue; }            // typed over by hand: leave it
       x.c.formulas = [[x.r[2]]]; res.restored++;
     }
@@ -400,6 +402,6 @@ async function writeShared(ctx, rows) {
   sh.getRange('A:F').clear();
   sh.getRange('A1:F1').values = [['Sheet', 'Cell', 'Formula', 'Value when shared', 'Sheet id', 'Where it is now']];
   if (!rows.length) return;
-  sh.getRange(`A2:E${rows.length + 1}`).values = rows.map(r => [r[0], r[1], 'CXF:' + r[2], r[3], r[4] || '']);
+  sh.getRange(`A2:E${rows.length + 1}`).values = rows.map(r => [literal(r[0]), r[1], 'CXF:' + r[2], literal(r[3]), r[4] || '']);
   sh.getRange(`F2:F${rows.length + 1}`).formulas = rows.map(r => [r[5] === 'gone' ? '#REF!' : refTo(r[0], r[1])]);
 }

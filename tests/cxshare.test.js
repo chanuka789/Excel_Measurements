@@ -12,7 +12,13 @@ function fakeExcel() {
     const cell = (r, c) => cells.get(`${r},${c}`) || { f: '', v: '' };
     const range = (r0, c0, r1, c1) => {
       const grid = (k) => Array.from({ length: r1 - r0 + 1 }, (_, i) => Array.from({ length: c1 - c0 + 1 }, (_, j) => cell(r0 + i, c0 + j)[k]));
-      const set = (rows, asFormula) => rows.forEach((row, i) => row.forEach((x, j) => cells.set(`${r0 + i},${c0 + j}`, asFormula && String(x).startsWith('=') ? { f: x, v: cell(r0 + i, c0 + j).v } : { f: x, v: x })));
+      // like Excel: a value starting with = becomes a formula; a leading apostrophe keeps it text (and is not shown)
+      const set = (rows, asFormula) => rows.forEach((row, i) => row.forEach((x, j) => {
+        const k = `${r0 + i},${c0 + j}`;
+        if (typeof x === 'string' && x.startsWith("'")) cells.set(k, { f: x.slice(1), v: x.slice(1) });
+        else if (typeof x === 'string' && x.startsWith('=')) cells.set(k, { f: x, v: asFormula ? cell(r0 + i, c0 + j).v : '#FORMULA' });
+        else cells.set(k, { f: x, v: x });
+      }));
       return { load() {}, isNullObject: false, rowIndex: r0, columnIndex: c0, cellCount: (r1 - r0 + 1) * (c1 - c0 + 1),
         get values() { return grid('v'); }, set values(x) { set(x, false); }, get formulas() { return grid('f'); }, set formulas(x) { set(x, true); },
         clear() { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) cells.delete(`${r},${c}`); } };
@@ -150,4 +156,15 @@ test('a second Share Copy keeps the moved position of cells frozen before', asyn
   assert.deepEqual(refs, ["='BOQ'!$A$2", "='BOQ'!$B$5"]);
   assert.deepEqual(await CX.restoreLinks(), { restored: 2, changed: 0, missing: 0 });
   assert.equal(a.get('A2').f, '=CX.QTY("aaaaaaaa")');
+});
+
+test('a text result that looks like a formula stays text when frozen, and restores', async () => {
+  const X = fakeExcel();
+  const CX = await import('../public/js/cxlinks.js');
+  const a = X.add('S');
+  a.put('A1', '=IF(CX.QTY("aaaaaaaa")>0,"=pending","")', '=pending');
+  await CX.freezeLinks();
+  assert.deepEqual(a.get('A1'), { f: '=pending', v: '=pending' });          // text, not a formula
+  assert.deepEqual(await CX.restoreLinks(), { restored: 1, changed: 0, missing: 0 });
+  assert.equal(a.get('A1').f, '=IF(CX.QTY("aaaaaaaa")>0,"=pending","")');
 });
