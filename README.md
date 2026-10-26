@@ -1,84 +1,91 @@
 # DWFx Measure - Excel add-in
 
-View any Revit DWFx model (architecture, structure, interiors, MEP) in 3D inside Excel, browse its elements
-by category, family and type, and send measurements to a **Take-off** sheet with live formulas. Drawings and models
-stay **on your computer** and are processed there; the server (Railway) stores only the projects, the team, the
-measurements and saved take-offs, plus each file's name, size and fingerprint. An optional AI assistant works out QS
-measurement methods; the add-in always calculates the numbers itself from the model.
+A **measurement app** for Excel. Measure 2D drawings (PDF, DWG, DXF, images, DWFx 2D sheets) and 3D models (DWFx)
+in a separate window that works like **RIB CostX**, and link the measurements to workbook cells with **live formulas**.
+DWFx quantity **schedules** are a separate tool in their own window. Drawings and models stay **on your computer** and
+are processed there, with your computer's power; the server (Railway) stores only the projects, the team, the
+measurements and saved take-offs, plus each file's name, size, fingerprint and the **paths** where each computer keeps it.
 
 Live: https://dwfx-addin-production.up.railway.app (Railway project `excel-measurements`, deploys on every push to `main`).
 
 ## Using it
-After adding the add-in, Excel shows a **DWFx Measure** tab on the ribbon:
+Excel shows a **DWFx Measure** tab on the ribbon:
 
-| Workflow button | What it opens |
+| Group | Buttons |
 |---|---|
-| Project & Models | Projects, models, PDFs, settings and templates |
-| Launch Viewer | Linked 3D/2D window; camera and visibility tools remain on the canvas |
-| Smart Takeoff | Filter & Select → Classify & Review → Export / Link |
-| BOQ & Schedules | Schedule exports, draft BOQs and elemental supporting detail |
-| AI Audit | Existing take-off AI checks and review tools |
+| Measure | Measurements (task pane list), Measurement Window, Projects |
+| Excel links | Link to Cell, Follow Excel (on/off), Refresh Links |
+| DWFx schedules | DWFx Schedules (separate window) |
 
-**Smart Takeoff (v0.6)** adds checked POMI, NRM 1 and NRM 2 heading catalogues, all heading-order combinations, separate quantity-basis selection, schedule column presets, conditional allocations, source-backed draft exports and one-to-many model links. Legacy Elements / Measure / AI / Review tabs remain available.
+**Version 0.7 changes the manifest** (new buttons and the CX custom functions). Run `npm run manifest` and **add the
+new `manifest.xml` to Excel once again** (remove the old add-in first), otherwise `=CX.QTY` shows `#NAME?`.
 
-Generated BOQs are **drafts requiring QS validation**, not a claim that every measurement clause has been encoded. Exact heading references do not prove correct quantity deductions. See [the full plan](docs/QS_AUTOMATION_PLAN.md) and [implementation status](docs/IMPLEMENTATION_STATUS.md). The NRM 1 output aggregates component costs and explicit allowances; it does not automatically invent element unit quantities or fees.
+### 1. Task pane: Measurements
+The pane shows the project's dimension folders and groups with live totals (and each group's dimensions). Buttons:
+Open measurement window, DWFx Schedules, Link to selected cell, Show in drawing, Linked cells, **Follow Excel**, Refresh.
+The **Projects** tab manages projects, models, drawings, the team and settings (Measure / Schedules buttons on each
+model version, Open & measure on each drawing).
 
-Run `npm run standards` after updating the source-checked JSON catalogues. Run `npm run manifest` after changing ribbon definitions. Reload or sideload the v0.6 manifest in Excel to see the five ribbon controls.
+### 2. Measurement window (CostX style)
+- **Ribbon** at the top: Home, Drawings, Dimensions, 3D View, Revisions, Workbooks (double-click a tab or Ctrl+F1
+  collapses it). Commands include Add / Properties / Manager / Drawing Sets / Compare drawings; Working Area,
+  Calibrate X and Y separately, Reset Calibration; Layers (All, Hide All, Invert, As Per File); Rotate 90/180/270,
+  Zoom Extents / Area / In / Out; Display (Save View, Ghost, Wireframe / Shaded / Transparent, Text, Hatching, Line
+  Weight, White, Monochrome, Markups); Dimension groups (Add, Properties, Copy, Export, Folder, Standard library,
+  Delete); Dimensions (Manual, Measure, Properties, Copy / Paste, Change, Select In Area, Edit Controls, Positive /
+  Negative / Both); BIM (Import, Model Maps, Schedule, Check BIM Objects, Show All); Type (Points, Faces, Object);
+  Zones; Snap (Geometry, Angle); Rebar and Auto Count modes; Show (Overlaps, Measured, Legend, Labels, Properties on
+  Add); 3D tools (views, section, plan, box select, x-ray, edges, colour, measure, saved views, picture); revision
+  compare for drawings and models; Workbooks (Link to Cell, Workbook View, Follow Excel, Refresh Links).
+- **Left pane**: Drawings / Layers / Model / Views on top; **Dimension Groups / Dimensions / Auto Count** below, with
+  the "Current:" group and "Click to Filter". Folders and groups are created, renamed, moved (drag and drop) and
+  deleted as in CostX. The pin hides the pane.
+- **Centre**: drawing tabs, the 3D model tab and the **Workbook View** (every linked cell, Go to cell, Show, Remove link).
+- **Status bar**: current group total, cursor position in drawing units, scale, snap, links.
 
-1. **Sign in** with the email and password your administrator gave you.
-2. **Project** tab: create a project, add DWFx models (the same model name makes a new version) and drawings
-   (PDF and images open in the built-in viewer; 2D sheets inside a DWFx are converted automatically), add
-   colleagues as Owner / Editor / Viewer, project settings (AI off switch, opening deduction threshold, BOQ house
-   style), project QS rules, export as ZIP.
-3. **3D view** (toolbar above the tabs): view cube and standard views (keys 1-7), perspective or orthographic,
-   section box, level plan (top view cut at a set height), box select (left-to-right inside, right-to-left
-   crossing), distance and face-area measure with snapping, colour by category / level / type / material / zone /
-   property / value / measured status / revision changes (click a legend row to select), x-ray, edges, saved views
-   for the team, picture into the sheet, and the **3D window** (large window for a second screen, with drawings and
-   properties side by side; selection stays linked).
-4. **Elements** tab: Category > Family > Type > element tree, search, level filter, undo/redo (Ctrl+Z / Ctrl+Y),
-   **zones** (named sets of elements: create from the selection, colour by zone, sub-total by zone).
-   Right-click an element for its properties, including exact **Geo** quantities measured from the 3D faces.
-5. **Measure** tab: choose quantities (Revit, geometry, type-name sizes, openings), add formula columns, sub-totals by
-   type / level / zone / category, then **Add to Excel take-off**. **Templates and discipline packs**: ready methods
-   for Structure, Architecture, Interiors and MEP plus your own saved methods; apply to any model.
-6. **AI** tab: the AI searches the model, reads the real quantities, tests its formulas on the elements and checks
-   the QS rules before it proposes a method. "How the AI worked it out" shows its steps. Save good methods as templates.
-7. **Review** tab: missing-data report, overlapping concrete, measured status, **AI take-off check**, **revision
-   compare** (added / removed / changed, quantity differences, colour in 3D), **update take-off** to a new
-   revision (in place, keeps formulas and your assumption values, writes a Change log sheet), **BOQ sheet** (linked
-   to named take-off totals; rates you type are kept when you rebuild; optional AI descriptions), **audit PDF**.
+### 3. Live links between Excel and measurements (both ways)
+- Select a cell in Excel, then **drag** a group or a dimension onto the "Link to selected cell" bar (Excel does not
+  accept a drop straight into a cell from an add-in), **double-click** it, or press **Link to Cell**. The cell gets a
+  live formula: `=CX.QTY("1a2b3c4d")` (group total), `=CX.VALUE("1a2b3c4d","9f8e7d6c")` (one dimension),
+  `=CX.QTY(ref,"Count")`, `=CX.NAME(ref)`, `=CX.UNIT(ref)`. The reference is the start of the group id, so renaming
+  or moving the group keeps the link. Values update while you measure. Schedules made from dimension groups write
+  their measured rows as live links too.
+- **Excel → drawing**: with **Follow Excel** on, a click on a linked cell opens the drawing (or the 3D model) and
+  highlights where it was measured. **Drawing → Excel**: selecting a group or a dimension selects its linked cells.
+- Follow Excel can be switched off; the links always stay. They are listed in a very hidden `_cxlinks` sheet.
 
-8. **3D window**: project tree on the left with **folders** for drawings and models and for
-   **dimension groups** (measured items: Count, Length, Area or Volume, with multiplier, width, height, offset, custom
-   quantities, variables, BIM dimensions and measured dimensions, standard groups library). Right-click an object for
-   Object Properties, Create Dimension Group, Show Only / Hide / Import Objects In (category, family, type, object,
-   selection, custom, area), Hide Geometry (H), Show All, Zoom Area / Extents, Reset View, Default Views, Hide Images.
-   Groups and folders go to Excel as schedules with the details you choose for each row.
+### 4. DWFx Schedules window (separate from measuring)
+Choose a model version, select elements (tree, 3D, search, zones), pick the **data columns** (category, family,
+type, level, mark, zone) and the **quantities each element really has** (Revit, exact Geo / FW geometry, type-name
+sizes, openings), then add **calculated columns in the same table**: Formwork (all free faces, no double counting),
+Reinforcement (volume × rate, the rate is a yellow cell), tonnes, or any formula. Volume, formwork and reinforcement
+of the same elements are always one table. **Export schedule to Excel** writes it with live formulas; Summary sheets
+(Quantities register + pivot by level or zone) are built by formulas. The **AI** tab selects elements and builds
+schedules on request; nothing is written until you press Run or Export. No NRM / POMI formats are used.
 
-9. **On-screen take-off (like CostX)**: open a PDF, image or DWFx 2D sheet with **Open & measure** (task pane) or from
-   the 3D window's Drawings tree (it opens in a tab next to the 3D model). Set the scale per page (1:N presets or
-   **Calibrate** with a known length), choose the current dimension group and click: areas (corners; Shift + 2 clicks
-   for a rectangle; perimeter kept), lengths and counts, positive or negative. Sticky cursor (snaps to PDF/SVG line ends
-   and lines; hold B to stop), angle snap, zoom at the cursor, rotate, layers (PDF), labels, legend, monochrome,
-   markups, select / move / edit corners / rotate / mirror / copy-paste / delete dimensions, drawing multiplier for
-   typical floors. In 3D: **Measure > Take-off into a dimension group** (point mode: areas, lengths, counts; one-click
-   face area). Dimensions keep their points (`props.measured[].pts`, `src`), are drawn again on the drawing or model,
-   are recalculated when the scale changes, and go to Excel with the group's schedule. Scales, multipliers and markups
-   are stored per drawing (`drawing_settings` table).
-   More CostX tools on drawings: **Auto Count** (capture a symbol, search the page for rotated and mirrored copies,
-   accept / reject, save as counts), **Convert to Cutout** / Remove Cutout (holes and splits in area dimensions),
-   **Rebar mode** (spacing line + one bar, spacing and extra length per bar), **Compare** with another drawing
-   (green / red overlay, intensity sliders, drag to align, measure on it), **Working area**, and **DWG / DXF**
-   measuring: the server converts them once to an SVG by layer in the file's units (1:1, no calibration), cached next
-   to the file (`/api/drawings/:id/cad`).
+### 5. Several paths for the same file (more than one computer)
+Each drawing or model can have many paths: a local folder, a **SharePoint or OneDrive folder synced to the computer**
+(works like a local folder), or a **SharePoint link**. When a computer does not have a file, the add-in first tries
+the places that computer remembers, then shows every saved path (all computers) with **Choose the file…** and
+**Choose a folder…**. The new path is saved; older paths are never removed, so going back to a previous computer
+uses its path again. Drawing Manager > **Paths** lists, adds and removes paths. Notes:
+- A browser add-in cannot open a typed path by itself: the user picks the file or folder once per computer, and the
+  browser may ask for permission again in a new session. The fingerprint must match.
+- **SharePoint links** open in the browser (to download or sync); direct download through Microsoft Graph is not
+  built in, because it needs an Azure app registration on your tenant. Syncing the SharePoint library with OneDrive
+  is the recommended setup.
+
+### 6. Speed
+Everything is processed on the computer (models in a worker, CAD to SVG once, cached). The 3D view lowers its
+resolution while you orbit and redraws sharp when you stop; PDFs show a quick preview first, render only the visible
+page (and a sharp detail when zoomed), and keep the last pages in memory.
 
 **DWG reading uses LibreDWG** (`@mlightcad/libredwg-web`, GPL-3.0) on the server only, in a worker thread; it is never
 sent to browsers. DXF uses `dxf-parser` (MIT). Some DWG versions (for example 2000) cannot be read by this build: users
 get a message to save the file as DWG 2013-2018, DXF or PDF. Check that the GPL licence fits how you distribute the app.
 
-**One table for the same elements**: concrete, formwork, reinforcement, waterproofing… measured on exactly the same
-elements (Measure tab, templates, AI or dimension groups) are added as new columns to the existing table.
+**One table for the same elements**: schedules of exactly the same elements (Schedules window, templates, AI or
+dimension groups) are added as new columns to the existing table.
 
 ## Exact geometry quantities
 Every element with 3D geometry gets quantities measured from its faces: **Geo volume** (closed solids only),
