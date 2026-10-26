@@ -22,7 +22,7 @@ function fakeExcel() {
       const r0 = m[2] ? +m[2] - 1 : 0, c0 = col(m[1]), c1 = m[3] ? col(m[3]) : c0, r1 = m[4] ? +m[4] - 1 : m[3] && !m[2] ? 999 : r0;
       return range(r0, c0, r1, c1);
     };
-    return { name, cells, visibility: 'Visible', load() {}, isNullObject: false, getRange: parse,
+    return { name, id: '{' + name + '-id}', cells, visibility: 'Visible', load() {}, isNullObject: false, getRange: parse,
       getUsedRangeOrNullObject() {
         const keys = [...cells.keys()].map(k => k.split(',').map(Number));
         if (!keys.length) return { isNullObject: true, load() {} };
@@ -61,8 +61,37 @@ test('share copy turns CX links into numbers and keeps the formulas; restore put
   assert.equal(await CX.sharedCount(), 2);
   s.put('C6', 300, 300);                                                 // someone typed over this one
   const back = await CX.restoreLinks();
-  assert.deepEqual(back, { restored: 1, changed: 1 });
+  assert.deepEqual(back, { restored: 1, changed: 1, missing: 0 });
   assert.equal(s.get('C5').f, '=CX.QTY("1a2b3c4d")');
   assert.equal(s.get('C6').f, 300);
   assert.equal(await CX.sharedCount(), 1);                               // the hand-changed cell stays listed
+});
+
+test('restore finds a renamed sheet by its id, and keeps records whose sheet is missing', async () => {
+  const X = fakeExcel();
+  const CX = await import('../public/js/cxlinks.js');
+  const a = X.add('Take-off'), b = X.add('Old');
+  a.put('B2', '=CX.QTY("1a2b3c4d")', 10); b.put('C3', '=CX.QTY("1a2b3c4d","Count")', 2);
+  assert.equal((await CX.freezeLinks()).cells, 2);
+  a.name = 'Take-off (renamed)';                              // renamed: same id
+  X.sheets.delete('Old');                                     // gone from this workbook
+  const r = await CX.restoreLinks();
+  assert.deepEqual(r, { restored: 1, changed: 0, missing: 1 });
+  assert.equal(a.get('B2').f, '=CX.QTY("1a2b3c4d")');
+  assert.equal(await CX.sharedCount(), 1);
+});
+
+test('the formulas are saved before any cell is replaced', async () => {
+  const X = fakeExcel();
+  const CX = await import('../public/js/cxlinks.js');
+  const a = X.add('A'), b = X.add('B');
+  a.put('A1', '=CX.QTY("1a2b3c4d")', 5); b.put('A1', '=CX.QTY("1a2b3c4d")', 6);
+  const real = b.getRange;
+  b.getRange = (addr) => { const r = real(addr); if (addr === 'A1') Object.defineProperty(r, 'values', { set() { throw new Error('protected'); } }); return r; };
+  await assert.rejects(CX.freezeLinks(), /protected/);
+  b.getRange = real;
+  assert.equal(await CX.sharedCount(), 2);                    // both formulas are kept even though the run failed
+  const r = await CX.restoreLinks();
+  assert.equal(r.restored, 1);                                // A1 on sheet A had been replaced; it comes back
+  assert.equal(a.get('A1').f, '=CX.QTY("1a2b3c4d")');
 });

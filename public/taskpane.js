@@ -138,7 +138,7 @@ async function restoreLinks() {
   if (!S.inExcel) { status('Open the add-in in Excel first.', 'bad'); return; }
   try {
     const r = await CX.restoreLinks();
-    status(r.restored || r.changed ? `${r.restored} link${r.restored === 1 ? '' : 's'} restored${r.changed ? `; ${r.changed} cell${r.changed === 1 ? ' was' : 's were'} changed by hand and left as is` : ''}.` : 'Nothing to restore: the links are already live.', 'ok');
+    status(r.restored || r.changed || r.missing ? `${r.restored} link${r.restored === 1 ? '' : 's'} restored${r.changed ? `; ${r.changed} cell${r.changed === 1 ? ' was' : 's were'} changed by hand and left as is` : ''}${r.missing ? `; ${r.missing} on a sheet that is not in this workbook (kept for later)` : ''}.` : 'Nothing to restore: the links are already live.', 'ok');
   } catch (err) { status(err.message, 'bad'); }
 }
 
