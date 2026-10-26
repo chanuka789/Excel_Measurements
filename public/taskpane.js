@@ -131,7 +131,9 @@ async function shareCopy() {
       <li>Then press <strong>Restore links</strong> to make your links live again.</li></ol>` })) return;
   try {
     const r = await CX.freezeLinks();
-    status(r.cells ? `${r.cells} linked cell${r.cells === 1 ? '' : 's'} on ${r.sheets} sheet${r.sheets === 1 ? '' : 's'} are now plain numbers${r.notReady ? ` (${r.notReady} not calculated yet, left as formulas)` : ''}. Save a copy now (File › Save a Copy), then press Restore links.` : 'There are no linked cells in this workbook.', r.cells ? 'ok' : 'info');
+    const wait = r.notReady ? `${r.notReady} linked cell${r.notReady === 1 ? ' is' : 's are'} not calculated yet (open its project and wait for the numbers), so ${r.notReady === 1 ? 'it was' : 'they were'} left as live formulas. Do not send the copy until this is fixed, then press Share copy again.` : '';
+    if (r.cells) status(`${r.cells} linked cell${r.cells === 1 ? '' : 's'} on ${r.sheets} sheet${r.sheets === 1 ? '' : 's'} are now plain numbers. ${wait || 'Save a copy now (File › Save a Copy), then press Restore links.'}`, wait ? 'warn' : 'ok');
+    else status(wait || 'There are no linked cells in this workbook.', wait ? 'warn' : 'info');
   } catch (err) { status(err.message, 'bad'); }
 }
 async function restoreLinks() {
