@@ -287,6 +287,8 @@ export const SHARED = '_cxshared';
 const CX_FN = /\bCX\.(QTY|VALUE|NAME|UNIT)\s*\(/i;
 /** A real CX function call, not the same letters inside a text in quotes ("..." with "" for a quote). */
 const callsCx = (f) => CX_FN.test(String(f).replace(/"(?:[^"]|"")*"/g, '""'));
+/** Does a formula use other cells (A1, $B$7, Sheet!C3, names of ranges are not counted), apart from its CX calls? */
+const usesCells = (f) => /(^|[^A-Za-z0-9_.])\$?[A-Z]{1,3}\$?\d{1,7}(?![A-Za-z0-9_(])/.test(String(f).replace(/"(?:[^"]|"")*"/g, '""').replace(/CX\.\w+\s*\([^)]*\)/gi, ''));
 /** A text result that starts like a formula is written with Excel's apostrophe, so it stays text. */
 const literal = (v) => (typeof v === 'string' && /^[=+\-@]/.test(v) ? "'" + v : v);
 const isError = (v) => typeof v === 'string' && /^#[A-Z0-9/!?]+[!?]?$/i.test(v.trim());
@@ -311,7 +313,7 @@ export async function freezeLinks() {
         const v = u.values[i][j];
         if (isError(v)) { res.notReady++; return; }                      // not calculated yet: keep the formula
         const addr = colName(u.columnIndex + j) + (u.rowIndex + i + 1);
-        have.set(`${sh.id}!${addr}`, [sh.name, addr, f, v, sh.id]);
+        have.set(`${sh.id}!${addr}`, [sh.name, addr, f, v, sh.id, null, `${sh.id}!${addr}`]);
         todo.push({ sh, addr, v });
       }));
     }
@@ -333,7 +335,7 @@ export async function freezeLinks() {
  * still works and a different sheet with the old name is never used; records whose sheet cannot be found (deleted, or not in this file) are kept, never thrown away. */
 export async function restoreLinks() {
   if (!App.inExcel?.()) throw new Error('Open the add-in in Excel first.');
-  const res = { restored: 0, changed: 0, missing: 0 };
+  const res = { restored: 0, changed: 0, missing: 0, moved: 0 };
   await Excel.run(async (ctx) => {
     const rows = await readShared(ctx);
     if (!rows.length) return;
@@ -346,7 +348,10 @@ export async function restoreLinks() {
       const at = r[5] || { sheet: r[0], address: r[1] };
       const sh = r[4] ? ws.items.find(x => x.id === r[4]) : ws.items.find(x => x.name === at.sheet);
       if (!sh) { res.missing++; left.push(r); continue; }
-      const c = sh.getRange(at.address); c.load('formulas,values'); live.push({ r: [sh.name, at.address, r[2], r[3], sh.id], c });
+      // the cell moved (rows or columns inserted) and its formula also uses other cells: those references inside the saved
+      // formula did not move with it, so it is not put back automatically
+      if (`${r[4] || r[0]}!${at.address}` !== r[6] && usesCells(r[2])) { res.moved++; left.push(r); continue; }
+      const c = sh.getRange(at.address); c.load('formulas,values'); live.push({ r: [sh.name, at.address, r[2], r[3], sh.id, null, r[6]], c });
     }
     await ctx.sync();
     for (const x of live) {
@@ -382,7 +387,7 @@ async function readShared(ctx) {
     const ref = parseRef(u.formulas[i + 1]?.[5]);
     // where the cell is now: the live reference wins over the address saved as text (rows and columns may have moved)
     const name = ref && ref !== 'gone' ? ref.sheet : String(v[0]), addr = ref && ref !== 'gone' ? ref.address : String(v[1]);
-    return [name, addr, String(v[2]).replace(/^CXF:/, ''), v[3], String(v[4] || ''), ref];
+    return [name, addr, String(v[2]).replace(/^CXF:/, ''), v[3], String(v[4] || ''), ref, String(v[6] || `${v[4] || v[0]}!${v[1]}`)];
   }).filter(r => r[0] && r[1] && r[2].startsWith('='));
 }
 /** ='Sheet name'!$B$7 -> { sheet, address }; #REF! (cell or sheet deleted) -> 'gone'; nothing -> null (older records). */
@@ -401,9 +406,10 @@ async function writeShared(ctx, rows) {
     sh = ctx.workbook.worksheets.add(SHARED);
     sh.visibility = Excel.SheetVisibility.veryHidden;
   }
-  sh.getRange('A:F').clear();
-  sh.getRange('A1:F1').values = [['Sheet', 'Cell', 'Formula', 'Value when shared', 'Sheet id', 'Where it is now']];
+  sh.getRange('A:G').clear();
+  sh.getRange('A1:G1').values = [['Sheet', 'Cell', 'Formula', 'Value when shared', 'Sheet id', 'Where it is now', 'Where it was']];
   if (!rows.length) return;
   sh.getRange(`A2:E${rows.length + 1}`).values = rows.map(r => [literal(r[0]), r[1], 'CXF:' + r[2], literal(r[3]), r[4] || '']);
   sh.getRange(`F2:F${rows.length + 1}`).formulas = rows.map(r => [r[5] === 'gone' ? '#REF!' : refTo(r[0], r[1])]);
+  sh.getRange(`G2:G${rows.length + 1}`).values = rows.map(r => [r[6] || `${r[4] || r[0]}!${r[1]}`]);
 }

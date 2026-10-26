@@ -69,7 +69,7 @@ test('share copy turns CX links into numbers and keeps the formulas; restore put
   assert.equal(await CX.sharedCount(), 2);
   s.put('C6', 300, 300);                                                 // someone typed over this one
   const back = await CX.restoreLinks();
-  assert.deepEqual(back, { restored: 1, changed: 1, missing: 0 });
+  assert.deepEqual(back, { restored: 1, changed: 1, missing: 0, moved: 0 });
   assert.equal(s.get('C5').f, '=CX.QTY("1a2b3c4d")');
   assert.equal(s.get('C6').f, 300);
   assert.equal(await CX.sharedCount(), 1);                               // the hand-changed cell stays listed
@@ -84,7 +84,7 @@ test('restore finds a renamed sheet by its id, and keeps records whose sheet is 
   a.name = 'Take-off (renamed)';                              // renamed: same id
   X.sheets.delete('Old');                                     // gone from this workbook
   const r = await CX.restoreLinks();
-  assert.deepEqual(r, { restored: 1, changed: 0, missing: 1 });
+  assert.deepEqual(r, { restored: 1, changed: 0, missing: 1, moved: 0 });
   assert.equal(a.get('B2').f, '=CX.QTY("1a2b3c4d")');
   assert.equal(await CX.sharedCount(), 1);
 });
@@ -113,7 +113,7 @@ test('a new sheet with the old name is not used to restore, and restored cells g
   X.sheets.delete('Take-off');
   const b = X.add('Take-off'); b.id = '{other-id}'; b.put('B2', 10, 10);     // same name, same cell value, different sheet
   const r = await CX.restoreLinks();
-  assert.deepEqual(r, { restored: 0, changed: 0, missing: 1 });
+  assert.deepEqual(r, { restored: 0, changed: 0, missing: 1, moved: 0 });
   assert.equal(b.get('B2').f, 10);
   // restore on the right sheet rescans the workbook, so the link list is rebuilt
   CX.setTree({ folders: [], groups: [{ id: '1a2b3c4d-1111-2222-3333-444455556666', name: 'G', mtype: 'Area', items: [], props: { measured: [] } }] }, 'p1');
@@ -135,7 +135,7 @@ test('restore follows the live reference when rows were inserted above the froze
   const moved = new Map([...a.cells].map(([k, v]) => { const [r, c] = k.split(',').map(Number); return [`${r + 1},${c}`, v]; }));
   a.cells.clear(); moved.forEach((v, k) => a.cells.set(k, v));
   kept.put('F2', "='Sheet A'!$A$2", ''); kept.put('F3', "='Sheet A'!$A$3", '');
-  assert.deepEqual(await CX.restoreLinks(), { restored: 2, changed: 0, missing: 0 });
+  assert.deepEqual(await CX.restoreLinks(), { restored: 2, changed: 0, missing: 0, moved: 0 });
   assert.equal(a.get('A2').f, '=CX.QTY("aaaaaaaa")');
   assert.equal(a.get('A3').f, '=CX.QTY("bbbbbbbb")');
   assert.equal(a.get('A1').f, '');
@@ -154,7 +154,7 @@ test('a second Share Copy keeps the moved position of cells frozen before', asyn
   await CX.freezeLinks();
   const refs = [kept.get('F2').f, kept.get('F3').f].sort();
   assert.deepEqual(refs, ["='BOQ'!$A$2", "='BOQ'!$B$5"]);
-  assert.deepEqual(await CX.restoreLinks(), { restored: 2, changed: 0, missing: 0 });
+  assert.deepEqual(await CX.restoreLinks(), { restored: 2, changed: 0, missing: 0, moved: 0 });
   assert.equal(a.get('A2').f, '=CX.QTY("aaaaaaaa")');
 });
 
@@ -165,7 +165,7 @@ test('a text result that looks like a formula stays text when frozen, and restor
   a.put('A1', '=IF(CX.QTY("aaaaaaaa")>0,"=pending","")', '=pending');
   await CX.freezeLinks();
   assert.deepEqual(a.get('A1'), { f: '=pending', v: '=pending' });          // text, not a formula
-  assert.deepEqual(await CX.restoreLinks(), { restored: 1, changed: 0, missing: 0 });
+  assert.deepEqual(await CX.restoreLinks(), { restored: 1, changed: 0, missing: 0, moved: 0 });
   assert.equal(a.get('A1').f, '=IF(CX.QTY("aaaaaaaa")>0,"=pending","")');
 });
 
@@ -176,6 +176,22 @@ test('a formula typed over a frozen cell is kept, even when it gives the same va
   a.put('A1', '=CX.QTY("aaaaaaaa")', 10);
   await CX.freezeLinks();
   a.put('A1', '=5+5', 10);
-  assert.deepEqual(await CX.restoreLinks(), { restored: 0, changed: 1, missing: 0 });
+  assert.deepEqual(await CX.restoreLinks(), { restored: 0, changed: 1, missing: 0, moved: 0 });
   assert.equal(a.get('A1').f, '=5+5');
+});
+
+test('a moved cell whose formula also uses other cells is not put back automatically', async () => {
+  const X = fakeExcel();
+  const CX = await import('../public/js/cxlinks.js');
+  const a = X.add('S');
+  a.put('A1', '=CX.QTY("aaaaaaaa")*B1', 20); a.put('A3', '=CX.QTY("bbbbbbbb")', 5);
+  await CX.freezeLinks();
+  const kept = X.sheets.get(CX.SHARED);
+  const moved = new Map([...a.cells].map(([k, v]) => { const [r, c] = k.split(',').map(Number); return [`${r + 1},${c}`, v]; }));
+  a.cells.clear(); moved.forEach((v, k) => a.cells.set(k, v));                // a row inserted above
+  [2, 3].forEach(r => kept.put('F' + r, `='S'!$A$${kept.get('B' + r).f === 'A1' ? 2 : 4}`, ''));
+  assert.deepEqual(await CX.restoreLinks(), { restored: 1, changed: 0, missing: 0, moved: 1 });
+  assert.equal(a.get('A4').f, '=CX.QTY("bbbbbbbb")');                    // only a CX call: safe to put back
+  assert.equal(a.get('A2').f, 20);                                        // also uses B1: left as the number
+  assert.equal(await CX.sharedCount(), 1);
 });
