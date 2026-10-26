@@ -49,12 +49,14 @@ test('share copy turns CX links into numbers and keeps the formulas; restore put
   s.put('C6', '=CX.QTY("1a2b3c4d")*1.05', 267.75);
   s.put('C7', '=CX.VALUE("1a2b3c4d","9f8e7d6c")', '#NAME?');          // not calculated: stays a formula
   s.put('D5', '=C5*12', 3060);
+  s.put('D6', '=IF(B1="CX.QTY(",1,2)', 2);                               // the letters only appear in a text
   const r = await CX.freezeLinks();
   assert.deepEqual(r, { cells: 2, sheets: 1, notReady: 1 });
   assert.deepEqual(s.get('C5'), { f: 255, v: 255 });
   assert.deepEqual(s.get('C6'), { f: 267.75, v: 267.75 });
   assert.equal(s.get('C7').f, '=CX.VALUE("1a2b3c4d","9f8e7d6c")');
   assert.equal(s.get('D5').f, '=C5*12');                                 // ordinary formulas are not touched
+  assert.equal(s.get('D6').f, '=IF(B1="CX.QTY(",1,2)');
   const kept = X.sheets.get(CX.SHARED);
   assert.equal(kept.visibility, 'VeryHidden');
   assert.ok(kept.get('C2').f.startsWith('CXF:='));                       // stored as text, never a live formula

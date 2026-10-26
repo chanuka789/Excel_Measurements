@@ -285,6 +285,8 @@ export async function onSelection(ev) {
 // formulas are kept in a very hidden sheet, _cxshared. Restore links puts them back (cells changed by hand are left).
 export const SHARED = '_cxshared';
 const CX_FN = /\bCX\.(QTY|VALUE|NAME|UNIT)\s*\(/i;
+/** A real CX function call, not the same letters inside a text in quotes ("..." with "" for a quote). */
+const callsCx = (f) => CX_FN.test(String(f).replace(/"(?:[^"]|"")*"/g, '""'));
 const isError = (v) => typeof v === 'string' && /^#[A-Z0-9/!?]+[!?]?$/i.test(v.trim());
 
 /** Turn the live links into values. Returns { cells, sheets, notReady }.
@@ -303,7 +305,7 @@ export async function freezeLinks() {
       const u = sh.getUsedRangeOrNullObject(true); u.load('formulas,values,rowIndex,columnIndex,cellCount'); await ctx.sync();
       if (u.isNullObject || u.cellCount > 2000000) continue;
       u.formulas.forEach((row, i) => row.forEach((f, j) => {
-        if (typeof f !== 'string' || !CX_FN.test(f)) return;
+        if (typeof f !== 'string' || !callsCx(f)) return;
         const v = u.values[i][j];
         if (isError(v)) { res.notReady++; return; }                      // not calculated yet: keep the formula
         const addr = colName(u.columnIndex + j) + (u.rowIndex + i + 1);
