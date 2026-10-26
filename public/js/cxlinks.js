@@ -339,9 +339,12 @@ export async function restoreLinks() {
     const left = [], live = [];
     for (const r of rows) {
       // by the sheet id; the name only for records saved without an id (a new sheet with the old name is not the same sheet)
-      const sh = r[4] ? ws.items.find(x => x.id === r[4]) : ws.items.find(x => x.name === r[0]);
+      // the live reference says where the cell is now (moved by inserted rows or columns); older records use the address
+      if (r[5] === 'gone') { res.missing++; left.push(r); continue; }
+      const at = r[5] || { sheet: r[0], address: r[1] };
+      const sh = r[4] ? ws.items.find(x => x.id === r[4]) : ws.items.find(x => x.name === at.sheet);
       if (!sh) { res.missing++; left.push(r); continue; }
-      const c = sh.getRange(r[1]); c.load('formulas,values'); live.push({ r: [sh.name, r[1], r[2], r[3], sh.id], c });
+      const c = sh.getRange(at.address); c.load('formulas,values'); live.push({ r: [sh.name, at.address, r[2], r[3], sh.id], c });
     }
     await ctx.sync();
     for (const x of live) {
@@ -369,9 +372,20 @@ async function readShared(ctx) {
   if (sh.isNullObject) return [];
   const u = sh.getUsedRangeOrNullObject(true); u.load('values,formulas'); await ctx.sync();
   if (u.isNullObject) return [];
-  // formulas are stored as text with a marker, so they never calculate in the hidden sheet
-  return u.values.slice(1).map(v => [String(v[0]), String(v[1]), String(v[2]).replace(/^CXF:/, ''), v[3], String(v[4] || '')]).filter(r => r[0] && r[1] && r[2].startsWith('='));
+  // formulas are stored as text with a marker, so they never calculate in the hidden sheet; column F is a live reference
+  // to the frozen cell (='Sheet'!$B$7), which Excel moves with inserted rows and columns and renames with the sheet
+  return u.values.slice(1).map((v, i) => [String(v[0]), String(v[1]), String(v[2]).replace(/^CXF:/, ''), v[3], String(v[4] || ''), parseRef(u.formulas[i + 1]?.[5])])
+    .filter(r => r[0] && r[1] && r[2].startsWith('='));
 }
+/** ='Sheet name'!$B$7 -> { sheet, address }; #REF! (cell or sheet deleted) -> 'gone'; nothing -> null (older records). */
+function parseRef(f) {
+  const t = String(f ?? '');
+  if (!t) return null;
+  if (/#REF!/i.test(t)) return 'gone';
+  const m = /^=(?:'((?:[^']|'')+)'|([^'!]+))!\$?([A-Z]{1,3})\$?(\d{1,7})$/i.exec(t);
+  return m ? { sheet: (m[1] ?? m[2]).replace(/''/g, "'"), address: m[3].toUpperCase() + m[4] } : null;
+}
+const refTo = (name, addr) => { const m = /^([A-Z]+)(\d+)$/i.exec(addr); return `='${String(name).replace(/'/g, "''")}'!$${m[1].toUpperCase()}$${m[2]}`; };
 async function writeShared(ctx, rows) {
   let sh = ctx.workbook.worksheets.getItemOrNullObject(SHARED); await ctx.sync();
   if (sh.isNullObject) {
@@ -379,7 +393,9 @@ async function writeShared(ctx, rows) {
     sh = ctx.workbook.worksheets.add(SHARED);
     sh.visibility = Excel.SheetVisibility.veryHidden;
   }
-  sh.getRange('A:E').clear();
-  sh.getRange('A1:E1').values = [['Sheet', 'Cell', 'Formula', 'Value when shared', 'Sheet id']];
-  if (rows.length) sh.getRange(`A2:E${rows.length + 1}`).values = rows.map(r => [r[0], r[1], 'CXF:' + r[2], r[3], r[4] || '']);
+  sh.getRange('A:F').clear();
+  sh.getRange('A1:F1').values = [['Sheet', 'Cell', 'Formula', 'Value when shared', 'Sheet id', 'Where it is now']];
+  if (!rows.length) return;
+  sh.getRange(`A2:E${rows.length + 1}`).values = rows.map(r => [r[0], r[1], 'CXF:' + r[2], r[3], r[4] || '']);
+  sh.getRange(`F2:F${rows.length + 1}`).formulas = rows.map(r => [r[5] === 'gone' ? '#REF!' : refTo(r[0], r[1])]);
 }

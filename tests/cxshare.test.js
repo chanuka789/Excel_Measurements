@@ -116,3 +116,21 @@ test('a new sheet with the old name is not used to restore, and restored cells g
   assert.equal((await CX.restoreLinks()).restored, 1);
   assert.ok(X.sheets.get(CX.LINKS).get('B2').f === 'C3');                    // _cxlinks row 2: Sheet2!C3
 });
+
+test('restore follows the live reference when rows were inserted above the frozen cells', async () => {
+  const X = fakeExcel();
+  const CX = await import('../public/js/cxlinks.js');
+  const a = X.add('Sheet A');
+  a.put('A1', '=CX.QTY("aaaaaaaa")', 10); a.put('A2', '=CX.QTY("bbbbbbbb")', 10);
+  await CX.freezeLinks();
+  const kept = X.sheets.get(CX.SHARED);
+  assert.equal(kept.get('F2').f, "='Sheet A'!$A$1");
+  // insert a row above row 1: Excel moves the cells and updates the references
+  const moved = new Map([...a.cells].map(([k, v]) => { const [r, c] = k.split(',').map(Number); return [`${r + 1},${c}`, v]; }));
+  a.cells.clear(); moved.forEach((v, k) => a.cells.set(k, v));
+  kept.put('F2', "='Sheet A'!$A$2", ''); kept.put('F3', "='Sheet A'!$A$3", '');
+  assert.deepEqual(await CX.restoreLinks(), { restored: 2, changed: 0, missing: 0 });
+  assert.equal(a.get('A2').f, '=CX.QTY("aaaaaaaa")');
+  assert.equal(a.get('A3').f, '=CX.QTY("bbbbbbbb")');
+  assert.equal(a.get('A1').f, '');
+});
