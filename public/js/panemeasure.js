@@ -25,6 +25,9 @@ export function renderMeasurements() {
       <button class="btn small" id="mmCells" ${M.sel && inExcel ? '' : 'disabled'} title="Select the linked cells in Excel">Linked cells</button>
       <label class="check follow"><input type="checkbox" id="mmFollow" ${CX.following() ? 'checked' : ''}> Follow Excel</label>
       <button class="btn small subtle" id="mmRefresh" title="Read the measurements and the linked cells again">Refresh</button></div>
+    ${inExcel ? `<div class="row meas-tools">
+      <button class="btn small" id="mmShare" title="For people without the add-in: the linked cells become plain numbers; the formulas are kept in the workbook">Share copy</button>
+      <button class="btn small" id="mmRestore" title="Make the links live again after sharing">Restore links</button></div>` : ''}
     <div class="dropbar" id="mmDrop" hidden>Drop here to link to the selected Excel cell</div>
     <input type="search" class="input" id="mmFind" placeholder="Click to filter" value="${esc(M.filter)}" aria-label="Filter dimension groups">`;
   if (!t) { box.innerHTML = head + '<div class="loading">Reading the measurements…</div>'; wire(box); return; }
@@ -70,6 +73,8 @@ function wire(box) {
   $('mmFollow').onchange = (e) => { CX.setFollow(e.target.checked); App.sendToWindow?.('measure', { type: 'paneEvent', what: 'follow', on: e.target.checked }); };
   $('mmFind').oninput = (e) => { M.filter = e.target.value; renderMeasurements(); const i = $('mmFind'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
   $('mmLink').onclick = () => link(M.sel);
+  if ($('mmShare')) $('mmShare').onclick = () => App.shareCopy?.();
+  if ($('mmRestore')) $('mmRestore').onclick = () => App.restoreLinks?.();
   $('mmShow').onclick = () => { if (M.sel) App.focusInWindow?.({ ...M.sel, force: true }); };
   $('mmCells').onclick = async () => { if (!M.sel) return; const n = await CX.selectLinked(M.sel).catch(() => 0); if (!n) status('Not linked to any cell yet.'); };
   const tr = box.querySelector('.mtree'); if (!tr) return;

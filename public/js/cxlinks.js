@@ -279,3 +279,137 @@ export async function onSelection(ev) {
   if (X.follow) send('measure', { type: 'focusDim', ...first, ids: found.slice(0, 50) });
   return true;
 }
+
+// ================================================================== sharing a workbook with people who do not have the add-in
+// Share copy: every CX formula in the workbook becomes its current value (a plain number that anyone can see); the
+// formulas are kept in a very hidden sheet, _cxshared. Restore links puts them back (cells changed by hand are left).
+export const SHARED = '_cxshared';
+const CX_FN = /\bCX\.(QTY|VALUE|NAME|UNIT)\s*\(/i;
+/** A real CX function call, not the same letters inside a text in quotes ("..." with "" for a quote). */
+const callsCx = (f) => CX_FN.test(String(f).replace(/"(?:[^"]|"")*"/g, '""').replace(/'(?:[^']|'')*'!/g, "''!"));   // not inside "text" or 'Sheet name'!
+/** Does a formula use other cells (A1, $B$7, Sheet!C3, names of ranges are not counted), apart from its CX calls? */
+const usesCells = (f) => /(^|[^A-Za-z0-9_.])\$?[A-Z]{1,3}\$?\d{1,7}(?![A-Za-z0-9_(])/.test(String(f).replace(/"(?:[^"]|"")*"/g, '""').replace(/CX\.\w+\s*\([^)]*\)/gi, ''));
+/** A text result that starts like a formula is written with Excel's apostrophe, so it stays text. */
+const literal = (v) => (typeof v === 'string' && /^[=+\-@']/.test(v) ? "'" + v : v);
+const isError = (v) => typeof v === 'string' && /^#[A-Z0-9/!?]+[!?]?$/i.test(v.trim());
+
+/** Turn the live links into values. Returns { cells, sheets, notReady }.
+ * The formulas are saved first (one sync), and only then are the cells replaced, so a failure part way never loses one. */
+export async function freezeLinks() {
+  if (!App.inExcel?.()) throw new Error('Open the add-in in Excel first.');
+  pushValues();
+  const res = { cells: 0, sheets: 0, notReady: 0 };
+  await Excel.run(async (ctx) => {
+    const ws = ctx.workbook.worksheets; ws.load('items/name,items/id'); await ctx.sync();
+    const kept = await readShared(ctx);
+    const have = new Map(kept.map(r => [`${r[4] || r[0]}!${r[1]}`, r]));
+    const todo = [];                                           // { sh, addr, v }
+    for (const sh of ws.items) {
+      if (sh.name === LINKS || sh.name === SHARED) continue;
+      const u = sh.getUsedRangeOrNullObject(true); u.load('formulas,values,rowIndex,columnIndex,cellCount'); await ctx.sync();
+      if (u.isNullObject || u.cellCount > 2000000) continue;
+      u.formulas.forEach((row, i) => row.forEach((f, j) => {
+        const v = u.values[i][j];
+        if (typeof f !== 'string' || f === String(v) || !callsCx(f)) return;   // f === v: text such as '=CX.QTY(...), not a formula
+        if (isError(v)) { res.notReady++; return; }                      // not calculated yet: keep the formula
+        const addr = colName(u.columnIndex + j) + (u.rowIndex + i + 1);
+        have.set(`${sh.id}!${addr}`, [sh.name, addr, f, v, sh.id, null, `${sh.id}!${addr}`]);
+        todo.push({ sh, addr, v });
+      }));
+    }
+    if (!todo.length) return;
+    await writeShared(ctx, [...have.values()]);
+    await ctx.sync();                                          // the formulas are safe before any cell changes
+    const done = new Set();
+    for (const t of todo) {
+      t.sh.getRange(t.addr).values = [[literal(t.v)]];
+      res.cells++; done.add(t.sh.id);
+    }
+    res.sheets = done.size;
+    X.quietUntil = Date.now() + 1500;
+    await ctx.sync();
+  });
+  return res;
+}
+/** Put the live formulas back. Returns { restored, changed, missing }. A sheet is found by its id, so a renamed sheet
+ * still works and a different sheet with the old name is never used; records whose sheet cannot be found (deleted, or not in this file) are kept, never thrown away. */
+export async function restoreLinks() {
+  if (!App.inExcel?.()) throw new Error('Open the add-in in Excel first.');
+  const res = { restored: 0, changed: 0, missing: 0, moved: 0 };
+  await Excel.run(async (ctx) => {
+    const rows = await readShared(ctx);
+    if (!rows.length) return;
+    const ws = ctx.workbook.worksheets; ws.load('items/name,items/id'); await ctx.sync();
+    const left = [], live = [];
+    for (const r of rows) {
+      // by the sheet id; the name only for records saved without an id (a new sheet with the old name is not the same sheet)
+      // the live reference says where the cell is now (moved by inserted rows or columns); older records use the address
+      if (r[5] === 'gone') { res.missing++; left.push(r); continue; }
+      const at = r[5] || { sheet: r[0], address: r[1] };
+      const sh = r[4] ? ws.items.find(x => x.id === r[4]) : ws.items.find(x => x.name === at.sheet);
+      if (!sh) { res.missing++; left.push(r); continue; }
+      // the cell moved (rows or columns inserted) and its formula also uses other cells: those references inside the saved
+      // formula did not move with it, so it is not put back automatically
+      if (`${r[4] || r[0]}!${at.address}` !== r[6] && usesCells(r[2])) { res.moved++; left.push(r); continue; }
+      const c = sh.getRange(at.address); c.load('formulas,values'); live.push({ r: [sh.name, at.address, r[2], r[3], sh.id, null, r[6]], c });
+    }
+    await ctx.sync();
+    for (const x of live) {
+      const f = x.c.formulas[0][0], v = x.c.values[0][0];
+      const isFormula = typeof f === 'string' && f.startsWith('=') && f !== String(v);          // text such as '=pending' shows itself
+      if (isFormula && callsCx(f)) continue;                                                    // the link is already live
+      if (isFormula) { res.changed++; left.push(x.r); continue; }                               // someone wrote their own formula: keep it
+      if (String(v) !== String(x.r[3])) { res.changed++; left.push(x.r); continue; }            // typed over by hand: leave it
+      x.c.formulas = [[x.r[2]]]; res.restored++;
+    }
+    await writeShared(ctx, left);
+    X.quietUntil = Date.now() + 1500;
+    await ctx.sync();
+  });
+  pushValues();
+  await broadcastLinks({ rescan: true }).catch(() => {});      // the restored cells go back into the link list
+  return res;
+}
+export async function sharedCount() {
+  if (!App.inExcel?.()) return 0;
+  let n = 0;
+  await Excel.run(async (ctx) => { n = (await readShared(ctx)).length; }).catch(() => {});
+  return n;
+}
+async function readShared(ctx) {
+  const sh = ctx.workbook.worksheets.getItemOrNullObject(SHARED); await ctx.sync();
+  if (sh.isNullObject) return [];
+  const u = sh.getUsedRangeOrNullObject(true); u.load('values,formulas'); await ctx.sync();
+  if (u.isNullObject) return [];
+  // formulas are stored as text with a marker, so they never calculate in the hidden sheet; column F is a live reference
+  // to the frozen cell (='Sheet'!$B$7), which Excel moves with inserted rows and columns and renames with the sheet
+  return u.values.slice(1).map((v, i) => {
+    const ref = parseRef(u.formulas[i + 1]?.[5]);
+    // where the cell is now: the live reference wins over the address saved as text (rows and columns may have moved)
+    const name = ref && ref !== 'gone' ? ref.sheet : String(v[0]), addr = ref && ref !== 'gone' ? ref.address : String(v[1]);
+    return [name, addr, String(v[2]).replace(/^CXF:/, ''), v[3], String(v[4] || ''), ref, String(v[6] || `${v[4] || v[0]}!${v[1]}`)];
+  }).filter(r => r[0] && r[1] && r[2].startsWith('='));
+}
+/** ='Sheet name'!$B$7 -> { sheet, address }; #REF! (cell or sheet deleted) -> 'gone'; nothing -> null (older records). */
+function parseRef(f) {
+  const t = String(f ?? '');
+  if (!t) return null;
+  if (/#REF!/i.test(t)) return 'gone';
+  const m = /^=(?:'((?:[^']|'')+)'|([^'!]+))!\$?([A-Z]{1,3})\$?(\d{1,7})$/i.exec(t);
+  return m ? { sheet: (m[1] ?? m[2]).replace(/''/g, "'"), address: m[3].toUpperCase() + m[4] } : null;
+}
+const refTo = (name, addr) => { const m = /^([A-Z]+)(\d+)$/i.exec(addr); return `='${String(name).replace(/'/g, "''")}'!$${m[1].toUpperCase()}$${m[2]}`; };
+async function writeShared(ctx, rows) {
+  let sh = ctx.workbook.worksheets.getItemOrNullObject(SHARED); await ctx.sync();
+  if (sh.isNullObject) {
+    if (!rows.length) return;
+    sh = ctx.workbook.worksheets.add(SHARED);
+    sh.visibility = Excel.SheetVisibility.veryHidden;
+  }
+  sh.getRange('A:G').clear();
+  sh.getRange('A1:G1').values = [['Sheet', 'Cell', 'Formula', 'Value when shared', 'Sheet id', 'Where it is now', 'Where it was']];
+  if (!rows.length) return;
+  sh.getRange(`A2:E${rows.length + 1}`).values = rows.map(r => [literal(r[0]), r[1], 'CXF:' + r[2], literal(r[3]), r[4] || '']);
+  sh.getRange(`F2:F${rows.length + 1}`).formulas = rows.map(r => [r[5] === 'gone' ? '#REF!' : refTo(r[0], r[1])]);
+  sh.getRange(`G2:G${rows.length + 1}`).values = rows.map(r => [r[6] || `${r[4] || r[0]}!${r[1]}`]);
+}

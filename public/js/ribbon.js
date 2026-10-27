@@ -17,16 +17,29 @@ export class Ribbon {
     this.min = Boolean(saved.min);
     this.render();
     document.addEventListener('keydown', (e) => { if (e.key === 'F1' && e.ctrlKey) { e.preventDefault(); this.toggleMin(); } });
+    let t = null; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => this.fit(), 120); });
+  }
+  /** Like Office and CostX: when the window is too narrow, groups from the right end show only the icons of their small
+   * buttons, one group at a time; if that is not enough, large buttons become small ones and every button shows only its
+   * icon. The names stay in the tooltips. The ribbon scrolls only if even that does not fit. */
+  fit() {
+    if (this.min || !this.host.querySelector('.rb-body')) return;
+    const body = () => this.host.querySelector('.rb-body');
+    const over = () => body().scrollWidth > body().clientWidth + 1;
+    this.level = 0; this.drawBody(); if (!over()) return;
+    for (const g of [...body().querySelectorAll('.rb-grp')].reverse()) { g.classList.add('gsm'); if (!over()) return; }
+    this.level = 2; this.drawBody(); if (!over()) return;       // large buttons as small ones that keep their names
+    this.host.classList.add('icons-all');                        // last step: icons only
   }
   save() { try { localStorage.setItem(this.o.storageKey || 'dwfxRibbon', JSON.stringify({ tab: this.tab, min: this.min })); } catch { /* storage blocked */ } }
   /** Show a tab (or keep the current one) and draw it. */
   setTab(id) { if (this.o.tabs.some(t => t.id === id)) { this.tab = id; this.save(); this.render(); this.o.onTab?.(id); } }
   toggleMin() { this.min = !this.min; this.save(); this.render(); this.o.onResize?.(); }
-  btn(id, size) {
+  btn(id, size, wasLarge = false) {
     const c = this.cmds[id];
     if (!c) return `<button class="rb-b ${size}" disabled title="${esc(id)}">${icon('props', size === 'lg' ? 32 : 16)}<span>${esc(id)}</span></button>`;
     const caret = c.menu ? '<span class="rb-caret" aria-hidden="true">▾</span>' : '';
-    return `<button class="rb-b ${size}" data-c="${esc(id)}" title="${esc(c.title || c.label)}" aria-label="${esc(c.label)}"${c.checked ? ' aria-pressed="false"' : ''}${c.menu ? ' aria-haspopup="menu"' : ''}>${icon(c.icon || 'props', size === 'lg' ? 32 : 16)}<span class="rb-l">${esc(c.label)}${caret}</span></button>`;
+    return `<button class="rb-b ${size}${wasLarge ? ' was-lg' : ''}" data-c="${esc(id)}" title="${esc(c.title || c.label)}" aria-label="${esc(c.label)}"${c.checked ? ' aria-pressed="false"' : ''}${c.menu ? ' aria-haspopup="menu"' : ''}>${icon(c.icon || 'props', size === 'lg' ? 32 : 16)}<span class="rb-l">${esc(c.label)}${caret}</span></button>`;
   }
   render() {
     const tabs = this.o.tabs, cur = tabs.find(t => t.id === this.tab) || tabs[0];
@@ -35,8 +48,7 @@ export class Ribbon {
         ${this.o.file ? '<button class="rb-file" data-file>File</button>' : ''}
         ${tabs.map(t => `<button role="tab" class="rb-t" data-t="${esc(t.id)}" aria-selected="${t.id === cur.id}" tabindex="${t.id === cur.id ? 0 : -1}">${esc(t.label)}</button>`).join('')}
         <span class="rb-sp"></span><button class="rb-min" data-min title="${this.min ? 'Show the ribbon' : 'Collapse the ribbon'} (Ctrl+F1)" aria-label="${this.min ? 'Show the ribbon' : 'Collapse the ribbon'}">${this.min ? '⌄' : '⌃'}</button></div>
-      <div class="rb-body" role="tabpanel" ${this.min ? 'hidden' : ''}>${cur.groups.map(g => `<div class="rb-grp" role="group" aria-label="${esc(g.label)}"><div class="rb-items">${g.items.map(it =>
-        Array.isArray(it) ? `<div class="rb-stack">${it.map(id => this.btn(id, 'sm')).join('')}</div>` : this.btn(it, 'lg')).join('')}</div><div class="rb-gl">${esc(g.label)}</div></div>`).join('')}</div>`;
+      <div class="rb-body" role="tabpanel" ${this.min ? 'hidden' : ''}></div>`;
     this.host.querySelectorAll('[data-t]').forEach(b => {
       b.onclick = () => { if (this.min) { this.min = false; this.save(); } this.setTab(b.dataset.t); this.o.onResize?.(); };
       b.ondblclick = () => this.toggleMin();
@@ -49,7 +61,24 @@ export class Ribbon {
     this.host.querySelector('[data-min]').onclick = () => this.toggleMin();
     const f = this.host.querySelector('[data-file]');
     if (f) f.onclick = () => { const r = f.getBoundingClientRect(); menu(this.o.file(), r.left, r.bottom + 2); };
-    this.host.querySelectorAll('[data-c]').forEach(b => b.onclick = () => this.run(b.dataset.c, b));
+    this.fit();
+  }
+  /** The buttons of the current tab. level 0: as designed (fit() may shrink single groups); 2: large buttons drawn as
+   * stacks of small ones, icons only. */
+  drawBody() {
+    const body = this.host.querySelector('.rb-body'); if (!body) return;
+    const cur = this.o.tabs.find(t => t.id === this.tab) || this.o.tabs[0], small = this.level === 2;
+    const items = (list) => {
+      if (!small) return list;
+      const out = []; let run = [];
+      for (const it of list) { if (Array.isArray(it)) { if (run.length) { out.push(run); run = []; } out.push(it); } else { run.push({ lg: it }); if (run.length === 3) { out.push(run); run = []; } } }
+      if (run.length) out.push(run);
+      return out;
+    };
+    this.host.classList.toggle('icons', small); this.host.classList.remove('icons-all');
+    body.innerHTML = cur.groups.map(g => `<div class="rb-grp" role="group" aria-label="${esc(g.label)}"><div class="rb-items">${items(g.items).map(it =>
+      Array.isArray(it) ? `<div class="rb-stack">${it.map(id => (id.lg ? this.btn(id.lg, 'sm', true) : this.btn(id, 'sm'))).join('')}</div>` : this.btn(it, 'lg')).join('')}</div><div class="rb-gl">${esc(g.label)}</div></div>`).join('');
+    body.querySelectorAll('[data-c]').forEach(b => b.onclick = () => this.run(b.dataset.c, b));
     this.refresh();
   }
   /** Run a command by id (from a button, a menu or a key). */

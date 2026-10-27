@@ -272,6 +272,12 @@
     <li><strong>Follow Excel</strong> on: click a linked cell and the measurement window opens the drawing (or the 3D model) and highlights where it was measured. Select a group or a dimension and its linked cells are selected in Excel. Switch Follow Excel off when you do not want the window to jump; the links always stay.</li>
     <li><strong>Workbook View</strong> (tab in the measurement window) lists every linked cell with <em>Go to cell</em>, <em>Show</em> and <em>Remove link</em> (the cell keeps its last value).</li>
   </ol>
+  <h3>Sending the workbook to someone without the add-in</h3>
+  <ol>
+    <li>Press <strong>Share Copy</strong> (ribbon or task pane). Every linked cell becomes a plain number; your other formulas stay. The live formulas are kept inside the workbook.</li>
+    <li><strong>File › Save a Copy</strong>, and send that copy. Everyone can see the numbers, with or without the add-in.</li>
+    <li>Press <strong>Restore Links</strong>: your links are live again. A cell someone typed over is left as it is.</li>
+  </ol>
   <div class="tip">After updating to version 0.7, add the new <code>manifest.xml</code> to Excel again (remove the old add-in first). Without it, the CX formulas show <code>#NAME?</code>.</div>
 
   <h2 id="revisions">11. DWFx Schedules window</h2>

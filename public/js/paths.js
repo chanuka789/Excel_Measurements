@@ -36,8 +36,8 @@ export async function savePath(fp, { path, kind = 'local', label = null, project
 }
 export const removePath = (id) => api('DELETE', `/paths/${id}`);
 
-const canHandles = () => typeof window !== 'undefined' && 'showOpenFilePicker' in window;
-const canFolders = () => typeof window !== 'undefined' && 'showDirectoryPicker' in window;
+const canHandles = () => typeof window !== 'undefined' && typeof window.showOpenFilePicker === 'function';
+const canFolders = () => typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
 export const pickers = () => ({ files: canHandles(), folders: canFolders() });
 
 async function permitted(handle, ask) {

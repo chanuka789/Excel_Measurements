@@ -36,6 +36,9 @@ body.app { display: flex; flex-direction: column; overflow: hidden; }
 .rb-b.lg { flex-direction: column; justify-content: flex-start; gap: 3px; padding: 3px 5px; min-width: 52px; max-width: 78px; height: 72px; text-align: center; }
 .rb-b.lg .rb-l { white-space: normal; }
 .rb-b.sm { gap: 5px; padding: 2px 6px 2px 4px; height: 23px; white-space: nowrap; }
+/* narrow window (ribbon.js fit): small buttons show only icons, then all buttons (the names stay in the tooltips) */
+.rb-grp.gsm .rb-b.sm:not(.was-lg) .rb-l, .rb.icons .rb-b:not(.was-lg) .rb-l, .rb.icons-all .rb-b .rb-l { display: none; }
+.rb-grp.gsm .rb-b.sm:not(.was-lg), .rb.icons .rb-b:not(.was-lg), .rb.icons-all .rb-b { padding: 2px 4px; }
 .rb-caret { font-size: 9px; margin-left: 2px; color: var(--fg3); }
 .ric { flex: none; }
 
@@ -148,6 +151,7 @@ table.links td.v { text-align: right; }
 
 @media (max-width: 760px) {
   .wmain.left, .wmain.left.split { grid-template-columns: 1fr; }
+  .wmain { position: relative; }                 /* the left pane overlays the drawing, below the ribbon */
   .wleft { position: absolute; z-index: 40; left: 0; top: 0; bottom: 0; width: min(92vw, 340px); box-shadow: var(--shadow); }
   .lgrip { display: none; }
   .rb-body { min-height: 0; }

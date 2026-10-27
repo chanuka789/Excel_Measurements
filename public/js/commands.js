@@ -148,7 +148,7 @@ export function buildCommands(A) {
     { label: 'Rotate 90°', run: () => t.transformSel('rot') }, { label: 'Mirror Left-Right', run: () => t.transformSel('x') }, { label: 'Mirror Up-Down', run: () => t.transformSel('y') }, '-',
     { label: 'Delete', run: () => t.deleteSel() }]; } });
   def('dim.selarea', 'Select In Area', 'selArea', () => tk().setTool('selarea'), { title: 'Drag a box to select the dimensions inside it', enabled: has2d });
-  def('dim.controls', 'Edit Controls', 'controls', () => { tk().setTool('select'); A.status('Select one dimension, then drag its corner handles to edit it.'); }, { title: 'Edit the points of a dimension', enabled: has2d, checked: () => tk()?.tool === 'select' });
+  def('dim.controls', 'Edit Controls', 'controls', () => { tk().setTool('select'); A.status('Select one dimension, then drag its corner handles to edit it.'); }, { title: 'Edit the points of a dimension', enabled: has2d });
   def('sign.pos', 'Positive', 'positive', () => { if (has2d()) { tk().sign = 1; tk().renderBar(); } if (A.PT) A.PT.sign = 1; }, { title: 'New dimensions are positive', checked: () => (has2d() ? tk().sign > 0 : (A.PT?.sign ?? 1) > 0) });
   def('sign.neg', 'Negative', 'negative', () => { if (has2d()) { tk().sign = -1; tk().renderBar(); } if (A.PT) A.PT.sign = -1; }, { title: 'New dimensions are negative (deductions)', checked: () => (has2d() ? tk().sign < 0 : (A.PT?.sign ?? 1) < 0) });
   def('sign.both', 'Show Both', 'both', null, { title: 'Show positive, negative or both kinds of dimension', enabled: has2d,
