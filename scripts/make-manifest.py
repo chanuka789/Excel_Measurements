@@ -2,7 +2,7 @@
 import sys, os
 from xml.sax.saxutils import escape
 BASE = (sys.argv[1] if len(sys.argv) > 1 else 'https://dwfx-addin-production.up.railway.app').rstrip('/')
-VERSION = '0.7.1.0'
+VERSION = '0.7.2.0'
 G = [
  ('Measure', 'Measure', 'measure', [
    ('Meas', 'Measurements', 'group', 'openMeasurements', 'Show the dimension groups and their totals in the task pane.'),
@@ -21,14 +21,23 @@ icons = sorted({g[2] for g in G} | {c[2] for g in G for c in g[3]})
 ic = lambda n: '\n'.join(f'                    <bt:Image size="{s}" resid="I.{n}.{s}"/>' for s in (16, 32, 80))
 groups = []
 for gid, glabel, gicon, ctrls in G:
-    cs = [f'''                <Control xsi:type="Button" id="DWFx.{cid}">
+    cs = []
+    for cid, label, icon, fn, tip in ctrls:
+        if cid == 'Meas':
+            act = f'''                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>DWFx.Taskpane</TaskpaneId>
+                    <SourceLocation resid="PaneUrl"/>
+                  </Action>'''
+        else:
+            act = f'''                  <Action xsi:type="ExecuteFunction"><FunctionName>{fn}</FunctionName></Action>'''
+        cs.append(f'''                <Control xsi:type="Button" id="DWFx.{cid}">
                   <Label resid="L.{cid}"/>
                   <Supertip><Title resid="L.{cid}"/><Description resid="T.{cid}"/></Supertip>
                   <Icon>
 {ic(icon)}
                   </Icon>
-                  <Action xsi:type="ExecuteFunction"><FunctionName>{fn}</FunctionName></Action>
-                </Control>''' for cid, label, icon, fn, tip in ctrls]
+{act}
+                </Control>''')
     groups.append(f'''              <Group id="DWFx.G.{gid}">
                 <Label resid="G.{gid}"/>
                 <Icon>

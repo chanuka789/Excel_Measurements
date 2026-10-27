@@ -183,17 +183,28 @@ const RIBBON = {
 function registerRibbon() {
   if (typeof Office === 'undefined' || !Office.actions?.associate) return;
   for (const [name, fn] of Object.entries(RIBBON)) {
-    Office.actions.associate(name, async (event) => {
-      try { await Office.addin?.showAsTaskpane?.(); } catch { /* older Office */ }
-      try { if (!session.get()?.token && name !== 'openHelp') showSignIn('Sign in first.'); else await fn(); }
-      catch (err) { status(err.message, 'bad'); }
-      event.completed();
-    });
+    try {
+      Office.actions.associate(name, async (event) => {
+        try {
+          try { await Office.addin?.showAsTaskpane?.(); } catch { /* older Office */ }
+          if (!session.get()?.token && name !== 'openHelp') {
+            showSignIn('Sign in first.');
+          } else {
+            await fn();
+          }
+        } catch (err) {
+          status(err.message, 'bad');
+        } finally {
+          event?.completed?.();
+        }
+      });
+    } catch { /* ignore if already associated */ }
   }
 }
 window.__ribbon = RIBBON;
 
 // ================================================================== start
+registerRibbon();
 CX.registerFunctions();
 initExcel(); initMeasurements();
 initWinHost({ inExcel: false });
@@ -203,7 +214,6 @@ officeReady.then(async (info) => {
   initPaneHost({ inExcel: S.inExcel });
   if (S.inExcel) {
     Excel.run(async (ctx) => { ctx.workbook.worksheets.onSelectionChanged.add(onExcelSelect); await ctx.sync(); }).catch(() => {});
-    registerRibbon();
     try { Office.context.document.addHandlerAsync?.(Office.EventType.OfficeThemeChanged, applyTheme); } catch { /* not supported */ }
   }
   applyTheme();
