@@ -37,7 +37,7 @@ await session('06-dimension-groups', async (T) => {
   await cap('Right-click a beam for the object menu. Create Dimension Group makes a measured item for the selection.', 3000);
   await rclickBeam(); await wait(1200); await pick('Create Dimension Group');
   await dtype('#dialog #dgN', 'Concrete to beams'); await D().selectOption('#dialog #dgT', 'Volume'); await wait(400);
-  await D().selectOption('#dialog #dgF', { label: 'Structure' }); await wait(400);
+  await dtype('#dialog #dgF', 'Structure'); await wait(400);
   await cap('Measurement type Volume. The group remembers the folder, display, multiplier, sizes and colours.', 2600);
   await dc('#dialog .btn.primary', 1200);
   await cap('The group shows its total. Its objects are coloured in 3D. Now a second item for the same beams: formwork.', 3200);

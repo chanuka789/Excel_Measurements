@@ -87,16 +87,28 @@ body.app { display: flex; flex-direction: column; overflow: hidden; }
 .tr-model, .tr-open { background: none; border: 2px solid var(--brand); transform: rotate(45deg) scale(.75); }
 .tr-open { background: var(--brand); }
 .tr-version { background: none; border: 1.5px solid var(--fg3); border-radius: 50%; transform: scale(.7); }
-.tr-drawing, .tr-sheet { background: #fff; border: 1.5px solid var(--brand); border-radius: 1px; }
-.tr-sheet { border-style: dashed; }
+.tr-sheet { background: #fff; border: 1.5px dashed var(--brand); border-radius: 1px; }
 .tr-file { background: none; border: 1.5px solid var(--fg3); }
 .tr-cat, .tr-fam, .tr-type, .tr-view, .tr-item, .tr-layer { background: none; border: 1.5px solid var(--fg3); transform: scale(.7); }
 .tr-cat, .tr-fam, .tr-type { border-radius: 50%; }
 .tr-layer { border-radius: 1px; background: var(--brand-bg); }
-.tr-dg-count { background: #107c10; border-radius: 50%; transform: scale(.75); }
-.tr-dg-length { background: linear-gradient(transparent 40%, #2f6fa3 40% 60%, transparent 60%); }
-.tr-dg-area { background: #3f8f8a; opacity: .85; }
-.tr-dg-volume { background: #c98a2b; box-shadow: inset -3px -3px 0 rgba(0,0,0,.25); }
+
+/* dimension group and drawing icons (CostX-like) */
+.tr-dg-count, .tr-dg-length, .tr-dg-area, .tr-dg-volume, .tr-drawing { width: 16px; height: 16px; border: 0; border-radius: 0; box-shadow: none; opacity: 1; transform: none; background: center / contain no-repeat; }
+.tr-dg-area { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1.5' y='1.5' width='13' height='13' fill='%23e3f3ea' stroke='%232e7d5b'/%3E%3Cpath d='M1.5 5.8h13M1.5 10.2h13M5.8 1.5v13M10.2 1.5v13' stroke='%232e7d5b' stroke-width='.9'/%3E%3C/svg%3E"); }
+.tr-dg-length { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='.5' y='5' width='15' height='6' rx='.5' fill='%23f6d79b' stroke='%239a6a12'/%3E%3Cpath d='M3 5v3M5.5 5v2M8 5v3M10.5 5v2M13 5v3' stroke='%239a6a12' stroke-width='.9'/%3E%3C/svg%3E"); }
+.tr-dg-count { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='4.5' cy='4.5' r='2.6' fill='%232e7d32'/%3E%3Ccircle cx='11.5' cy='4.5' r='2.6' fill='%232e7d32'/%3E%3Ccircle cx='4.5' cy='11.5' r='2.6' fill='%232e7d32'/%3E%3Ccircle cx='11.5' cy='11.5' r='2.6' fill='%232e7d32'/%3E%3C/svg%3E"); }
+.tr-dg-volume { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.5 14.5 4.8v6.6L8 14.5 1.5 11.4V4.8z' fill='%23f3d6a4' stroke='%239a5f12'/%3E%3Cpath d='M1.5 4.8 8 8l6.5-3.2M8 8v6.5' fill='none' stroke='%239a5f12'/%3E%3C/svg%3E"); }
+.tr-drawing { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.5 1.5h8l3 3v10h-11z' fill='%23eaf2fb' stroke='%231f5fae'/%3E%3Cpath d='M4.5 6.5h7v5h-7zM6.5 6.5v5M4.5 9h7' fill='none' stroke='%231f5fae' stroke-width='.9'/%3E%3C/svg%3E"); }
+/* folders: blue names without an icon; top-level folders (stages such as "2026-09-25 SD 50%") have a rule under them */
+.tr-row.fold .tr-ic { display: none; }
+.tr-row.fold .tr-l { color: var(--brand-text); }
+.tr-row.fold.top { border-bottom-color: var(--brand-bg); }
+.tr-row.fold.top .tr-l { font-weight: 600; }
+.tr-row.strong .tr-l { font-weight: 700; }
+.tr-c.u { width: 34px; text-align: left; }
+.tr-sw { width: 12px; height: 12px; flex: none; border: 1px solid rgba(0,0,0,.35); margin-left: 4px; }
+.tr-sw.none { border-color: transparent; }
 .tr-qty { background: none; border-left: 2px solid var(--fg3); border-radius: 0; width: 8px; margin-left: 4px; }
 .tr-empty { padding: 10px; }
 .dims-bar { display: flex; gap: 8px; align-items: center; padding: 6px 8px; }

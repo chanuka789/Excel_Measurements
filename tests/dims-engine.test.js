@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluate } from '../public/js/engine.js';
-import { baseValue, dimQuantity, groupTotal, groupToSpec, sameElements, mergeSpecs, mergeList, conversion } from '../public/js/dims.js';
+import { baseValue, dimQuantity, groupTotal, groupToSpec, sameElements, mergeSpecs, mergeList, conversion, displayUnit } from '../public/js/dims.js';
 
 const E = (id, q, extra = {}) => ({ id, cat: 'Structural Framing', fam: 'Beam', type: 'B-200X600', level: 'L1', mark: '', q, props: { Material: 'C40' }, ...extra });
 const byId = new Map([
@@ -30,6 +30,25 @@ test('multiplier, offset, sign and width/height conversion (default display)', (
   assert.equal(conversion({ mtype: 'Length', props: { display: 'Area', height: 0 } }).display, 'Length');
   const t = groupTotal({ mtype: 'Length', props: { measured: [{ value: 10, sign: -1, multiplier: 1 }] }, items: items([1, 2, 99]) }, byId);
   assert.equal(t.total, 4 + 5 - 10); assert.equal(t.absent, 1); assert.equal(t.unit, 'm');
+});
+
+test('Wall Area and Weight displays (CostX Default Display)', () => {
+  const wall = { mtype: 'Length', props: { display: 'Wall Area', height: 2.4 } };
+  assert.deepEqual(conversion(wall), { display: 'Wall Area', terms: ['Height'] });
+  assert.equal(displayUnit(wall), 'm2');
+  assert.equal(dimQuantity(wall, 10, { sign: 1, multiplier: 1 }), 24);
+  // a weight is the quantity x the multiplier (weight per unit), in the group's weight unit
+  const w = { id: 'w', name: 'Rebar T12', mtype: 'Length', items: items([1, 2]), props: { display: 'Weight', multiplier: 0.888, weightUom: 'kg' } };
+  assert.equal(displayUnit(w), 'kg');
+  assert.ok(Math.abs(groupTotal(w, byId).total - 9 * 0.888) < 1e-9);
+  const spec = groupToSpec(w, byId);
+  const ev = evaluate(spec, byId);
+  assert.equal(spec.formulas.find(f => f.key === 'Qty').unit, 'kg');
+  assert.ok(Math.abs(ev.tot.Qty - 9 * 0.888) < 1e-9);
+  assert.equal(displayUnit({ mtype: 'Count', props: { display: 'Weight', weightUom: 't' } }), 't');
+  assert.equal(displayUnit({ mtype: 'Count', props: { display: 'Weight' } }), 'kg');
+  // a display the type cannot use falls back to the type
+  assert.equal(conversion({ mtype: 'Area', props: { display: 'Wall Area', height: 3 } }).display, 'Area');
 });
 
 test('a dimension group becomes a schedule whose Excel formulas give the same total', () => {

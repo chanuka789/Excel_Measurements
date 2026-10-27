@@ -170,7 +170,7 @@ export function buildCommands(A) {
   def('mode.autocount', 'Auto Count', 'autocount', () => { A.tree.setBottom('auto'); tk().act('autocount'); }, { title: 'Find every copy of a symbol (Count group)', enabled: () => has2d() && ed(), checked: () => Boolean(tk()?.ac) });
   def('show.overlaps', 'Overlaps', 'overlaps', () => { if (need3d()) A.colourMeasured('overlaps'); }, { title: 'Objects in more than one dimension group', enabled: () => Boolean(A.V?.loaded) });
   def('show.measured', 'Measured', 'measured', () => { if (need3d()) A.colourMeasured('measured'); }, { title: 'Colour objects: not measured, measured once, more than once', enabled: () => Boolean(A.V?.loaded) });
-  def('show.all', 'All Groups', 'dims', () => tk().act('all'), { title: 'Show every dimension group on the drawing (off: only the current one)', enabled: has2d, checked: () => has2d() && tk().showAll });
+  def('show.all', 'All Groups', 'dims', () => tk().act('all'), { title: 'Show every dimension group on the drawing (off: only the group or folder chosen in the Dimension Groups tree)', enabled: has2d, checked: () => has2d() && tk().showAll });
   def('show.legend', 'Legend', 'legend', () => tk().act('legend'), { enabled: has2d, checked: () => has2d() && tk().legend });
   def('show.labels', 'Labels', 'labels', () => tk().act('labels'), { enabled: has2d, checked: () => has2d() && tk().labels });
   def('show.markups', 'Markups', 'markups', () => tk().act('markups'), { enabled: has2d, checked: () => has2d() && tk().markupsOn });

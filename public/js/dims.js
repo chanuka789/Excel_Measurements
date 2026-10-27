@@ -11,7 +11,11 @@ import { keyOf } from './engine.js';
 import { enrichElementQs } from './rules.js';
 
 export const MTYPES = ['Count', 'Length', 'Area', 'Volume'];
-export const UNIT = { Count: 'nr', Length: 'm', Area: 'm2', Volume: 'm3' };
+export const UNIT = { Count: 'nr', Length: 'm', Area: 'm2', 'Wall Area': 'm2', Volume: 'm3' };
+/** "Default Display" choices (CostX order) and the ones each measurement type can use. Weight = quantity x multiplier (weight per unit). */
+export const DISPLAYS = ['Count', 'Length', 'Area', 'Wall Area', 'Volume', 'Weight'];
+export const DISPLAYS_FOR = { Count: ['Count', 'Weight'], Length: ['Length', 'Area', 'Wall Area', 'Volume', 'Weight'], Area: ['Area', 'Volume', 'Weight'], Volume: ['Volume', 'Weight'] };
+export const WEIGHT_UOMS = ['kg', 't'];
 /** BIM quantities tried in order when a group does not name one (the first one the element has is used). */
 export const PREFERRED = {
   Length: ['Length', 'Cut Length', 'Geo box length', 'Perimeter'],
@@ -42,12 +46,13 @@ export function baseValue(g, e) {
 /** How the base value turns into the displayed quantity ("Default Display" with width and height). */
 export function conversion(g) {
   const d = P(g).display || g.mtype, w = factor(P(g).width, 0), h = factor(P(g).height, 0);
-  if (g.mtype === 'Length' && d === 'Area' && h > 0) return { display: 'Area', terms: ['Height'] };
+  if (d === 'Weight' && (DISPLAYS_FOR[g.mtype] || []).includes('Weight')) return { display: 'Weight', terms: [] };
+  if (g.mtype === 'Length' && (d === 'Area' || d === 'Wall Area') && h > 0) return { display: d, terms: ['Height'] };
   if (g.mtype === 'Length' && d === 'Volume' && w > 0 && h > 0) return { display: 'Volume', terms: ['Width', 'Height'] };
   if (g.mtype === 'Area' && d === 'Volume' && h > 0) return { display: 'Volume', terms: ['Height'] };
   return { display: g.mtype, terms: [] };
 }
-export const displayUnit = (g) => UNIT[conversion(g).display];
+export const displayUnit = (g) => { const d = conversion(g).display; return d === 'Weight' ? (WEIGHT_UOMS.includes(P(g).weightUom) ? P(g).weightUom : 'kg') : UNIT[d]; };
 
 /** Sign x dimension multiplier x drawing multiplier of one dimension (1 for a plain positive dimension). */
 export const itemFactor = (item = {}) => (item.sign < 0 ? -1 : 1) * factor(item.multiplier) * factor(item.dmult);
@@ -116,7 +121,7 @@ export function groupToSpec(g, byId, opts = {}) {
   for (const v of p.variables || []) { const key = keyOf(v.name); if (!constants.some(c => c.key === key)) constants.push({ key, label: v.name, value: factor(v.value, 0), unit: v.unit || '' }); }
   const base = g.mtype === 'Length' && factor(p.offset, 0) ? '({Base} + {Offset})' : `{${baseKey}}`;
   const qtyLabel = g.name;
-  if (terms.length || base !== `{${baseKey}}`) formulas.push({ key: 'Qty', label: qtyLabel, unit: UNIT[conv.display], expr: [base, ...terms].join(' * ') });
+  if (terms.length || base !== `{${baseKey}}` || conv.display === 'Weight') formulas.push({ key: 'Qty', label: qtyLabel, unit: displayUnit(g), expr: [base, ...terms].join(' * ') });
   else { const b = inputs.find(i => i.key === baseKey); b.label = `${g.name}: ${b.label}`; }
   const qtyRef = formulas.length ? '{Qty}' : `{${baseKey}}`;
   // custom quantities: {Qty}, {Base}, {Width}, {Height}, {Multiplier}, variables and any BIM quantity of the elements
