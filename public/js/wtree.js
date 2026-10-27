@@ -5,13 +5,15 @@
 import { $, esc, api, status, fmtDate } from './core.js';
 import { fmt, keyOf, evaluate } from './engine.js';
 import { menu, dialog, ask, confirmIt } from './wui.js';
-import { MTYPES, UNIT, DETAILS, groupTotal, dimensions, groupToSpec, displayUnit, baseValue, quantityNames } from './dims.js';
+import { MTYPES, UNIT, DETAILS, DISPLAYS, DISPLAYS_FOR, groupTotal, dimensions, groupToSpec, displayUnit, conversion, baseValue, quantityNames } from './dims.js';
 import { canView } from './drawings.js';
 import { canMeasure } from './takeoff2d.js';
 import { addDrawings } from './localfiles.js';
+import { drawingKey } from './tkstore.js';
 
 let C;                                   // context from window.js: { W, V, paint, send, openDrawing, openProps, openVersion, setIds, ... }
-const T = { folders: [], groups: [], standard: [], open: new Set(['std']), shut: new Set(), cur: null, sel: null, filter: '', dimSel: new Set(), top: 'drawings', bottom: 'groups', zones: [], waiting: null };
+const T = { folders: [], groups: [], standard: [], open: new Set(['std']), shut: new Set(), cur: null, sel: null, filter: '', dimSel: new Set(), top: 'drawings', bottom: 'groups', zones: [], waiting: null,
+  selFolder: null, show: new Set() };    // show: the groups whose dimensions are drawn (the group or folder clicked in the tree)
 const canEdit = () => ['owner', 'editor'].includes(C.W.project?.my_role);
 const G = (id) => T.groups.find(g => g.id === id) || T.standard.find(g => g.id === id);
 const folderPath = (id) => { const out = []; for (let f = T.folders.find(x => x.id === id); f; f = T.folders.find(x => x.id === f.parent_id)) out.unshift(f.name); return out.join('\\'); };
@@ -26,6 +28,7 @@ export async function loadTree() {
     T.folders = t.folders; T.groups = t.groups; T.standard = s.groups;
     if (T.cur && !G(T.cur)) T.cur = null;
     if (T.sel && !G(T.sel)) T.sel = null;
+    if (T.selFolder && !T.folders.some(f => f.id === T.selFolder)) T.selFolder = null;
   } catch (err) { status('Could not load the project tree: ' + err.message, 'bad'); }
   render();
 }
@@ -37,16 +40,18 @@ async function patchGroup(g, body, msg) {
 }
 
 // ================================================================== generic tree
-/** nodes: [{ key, label, cols:[], icon, children, open, sel, cur, onClick, onOpen, onMenu, drag:{type,id}, drop:fn(data) }] */
-function tree(host, nodes, columns) {
+/** nodes: [{ key, label, cols:[], icon, children, open, sel, cur, strong, swatch, onClick, onOpen, onMenu, drag:{type,id}, drop:fn(data) }]
+ * columns: headings after Name ("Unit" and "UOM" are narrow); swatch: add the colour column (dimension groups). */
+function tree(host, nodes, columns, { swatch = false } = {}) {
   const rows = [];
   const walk = (list, depth) => list.forEach(n => { rows.push([n, depth]); if (n.children?.length && n.open) walk(n.children, depth + 1); });
   walk(nodes, 0);
-  host.innerHTML = `<div class="tr-head"><span>Name</span>${columns.map(c => `<span class="tr-c">${esc(c)}</span>`).join('')}</div>
-    <div class="tr-body" role="tree">${rows.map(([n, d], i) => `<div class="tr-row ${n.sel ? 'sel' : ''} ${n.cur ? 'cur' : ''} ${n.muted ? 'muted' : ''} ${n.linked ? 'linked' : ''}" role="treeitem" tabindex="${i === 0 ? 0 : -1}" data-i="${i}"
-      ${n.children?.length ? `aria-expanded="${Boolean(n.open)}"` : ''} ${n.drag ? 'draggable="true"' : ''} style="--d:${d}">
+  const cc = (c) => `tr-c${/^(Unit|UOM)$/.test(c) ? ' u' : ''}`;
+  host.innerHTML = `<div class="tr-head"><span>Name</span>${columns.map(c => `<span class="${cc(c)}">${esc(c)}</span>`).join('')}${swatch ? '<span class="tr-sw none"></span>' : ''}</div>
+    <div class="tr-body" role="tree">${rows.map(([n, d], i) => `<div class="tr-row ${n.sel ? 'sel' : ''} ${n.cur ? 'cur' : ''} ${n.muted ? 'muted' : ''} ${n.linked ? 'linked' : ''} ${n.strong ? 'strong' : ''} ${n.icon === 'folder' ? 'fold' : ''} ${n.icon === 'folder' && !d ? 'top' : ''}" role="treeitem" tabindex="${i === 0 ? 0 : -1}" data-i="${i}"
+      ${n.children?.length ? `aria-expanded="${Boolean(n.open)}"` : ''} ${n.sel ? 'aria-selected="true"' : ''} ${n.drag ? 'draggable="true"' : ''} style="--d:${d}">
       <span class="tr-tw">${n.children?.length ? (n.open ? '▾' : '▸') : ''}</span>${n.check != null ? `<input type="checkbox" class="tr-chk" ${n.check ? 'checked' : ''} aria-label="Show ${esc(n.label)}">` : ''}<span class="tr-ic tr-${n.icon || 'item'}" aria-hidden="true"></span>
-      <span class="tr-l" title="${esc(n.title || n.label)}">${esc(n.label)}</span>${columns.map((c, k) => `<span class="tr-c">${esc(n.cols?.[k] ?? '')}</span>`).join('')}</div>`).join('') || '<div class="hint tr-empty">Nothing here yet. Right-click for options.</div>'}</div>`;
+      <span class="tr-l" title="${esc(n.title || n.label)}">${esc(n.label)}</span>${columns.map((c, k) => `<span class="${cc(c)}">${esc(n.cols?.[k] ?? '')}</span>`).join('')}${swatch ? `<span class="tr-sw ${n.swatch ? '' : 'none'}" ${n.swatch ? `style="background:${esc(n.swatch)}"` : ''} aria-hidden="true"></span>` : ''}</div>`).join('') || '<div class="hint tr-empty">Nothing here yet. Right-click for options.</div>'}</div>`;
   const body = host.querySelector('.tr-body');
   const rowOf = (el) => rows[+el.closest('.tr-row').dataset.i][0];
   body.querySelectorAll('.tr-row').forEach(el => {
@@ -94,6 +99,7 @@ function renderTop() {
   if (T.top === 'layers') return renderLayersTab(host);
   const p = C.W.project; if (!p) { host.innerHTML = '<p class="hint tr-empty">Open a project in the Excel task pane to see its drawings.</p>'; return; }
   const folders = T.folders.filter(f => f.kind === 'drawing');
+  const measuredOn = new Set(T.groups.flatMap(g => (g.props.measured || []).map(m => m.src?.t === 'd' && m.src.key)).filter(Boolean));   // drawings with dimensions are bold
   const modelNode = (m) => ({ key: 'm' + m.id, label: m.name, icon: 'model', cols: ['3D'], open: T.open.has('m' + m.id), toggle: toggler('m' + m.id),
     drag: { type: 'model', id: m.id }, title: `${m.name} · ${m.versions.length} version(s)`,
     onMenu: (x, y) => menu([{ label: 'Open latest version', disabled: !m.versions.some(v => v.status === 'ready'), run: () => { const v = m.versions.find(x => x.status === 'ready'); C.openVersion(v.id, `${m.name} v${v.version}`); } },
@@ -106,7 +112,7 @@ function renderTop() {
         onOpen: () => C.openDrawing({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }),
         onClick: () => C.openDrawing({ kind: 'sheet', versionId: v.id, index: sh.index, name: sh.name }) })) })) });
   const drawingNode = (d) => ({ key: 'd' + d.id, label: d.name, icon: canMeasure(d.name) ? 'drawing' : 'file', cols: [C.uomOf?.(d) ?? (d.name.split('.').pop() || '').toUpperCase()],
-    drag: { type: 'drawing', id: d.id }, muted: !canMeasure(d.name),
+    drag: { type: 'drawing', id: d.id }, muted: !canMeasure(d.name), strong: measuredOn.has(drawingKey(d)),
     onClick: () => canMeasure(d.name) && C.openDrawing(d), onOpen: () => (canMeasure(d.name) ? C.openDrawing(d) : status('This file type opens outside the add-in. Download it from the task pane.')),
     onMenu: (x, y) => menu([{ label: 'Open and Measure', disabled: !canMeasure(d.name), run: () => C.openDrawing(d) },
       { label: 'Open Side by Side', disabled: !canView(d.name), run: () => C.openDrawingSide?.(d) }, '-',
@@ -192,7 +198,8 @@ function customTotals(g) {
 function groupNode(g) {
   const t = groupTotal(g, C.W.byId);
   const subs = customTotals(g), qk = 'q' + g.id;
-  return { key: 'g' + g.id, label: g.name, icon: 'dg-' + g.mtype.toLowerCase(), cols: [nice(t.total, t.unit), t.unit], sel: T.sel === g.id, cur: T.cur === g.id,
+  return { key: 'g' + g.id, label: g.name, icon: 'dg-' + g.mtype.toLowerCase(), cols: [nice(t.total, t.unit), t.unit], swatch: g.props.posColor || '#107c10',
+    sel: T.sel === g.id && !T.selFolder, cur: T.cur === g.id,
     open: subs.length && !T.shut.has(qk), toggle: () => { T.shut.has(qk) ? T.shut.delete(qk) : T.shut.add(qk); render(); },
     children: subs.map((c, i) => ({ key: qk + '-' + i, label: c.label, icon: 'qty', muted: true, title: `${c.label}${c.rule ? ' · ' + c.rule : ''} (custom quantity of "${g.name}")`, cols: [nice(c.total, c.unit), c.unit],
       onClick: () => selectGroup(g.id), onOpen: () => editGroup(g, undefined, 'custom'), onMenu: (x, y) => groupMenu(g, x, y) })),
@@ -211,7 +218,8 @@ function renderBottom() {
   const folderNode = (f) => {
     const key = 'f' + f.id;
     return { key, label: f.name, icon: 'folder', cols: ['', ''], open: T.open.has(key) || Boolean(q), toggle: toggler(key), drag: { type: 'folder', id: f.id },
-      drop: (d) => dropOn(f.id, d, 'dim'), onMenu: (x, y) => folderMenu(f, x, y),
+      sel: T.selFolder === f.id, title: `${folderPath(f.id)} · click to show the dimensions of every group in it`,
+      onClick: () => selectFolder(f.id), drop: (d) => dropOn(f.id, d, 'dim'), onMenu: (x, y) => folderMenu(f, x, y),
       children: [...folders.filter(x => x.parent_id === f.id && (!q || has(x.id))).map(folderNode), ...T.groups.filter(g => g.folder_id === f.id && match(g)).map(groupNode)] };
   };
   const std = { key: 'std', label: 'Standard', icon: 'std', cols: ['', ''], open: T.open.has('std'), toggle: toggler('std'), title: 'Standard dimension groups: the company library',
@@ -226,7 +234,7 @@ function renderBottom() {
     { label: 'Add Dimension Group from Standard...', disabled: !canEdit() || !T.standard.length, run: () => fromStandard() }, '-',
     { label: 'Expand All', run: () => expandAll('dim', true) }, { label: 'Collapse All', run: () => expandAll('dim', false) }, '-', { label: 'Exit Menu' }], x, y);
   host.onRootDrop = (d) => dropOn(null, d, 'dim');
-  tree(host, nodes, ['Quantity', 'Unit']);
+  tree(host, nodes, ['Quantity', 'Unit'], { swatch: true });
 }
 function folderMenu(f, x, y) {
   const inside = groupsIn(f.id);
@@ -264,13 +272,22 @@ function groupMenu(g, x, y) {
 }
 export function selectGroup(id, { current = true } = {}) {
   T.sel = id; if (current) T.cur = id; T.dimSel.clear();
+  T.selFolder = null;                     // only the clicked group's dimensions are drawn
   if (id) C.onGroupSelected?.(id);
   const g = G(id);
   for (let f = T.folders.find(x => x.id === g?.folder_id); f; f = T.folders.find(x => x.id === f.parent_id)) T.open.add('f' + f.id);   // show it in the tree
   if (g && g.items.length) C.setGroupColors(g); else C.setGroupColors(null);
   render();
 }
-function render() { renderTop(); renderBottom(); renderStatusBar(); C.onTreeChange?.(); }
+/** Click on a dimension group folder: the dimensions of every group in it (and its sub-folders) are drawn. */
+function selectFolder(fid) {
+  T.selFolder = fid; T.sel = null; T.dimSel.clear();
+  render();
+}
+function render() {
+  T.show = new Set(T.selFolder ? groupsIn(T.selFolder).map(g => g.id) : T.sel ? [T.sel] : []);
+  renderTop(); renderBottom(); renderStatusBar(); C.onTreeChange?.();
+}
 export function refresh() { render(); }
 
 // ================================================================== dimensions tab
@@ -361,14 +378,36 @@ function renderStatusBar() {
   if (T.groups.some(x => x.props.gfa)) parts.push(`GFA = ${nice(gfa, 'm2')} m2`);
   el.textContent = parts.join('     ');
 }
-const conversionName = (g) => ({ m: 'Length', m2: 'Area', m3: 'Volume', nr: 'Count' })[displayUnit(g)];
+const conversionName = (g) => conversion(g).display;
 
 // ================================================================== folders, moving
 async function newFolder(kind, parentId) {
-  const name = await ask('New folder', 'Folder name', '', { okLabel: 'Create' }); if (!name) return;
-  try { const r = await api('POST', `/projects/${C.W.projectId}/folders`, { kind, name, parentId }); T.folders.push(r.folder); if (parentId) T.open.add('f' + parentId); render(); status(`Folder "${name}" created.`, 'ok'); }
+  const name = await ask('New folder', 'Folder name', '', { okLabel: 'Create', hint: 'Type a path such as 2026-09-25 SD 50%\\Hardscape\\Paving to create the folders inside each other.' }); if (!name) return;
+  try { const id = await folderFromPath(kind, name, parentId); openTo(id); render(); status(`Folder "${folderPath(id)}" created.`, 'ok'); }
   catch (err) { status(err.message, 'bad'); }
 }
+const splitPath = (path) => String(path || '').split('\\').map(x => x.trim()).filter(Boolean);
+/** The folder at a path such as "2026-09-25 SD 50%\Hardscape\Paving" (null: top level). Folders that do not exist yet are created. */
+async function folderFromPath(kind, path, parentId = null) {
+  let parent = parentId;
+  for (const name of splitPath(path)) {
+    let f = T.folders.find(x => x.kind === kind && (x.parent_id || null) === parent && x.name.toLowerCase() === name.toLowerCase());
+    if (!f) { f = (await api('POST', `/projects/${C.W.projectId}/folders`, { kind, name, parentId: parent })).folder; T.folders.push(f); }
+    parent = f.id;
+  }
+  return parent;
+}
+/** Is there a folder at this path already? */
+const folderAt = (kind, path) => {
+  let parent = null;
+  for (const name of splitPath(path)) {
+    const f = T.folders.find(x => x.kind === kind && (x.parent_id || null) === parent && x.name.toLowerCase() === name.toLowerCase());
+    if (!f) return undefined;
+    parent = f.id;
+  }
+  return parent;
+};
+const openTo = (fid) => { for (let f = T.folders.find(x => x.id === fid); f; f = T.folders.find(x => x.id === f.parent_id)) T.open.add('f' + f.id); };
 async function renameFolder(f) {
   const name = await ask('Rename folder', 'Folder name', f.name, { okLabel: 'Rename' }); if (!name) return;
   try { await api('PATCH', `/folders/${f.id}`, { name }); f.name = name; render(); } catch (err) { status(err.message, 'bad'); }
@@ -465,12 +504,27 @@ async function fromStandard(s) {
   catch (err) { status(err.message, 'bad'); }
 }
 
+// Colours and fill patterns of the Properties tab (the CostX names)
+const COLORS = [['Black', '#000000'], ['Maroon', '#800000'], ['Green', '#008000'], ['Olive', '#808000'], ['Navy', '#000080'], ['Purple', '#800080'], ['Teal', '#008080'],
+  ['Gray', '#808080'], ['Silver', '#c0c0c0'], ['Red', '#ff0000'], ['Lime', '#00ff00'], ['Yellow', '#ffff00'], ['Blue', '#0000ff'], ['Fuchsia', '#ff00ff'], ['Aqua', '#00ffff'],
+  ['White', '#ffffff'], ['Orange', '#ffa500'], ['Brown', '#a52a2a']];
+const PATTERNS = ['Solid', 'Hatch', 'Cross Hatch', 'Outline'];
+const randomNamed = (not = []) => { const list = COLORS.filter(c => !['#000000', '#ffffff', '#ff0000', ...not.map(x => String(x).toLowerCase())].includes(c[1])); return list[Math.floor(Math.random() * list.length)][1]; };
+/** A number with at least n decimals ("1.000000"), never rounded. */
+const fixed = (v, n) => { const t = String(Number(v) || 0); return (t.split('.')[1] || '').length > n ? t : (Number(v) || 0).toFixed(n); };
+const nameTaken = (name, id) => T.groups.some(x => x.id !== id && x.name.trim().toLowerCase() === name.trim().toLowerCase());
+/** The name, or the name with a number added when another group already has it. */
+const freeName = (name) => { if (!nameTaken(name)) return name; let n = 2; while (nameTaken(`${name} ${n}`)) n++; return `${name} ${n}`; };
+
 /** Properties dialog ("Dimension Group Properties"); g = null creates a new group. */
 export async function editGroup(g, folderId, tab = 'props', { importIds = null, name = '', mtype = '' } = {}) {
   const isNew = !g;
   const W = C.W;
-  const work = JSON.parse(JSON.stringify(g || { id: null, name, mtype: mtype || 'Count', folder_id: folderId ?? null, items: [], props: { multiplier: 1, width: 0, height: 0, offset: 0, posColor: '#107c10', negColor: '#d13438', custom: [], variables: [], measured: [] } }));
-  work.props = { multiplier: 1, width: 0, height: 0, offset: 0, posColor: '#107c10', negColor: '#d13438', custom: [], variables: [], measured: [], ...work.props };
+  const pos = randomNamed();
+  const work = JSON.parse(JSON.stringify(g || { id: null, name: freeName(name), mtype: mtype || 'Area', folder_id: folderId ?? (T.selFolder || G(T.sel)?.folder_id || null), items: [], props: {} }));
+  work.props = { multiplier: 1, width: 0, height: 0, offset: 0, posColor: pos, negColor: '#ff0000', posPattern: 'Solid', negPattern: 'Solid', custom: [], variables: [], measured: [], ...work.props };
+  work.path = folderPath(work.folder_id);
+  const locked = () => Boolean(work.items.length || work.props.measured.length);      // the type stays once a group has dimensions
   const removed = new Set();
   const qNames = () => {
     const unit = UNIT[work.mtype], seen = new Map();
@@ -487,10 +541,12 @@ export async function editGroup(g, folderId, tab = 'props', { importIds = null, 
   const read = () => {     // copy form values into "work"
     const v = (id) => pane.querySelector('#' + id);
     if (cur === 'props') {
-      work.name = v('dgN').value.trim(); work.folder_id = v('dgF').value || null; work.mtype = v('dgT').value;
-      Object.assign(work.props, { display: v('dgD').value, quantity: v('dgQ').value || undefined, multiplier: Number(v('dgM').value) || 0, width: Number(v('dgW').value) || 0,
-        height: Number(v('dgH').value) || 0, offset: Number(v('dgO').value) || 0, gfa: v('dgG').checked, posColor: v('dgPC').value, negColor: v('dgNC').value, weightUom: v('dgU').value,
-        description: v('dgDesc').value });
+      work.name = v('dgN').value.trim(); work.path = splitPath(v('dgF').value).join('\\'); work.mtype = v('dgT').value;
+      Object.assign(work.props, { display: v('dgD').value, multiplier: Number(v('dgM').value) || 0, width: Number(v('dgW').value) || 0,
+        height: Number(v('dgH').value) || 0, offset: Number(v('dgO').value) || 0, gfa: v('dgG').checked, posColor: v('dgPC').value, negColor: v('dgNC').value,
+        posPattern: v('dgPP').value, negPattern: v('dgNP').value, weightUom: v('dgU').value });
+    } else if (cur === 'bim') {
+      work.props.quantity = v('dgQ').value || undefined;
     } else if (cur === 'custom') {
       work.props.custom = [...pane.querySelectorAll('tr[data-r]')].map(tr => { const was = work.props.custom[+tr.dataset.r] || {}, expr = tr.querySelector('[data-f=expr]').value.trim();
         return { label: tr.querySelector('[data-f=label]').value.trim(), unit: tr.querySelector('[data-f=unit]').value.trim(), expr, ...(was.rule && was.expr === expr ? { rule: was.rule } : {}) }; }).filter(c => c.label || c.expr);
@@ -513,32 +569,61 @@ export async function editGroup(g, folderId, tab = 'props', { importIds = null, 
     body.querySelectorAll('[data-dt]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.dt === cur)));
     const p = work.props;
     if (cur === 'props') {
-      const qs = qNames();
-      pane.innerHTML = `<div class="dg-form">
-        <label>Name:</label><input class="input" id="dgN" value="${esc(work.name)}" ${ro} autofocus>
-        <label>Folder:</label><select class="input" id="dgF" ${ro}>${folderOptions('dim', work.folder_id)}</select>
-        <label>Measurement Type:</label><select class="input" id="dgT" ${work.items.length || ro ? 'disabled' : ''}>${MTYPES.map(m => `<option ${m === work.mtype ? 'selected' : ''}>${m}</option>`).join('')}</select>
-        <label>Measured From:</label><select class="input" id="dgQ" ${ro || work.mtype === 'Count' ? 'disabled' : ''}><option value="">(automatic: ${esc(quantityNames({ mtype: work.mtype, props: {} }).slice(0, 2).join(', ') || 'one per object')})</option>${qs.map(n => `<option ${n === p.quantity ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
-        <label>Default Display:</label><select class="input" id="dgD" ${ro}>${MTYPES.map(m => `<option ${m === (p.display || work.mtype) ? 'selected' : ''}>${m}</option>`).join('')}</select>
-        <label>Default Multiplier:</label><input class="input" id="dgM" type="number" step="any" value="${p.multiplier}" ${ro}>
-        <label>Default Width:</label><span><input class="input" id="dgW" type="number" step="any" value="${p.width}" ${ro}> m</span>
-        <label>Default Height:</label><span><input class="input" id="dgH" type="number" step="any" value="${p.height}" ${ro}> m</span>
-        <label>Default Offset:</label><span><input class="input" id="dgO" type="number" step="any" value="${p.offset}" ${ro}> m</span>
-        <label>Add To GFA:</label><input type="checkbox" id="dgG" ${p.gfa ? 'checked' : ''} ${ro}>
-        <label>Positive Dimensions:</label><input type="color" id="dgPC" value="${esc(p.posColor)}" ${ro}>
-        <label>Negative Dimensions:</label><input type="color" id="dgNC" value="${esc(p.negColor)}" ${ro}>
-        <label>Weight UOM:</label><select class="input" id="dgU" ${ro}>${['', 'kg', 't'].map(u => `<option ${u === (p.weightUom || '') ? 'selected' : ''}>${u}</option>`).join('')}</select>
-        <label>Description:</label><input class="input" id="dgDesc" value="${esc(p.description || '')}" ${ro} placeholder="Shown as the method in Excel">
-        <label>Date Added:</label><span>${g ? esc(fmtDate(g.created_at)) : '—'}</span>
-        <label>Date Modified:</label><span>${g ? esc(fmtDate(g.updated_at)) : '—'}</span></div>
-        <p class="hint">Display: a length shown as an area uses the height (length × height); as a volume, width × height. An area shown as a volume uses the height. Offset is added to every length.</p>`;
+      const allowed = DISPLAYS_FOR[work.mtype] || [work.mtype];
+      const display = allowed.includes(p.display) ? p.display : work.mtype;
+      const num = (id, v, n, unit) => `<span class="dgp-num"><input class="input" id="${id}" type="number" step="any" value="${fixed(v, n)}" ${ro}>${unit ? `<span>${unit}</span>` : ''}</span>`;
+      const colour = (k, label) => {
+        const col = String(p[k + 'Color']).toLowerCase(), known = COLORS.some(c => c[1] === col), pat = p[k + 'Pattern'] || (k === 'neg' ? 'Hatch' : 'Solid');
+        return `<label for="dg${k[0].toUpperCase()}C">${label}</label><span class="dgp-col">
+          <span class="dgp-pick"><span class="dgp-sw" style="background:${esc(col)}" aria-hidden="true"></span><select class="input" id="dg${k[0].toUpperCase()}C" ${ro}>${COLORS.map(([n, c]) => `<option value="${c}" ${c === col ? 'selected' : ''}>${n}</option>`).join('')}${known ? '' : `<option value="${esc(col)}" selected>Custom</option>`}<option value="pick">More colours...</option></select></span>
+          <span class="dgp-pick"><span class="dgp-sw pat-${pat.replace(' ', '-').toLowerCase()}" style="--c:${esc(col)}" aria-hidden="true"></span><select class="input" id="dg${k[0].toUpperCase()}P" aria-label="${label.replace(':', '')} pattern" ${ro}>${PATTERNS.map(x => `<option ${x === pat ? 'selected' : ''}>${x}</option>`).join('')}</select></span>
+          <button type="button" class="btn small subtle dgp-rnd" data-rnd="${k}" title="Another colour" aria-label="Another colour for ${label.replace(':', '').toLowerCase()}" ${ro}>⟳</button>
+          <input type="color" id="dg${k[0].toUpperCase()}X" value="${esc(col)}" hidden tabindex="-1"></span>`;
+      };
+      pane.innerHTML = `<div class="dgp-form">
+        <label for="dgN">Name:</label><input class="input" id="dgN" value="${esc(work.name)}" ${ro} autofocus maxlength="200">
+        <label for="dgF">Folder:</label><span class="dgp-combo"><input class="input" id="dgF" value="${esc(work.path)}" placeholder="(top level)" ${ro} autocomplete="off" title="Choose a folder, or type a path such as 2026-09-25 SD 50%\\Hardscape\\Paving (new folders are created)"><button type="button" class="dgp-dd" id="dgFB" aria-label="Choose a folder" ${ro}>▾</button></span>
+        <label for="dgT">Measurement Type:</label><select class="input" id="dgT" ${locked() || ro ? 'disabled' : ''}>${[...MTYPES].sort().map(m => `<option ${m === work.mtype ? 'selected' : ''}>${m}</option>`).join('')}</select>
+        <label for="dgD">Default Display:</label><select class="input" id="dgD" ${ro}>${DISPLAYS.map(m => `<option ${m === display ? 'selected' : ''} ${allowed.includes(m) ? '' : 'disabled'}>${m}</option>`).join('')}</select>
+        <label for="dgM">Default Multiplier:</label>${num('dgM', p.multiplier, 6, '')}
+        <label for="dgW">Default Width:</label>${num('dgW', p.width, 4, 'm')}
+        <label for="dgH">Default Height:</label>${num('dgH', p.height, 4, 'm')}
+        <label for="dgO">Default Offset:</label>${num('dgO', p.offset, 4, 'm')}
+        <label for="dgG">Add To GFA:</label><span><input type="checkbox" id="dgG" ${p.gfa ? 'checked' : ''} ${ro}></span>
+        ${colour('pos', 'Positive Dimensions:')}
+        ${colour('neg', 'Negative Dimensions:')}
+        <label for="dgU">Weight UOM:</label><select class="input dgp-short" id="dgU" ${ro}>${['', 'kg', 't'].map(u => `<option ${u === (p.weightUom || '') ? 'selected' : ''}>${u}</option>`).join('')}</select>
+        <label>Date Added:</label><span>${g ? esc(fmtDate(g.created_at)) : ''}</span>
+        <label>Date Modified:</label><span>${g ? esc(fmtDate(g.updated_at)) : ''}</span></div>`;
+      pane.oninput = null;
       pane.querySelector('#dgT').onchange = () => {
         const oldType = work.mtype, oldDisplay = pane.querySelector('#dgD').value;
         read();
-        if (oldDisplay === oldType) work.props.display = work.mtype;     // the display follows the type unless it was changed on purpose
+        if (oldDisplay === oldType || !(DISPLAYS_FOR[work.mtype] || []).includes(work.props.display)) work.props.display = work.mtype;     // the display follows the type unless it was changed on purpose
         if (work.mtype !== oldType) work.props.quantity = undefined;
         draw();
       };
+      pane.querySelector('#dgFB').onclick = (e) => {
+        const r = e.currentTarget.getBoundingClientRect(), inp = pane.querySelector('#dgF');
+        const paths = T.folders.filter(f => f.kind === 'dim').map(f => folderPath(f.id)).sort((a, b) => a.localeCompare(b));
+        menu([{ label: '(top level)', checked: !inp.value, run: () => { inp.value = ''; inp.focus(); } }, ...(paths.length ? ['-'] : []),
+          ...paths.map(x => ({ label: x, checked: x === inp.value, run: () => { inp.value = x; inp.focus(); } }))], r.right - 320, r.bottom + 2);
+      };
+      for (const k of ['P', 'N']) {
+        const sel = pane.querySelector(`#dg${k}C`), pick = pane.querySelector(`#dg${k}X`);
+        const set = (c) => {
+          if (!COLORS.some(x => x[1] === c)) { let o = [...sel.options].find(x => x.textContent === 'Custom'); if (!o) { o = new Option('Custom', c); sel.add(o, sel.options.length - 1); } o.value = c; }
+          sel.value = c; pick.value = c; read(); draw();
+        };
+        let was = sel.value;
+        sel.onfocus = () => { was = sel.value; };
+        sel.onchange = () => { if (sel.value === 'pick') { sel.value = was; pick.click(); } else set(sel.value); };
+        pick.onchange = () => set(pick.value.toLowerCase());
+        pane.querySelector(`#dg${k}P`).onchange = () => { read(); draw(); };
+      }
+      pane.querySelectorAll('[data-rnd]').forEach(b => b.onclick = () => {
+        read(); const k = b.dataset.rnd; work.props[k + 'Color'] = randomNamed([work.props.posColor, work.props.negColor]); draw();
+      });
     } else if (cur === 'custom') {
       const keys = new Set(); ids(work).slice(0, 3000).forEach(id => Object.keys(W.byId.get(id)?.q || {}).forEach(n => keys.add(keyOf(n))));
       pane.innerHTML = `<p class="hint">Formulas for each dimension, written to Excel as live formulas. Use {Qty} (the dimension quantity), {Base}, {Width}, {Height}, {Multiplier}, your variables and the BIM quantities of the objects, e.g. <code>{Geo_side_area} + {Geo_bottom_area}</code>.</p>
@@ -564,12 +649,15 @@ export async function editGroup(g, folderId, tab = 'props', { importIds = null, 
     } else if (cur === 'bim') {
       const live = work.items.filter(i => !removed.has(i.element_id));
       const t = groupTotal({ ...work, items: live, props: { ...p, measured: [] } }, W.byId);
-      pane.innerHTML = `<p>${live.length} BIM dimension(s) · total ${esc(nice(t.total, t.unit))} ${esc(t.unit)}${t.absent ? ` · ${t.absent} not in this model` : ''}${t.missing ? ` · ${t.missing} without a value` : ''}${importIds ? ` · ${importIds.length} will be imported` : ''}</p>
+      const qs = qNames();
+      pane.innerHTML = `<label class="field dgp-from">Measured from (BIM quantity)<select class="input" id="dgQ" ${ro || work.mtype === 'Count' ? 'disabled' : ''}><option value="">(automatic: ${esc(quantityNames({ mtype: work.mtype, props: {} }).slice(0, 2).join(', ') || 'one per object')})</option>${qs.map(n => `<option ${n === p.quantity ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+        <p>${live.length} BIM dimension(s) · total ${esc(nice(t.total, t.unit))} ${esc(t.unit)}${t.absent ? ` · ${t.absent} not in this model` : ''}${t.missing ? ` · ${t.missing} without a value` : ''}${importIds ? ` · ${importIds.length} will be imported` : ''}</p>
         <div class="dg-list"><table class="q"><thead><tr><th></th><th>Object</th><th>Level</th><th style="text-align:right">${esc(work.mtype)}</th></tr></thead><tbody>
         ${work.items.slice(0, 1500).map(i => { const e = W.byId.get(i.element_id); return `<tr class="${removed.has(i.element_id) ? 'muted strike' : ''}"><td><input type="checkbox" data-rm="${i.element_id}" ${removed.has(i.element_id) ? '' : 'checked'} ${ro} aria-label="Keep"></td>
           <td>${esc(e ? `${e.type} [${e.id}]` : `[${i.element_id}] not in this model`)}${i.sign < 0 ? ' <span class="hint">(negative)</span>' : ''}</td><td>${esc(e?.level || '')}</td><td class="v">${esc(nice(baseValue(work, e), UNIT[work.mtype]))}</td></tr>`; }).join('')}
         </tbody></table></div><p class="hint">Untick to remove dimensions. Add objects with right-click in 3D > Import Objects In.</p>`;
-      pane.querySelectorAll('[data-rm]').forEach(c => c.onchange = () => { const id = Number(c.dataset.rm); c.checked ? removed.delete(id) : removed.add(id); draw(); });
+      pane.querySelectorAll('[data-rm]').forEach(c => c.onchange = () => { read(); const id = Number(c.dataset.rm); c.checked ? removed.delete(id) : removed.add(id); draw(); });
+      pane.querySelector('#dgQ').onchange = () => { read(); draw(); };
       pane.oninput = null;
     } else if (cur === 'meas') {
       pane.innerHTML = `<p class="hint">Dimensions measured by hand: a distance or face area from the 3D Measure tool, or a value you type. Unit: ${esc(UNIT[work.mtype])}.</p>
@@ -586,11 +674,13 @@ export async function editGroup(g, folderId, tab = 'props', { importIds = null, 
   };
   body.querySelectorAll('[data-dt]').forEach(b => b.onclick = () => { read(); cur = b.dataset.dt; draw(); });
   draw();
-  const res = await dialog({ title: isNew ? 'Add Dimension Group' : 'Dimension Group Properties', body, wide: true, side: true,
+  const res = await dialog({ title: isNew ? 'Add Dimension Group' : 'Dimension Group Properties', body, wide: true, side: true, cls: 'dgp',
     buttons: canEdit() ? [{ label: isNew ? 'Add' : 'Update', value: 'ok', primary: true }, { label: 'Cancel', value: null }] : [{ label: 'Close', value: null }],
     validate: () => {
       read();
       if (!work.name) return 'Give the dimension group a name (Properties tab).';
+      if (nameTaken(work.name, work.id)) return `A dimension group called "${work.name}" is already in this project. Give it a unique name.`;
+      if (splitPath(work.path).some(x => x.length > 120)) return 'A folder name can have up to 120 characters.';
       const live = work.items.filter(i => !removed.has(i.element_id) && W.byId.has(i.element_id));
       if (live.length) { try { groupToSpec({ ...work, items: live }, W.byId, {}); } catch (err) { return err.message; } }
       else {      // no objects yet: check the formulas against every quantity in the model
@@ -607,6 +697,9 @@ export async function editGroup(g, folderId, tab = 'props', { importIds = null, 
     } });
   if (res !== 'ok') return null;
   try {
+    const isNewFolder = work.path && folderAt('dim', work.path) === undefined;
+    work.folder_id = await folderFromPath('dim', work.path);
+    openTo(work.folder_id);
     const payload = { name: work.name, mtype: work.mtype, folderId: work.folder_id, props: work.props };
     let saved;
     if (isNew) saved = (await api('POST', `/projects/${W.projectId}/dimgroups`, payload)).group;
@@ -617,7 +710,8 @@ export async function editGroup(g, folderId, tab = 'props', { importIds = null, 
     }
     if (importIds?.length) saved = (await api('POST', `/dimgroups/${saved.id}/items`, { ids: importIds, versionId: W.versionId })).group;
     replaceGroup(saved); selectGroup(saved.id);
-    status(isNew ? `Dimension group "${saved.name}" created${importIds?.length ? ` with ${importIds.length} object(s)` : ''}. It is the current group.` : `"${saved.name}" updated.`, 'ok');
+    status((isNew ? `Dimension group "${saved.name}" created${importIds?.length ? ` with ${importIds.length} object(s)` : ''}. It is the current group.` : `"${saved.name}" updated.`)
+      + (isNewFolder ? ` Folder "${work.path}" created.` : ''), 'ok');
     return saved;
   } catch (err) { status(err.message, 'bad'); return null; }
 }
@@ -680,7 +774,7 @@ export const treeActions = {
 /** The tree's dimension groups as the source of the on-screen take-off store (one copy of the data). */
 export const tkSource = {
   groups: () => T.groups, current: () => T.cur, setCurrent: (id) => selectGroup(id),
-  replace: (g) => { replaceGroup(g); subCache.clear(); render(); }, reload: () => loadTree(),
+  replace: (g) => { replaceGroup(g); subCache.clear(); render(); }, reload: () => loadTree(), shown: () => T.show,
 };
 
 // ================================================================== Excel schedules

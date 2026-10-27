@@ -100,6 +100,11 @@ test('dimension groups: properties, import objects, signs and multipliers, copy,
   r = await call('PATCH', `/api/dimgroups/${g.id}`, { token: T.user, body: { props: { measured: [{ label: 'Distance on site', value: 12.5, unit: 'm', kind: 'distance' }] } } });
   assert.equal(r.data.group.props.measured[0].value, 12.5); assert.equal(r.data.group.props.multiplier, 2);   // other properties kept
   assert.equal((await call('PATCH', `/api/dimgroups/${g.id}`, { token: T.user, body: { mtype: 'Weird' } })).status, 400);
+  // CostX displays and fill patterns are kept; unknown ones are dropped
+  r = await call('PATCH', `/api/dimgroups/${g.id}`, { token: T.user, body: { props: { display: 'Wall Area', posPattern: 'Cross Hatch', negPattern: '<b>' } } });
+  assert.equal(r.data.group.props.display, 'Wall Area'); assert.equal(r.data.group.props.posPattern, 'Cross Hatch'); assert.equal(r.data.group.props.negPattern, undefined);
+  r = await call('PATCH', `/api/dimgroups/${g.id}`, { token: T.user, body: { props: { display: 'Bogus' } } });
+  assert.equal(r.data.group.props.display, undefined);
   // copy with and without dimensions
   const c1 = (await call('POST', `/api/dimgroups/${g.id}/copy`, { token: T.user, body: { name: 'IR Ducts B', withDimensions: true } })).data.group;
   assert.equal(c1.items.length, 3); assert.equal(c1.props.measured.length, 1);

@@ -4,6 +4,8 @@ import { q, one, tx, audit } from './db.js';
 import { json, wrap, clean, uuidOk, fail, need, versionProject } from './http.js';
 
 export const MTYPES = ['Count', 'Length', 'Area', 'Volume'];
+const DISPLAYS = [...MTYPES, 'Wall Area', 'Weight'];
+export const PATTERNS = ['Solid', 'Hatch', 'Cross Hatch', 'Outline'];
 const KINDS = ['drawing', 'dim'];
 const num = (v, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
 const color = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v)) ? String(v) : d);
@@ -22,10 +24,11 @@ export function cleanProps(p = {}, old = {}) {
   const src = { ...old, ...(p && typeof p === 'object' ? p : {}) };
   const list = (a, n) => (Array.isArray(a) ? a.slice(0, n) : []);
   return {
-    display: MTYPES.includes(src.display) ? src.display : undefined,
+    display: DISPLAYS.includes(src.display) ? src.display : undefined,
     quantity: clean(src.quantity, 120) || undefined,           // BIM property used for the measured value
     multiplier: num(src.multiplier, 1), width: num(src.width), height: num(src.height), offset: num(src.offset),
     gfa: Boolean(src.gfa), posColor: color(src.posColor, '#107c10'), negColor: color(src.negColor, '#d13438'),
+    posPattern: PATTERNS.includes(src.posPattern) ? src.posPattern : undefined, negPattern: PATTERNS.includes(src.negPattern) ? src.negPattern : undefined,
     weightUom: clean(src.weightUom, 20), zone: clean(src.zone, 120) || undefined, description: clean(src.description, 500) || undefined,
     custom: list(src.custom, 50).map(c => ({ label: clean(c?.label, 120), unit: clean(c?.unit, 20), expr: clean(c?.expr, 1500), rule: cleanRule(c?.rule) })).filter(c => c.label && c.expr),
     rule: cleanRule(src.rule),

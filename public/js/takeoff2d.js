@@ -34,7 +34,8 @@ export class DrawingTakeoff {
   constructor(host, store, opts = {}) {
     this.host = host; this.store = store; this.o = opts;
     this.tool = 'select'; this.sign = 1; this.angle = false; this.snapOn = true; this.labels = true; this.legend = true;
-    this.markupsOn = true; this.mono = false; this.showAll = true;
+    this.markupsOn = true; this.mono = false;
+    this.showAll = !store.hasTree?.();     // in the measurement window the tree chooses what is shown (the groups or folder clicked)
     this.signShow = 0;                       // 0 both, 1 only positive, -1 only negative dimensions (ribbon Positive / Negative / Both)
     this.disp = { text: true, hatch: true, weight: true, white: false, lineStyles: true };   // drawing display (ribbon Display group)
     this.sel = new Set(); this.draft = null; this.hover = null; this.pending = [];
@@ -372,7 +373,7 @@ export class DrawingTakeoff {
       { label: 'Reset Working Area', disabled: !this.areaHere(), run: () => this.resetWorkingArea() },
       { label: this.cmp ? 'Close Comparison' : 'Compare with Another Drawing...', disabled: !this.cmp && !this.o.drawings, run: () => (this.cmp ? this.closeCompare() : this.compareWith()) }, '-',
       { label: 'Layers...', disabled: !this.layerList().length, title: this.layerList().length ? '' : 'This drawing has no layers', run: () => this.layers() },
-      { label: 'Show Every Dimension Group', checked: this.showAll, title: 'Off: only the current group', run: () => this.act('all') }, '-',
+      { label: 'Show Every Dimension Group', checked: this.showAll, title: 'Off: only the dimension group or folder chosen in the tree', run: () => this.act('all') }, '-',
       { label: 'Drawing Properties...', run: () => this.drawingProps() },
       { label: 'Picture of the Drawing', run: () => this.picture() }, '-', { label: 'Close Menu' }], r.left, r.bottom + 2);
   }
@@ -640,7 +641,7 @@ export class DrawingTakeoff {
 
   // ================================================================== dimensions on this page
   dimsHere() { return this.store.dimsOn(this.d.kind === 'sheet' ? 's' : 'd', this.dkey, this.page); }
-  visibleDims() { const cur = this.store.currentId(); return this.dimsHere().filter(x => (this.showAll || x.g.id === cur) && (!this.signShow || (x.m.sign < 0 ? -1 : 1) === this.signShow)); }
+  visibleDims() { const cur = this.store.currentId(); return this.dimsHere().filter(x => (this.showAll || x.g.id === cur || this.store.isShown?.(x.g.id)) && (!this.signShow || (x.m.sign < 0 ? -1 : 1) === this.signShow)); }
   hitDim(p) {
     const tol = 6 / this.z; let best = null, bestD = tol, bestA = Infinity;
     for (const x of this.visibleDims()) {
@@ -883,12 +884,20 @@ export class DrawingTakeoff {
   }
 
   // ================================================================== drawing the overlay
-  pattern(color) {
-    const id = 'tkh' + color.replace('#', ''), k = 8 / this.z;
+  pattern(color, cross = false) {
+    const id = 'tkh' + (cross ? 'x' : '') + color.replace('#', ''), k = 8 / this.z;
     if (!this.el.defs.querySelector('#' + id)) {
-      this.el.defs.insertAdjacentHTML('beforeend', `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${k}" height="${k}" patternTransform="rotate(45)"><rect width="${k}" height="${k}" fill="${color}" fill-opacity=".12"/><line x1="0" y1="0" x2="0" y2="${k}" stroke="${color}" stroke-width="${3 / this.z}" stroke-opacity=".55"/></pattern>`);
+      const line = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${3 / this.z}" stroke-opacity=".55"/>`;
+      this.el.defs.insertAdjacentHTML('beforeend', `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${k}" height="${k}" patternTransform="rotate(45)"><rect width="${k}" height="${k}" fill="${color}" fill-opacity=".12"/>${line(0, 0, 0, k)}${cross ? line(0, 0, k, 0) : ''}</pattern>`);
     }
     return `url(#${id})`;
+  }
+  /** Fill of an area dimension: the group's pattern for positive or negative dimensions (Solid, Hatch, Cross Hatch, Outline). */
+  areaFill(g, neg, col, sel) {
+    const kind = neg ? (g.props.negPattern || 'Hatch') : (g.props.posPattern || 'Solid');
+    if (kind === 'Outline') return 'fill="none"';
+    if (kind === 'Hatch' || kind === 'Cross Hatch') return `fill="${this.pattern(col, kind === 'Cross Hatch')}" fill-opacity="1"`;
+    return `fill="${col}" fill-opacity="${sel ? 0.45 : 0.3}"`;
   }
   drawDims() {
     if (!this.el?.dims || !this.W) return;
@@ -906,8 +915,8 @@ export class DrawingTakeoff {
       const P = G2.pairs(pts).map(q => q.join(',')).join(' ');
       if (m.shape === 'area' && holes.length) {
         const ring = (r) => 'M' + G2.pairs(r).map(q => q.join(',')).join('L') + 'Z';
-        out.push(`<path d="${ring(pts)}${holes.map(ring).join('')}" fill-rule="evenodd" fill="${neg ? this.pattern(col) : col}" fill-opacity="${neg ? 1 : sel ? 0.45 : 0.3}" stroke="${stroke}" ${sw(w)}${dim}/>`);
-      } else if (m.shape === 'area') out.push(`<polygon points="${P}" fill="${neg ? this.pattern(col) : col}" fill-opacity="${neg ? 1 : sel ? 0.45 : 0.3}" stroke="${stroke}" ${sw(w)}${dim}/>`);
+        out.push(`<path d="${ring(pts)}${holes.map(ring).join('')}" fill-rule="evenodd" ${this.areaFill(g, neg, col, sel)} stroke="${stroke}" ${sw(w)}${dim}/>`);
+      } else if (m.shape === 'area') out.push(`<polygon points="${P}" ${this.areaFill(g, neg, col, sel)} stroke="${stroke}" ${sw(w)}${dim}/>`);
       else if (m.shape === 'rebar') out.push(this.rebarSvg(m, pts, col, z, sel || hov));
       else if (m.shape === 'length') out.push(`<polyline points="${P}" fill="none" stroke="${stroke}" ${sw(w + 2)} stroke-linecap="round" stroke-linejoin="round"${neg ? ` stroke-dasharray="${6 / z} ${4 / z}"` : ''}${dim}/>`);
       else if (m.shape === 'count') { const r = 6 / z; out.push(`<circle cx="${pts[0]}" cy="${pts[1]}" r="${r}" fill="${col}" fill-opacity=".85" stroke="${sel ? '#0078d4' : '#fff'}" ${sw(sel ? 3 : 1.5)}${dim}/>${neg ? `<line x1="${pts[0] - r}" y1="${pts[1]}" x2="${pts[0] + r}" y2="${pts[1]}" stroke="#fff" ${sw(2)}/>` : ''}`); }

@@ -11,7 +11,7 @@ export const drawingKey = (d) => (d.kind === 'sheet' ? `s:${d.versionId}:${d.ind
 export const newId = () => Math.random().toString(36).slice(2, 10);
 
 export class TakeoffStore {
-  /** opts: { projectId, canEdit(), source?: { groups(), current(), setCurrent(id), replace(group), reload() }, api? (tests) } */
+  /** opts: { projectId, canEdit(), source?: { groups(), current(), setCurrent(id), replace(group), reload(), shown() }, api? (tests) } */
   constructor(opts) {
     this.o = opts; this.own = { groups: [], current: null }; this.settings = {}; this.listeners = new Set();
     this.api = opts.api || api; this.queues = new Map();
@@ -40,6 +40,10 @@ export class TakeoffStore {
   group(id) { return this.groups().find(g => g.id === id) || null; }
   currentId() { return this.o.source ? this.o.source.current() : this.own.current; }
   current() { return this.group(this.currentId()); }
+  /** True in the measurement window, where the project tree owns the groups and chooses which are shown. */
+  hasTree() { return Boolean(this.o.source); }
+  /** Is a group's dimensions shown on drawings and in 3D: the current group, and the groups (or folder) clicked in the tree. */
+  isShown(id) { if (!this.o.source?.shown) return true; return id === this.currentId() || this.o.source.shown().has(id); }
   setCurrent(id) { if (this.o.source) this.o.source.setCurrent(id); else this.own.current = id; this.emit('current'); }
   replace(g) {
     const old = this.group(g.id);

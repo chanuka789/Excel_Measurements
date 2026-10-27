@@ -43,7 +43,7 @@ export class PointTakeoff {
   refresh() {
     const key = this.o.versionId(); if (!key) { this.v.setDims3d([]); return; }
     const cur = this.store.currentId(), all = this.o.showAll ? this.o.showAll() : true;
-    const list = this.store.dimsOn('3d', key).filter(x => all || x.g.id === cur).filter(x => x.m.pts?.length)
+    const list = this.store.dimsOn('3d', key).filter(x => (all || x.g.id === cur) && this.store.isShown(x.g.id)).filter(x => x.m.pts?.length)
       .map(({ g, m }) => ({ id: m.id, shape: m.shape, pts: m.pts, neg: m.sign < 0, sel: this.sel.has(m.id), color: m.sign < 0 ? g.props.negColor || '#d13438' : g.props.posColor || '#107c10' }));
     this.v.setDims3d(list);
   }

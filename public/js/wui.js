@@ -73,15 +73,15 @@ export function menu(items, x, y) {
 }
 
 /**
- * Modal dialog. body: HTML string or element. buttons: [{ label, value, primary, danger }]. onOpen(root) wires fields.
+ * Modal dialog. body: HTML string or element. buttons: [{ label, value, primary, danger }]. onOpen(root) wires fields. cls: extra class.
  * Resolves with the clicked button's value (validate(root, value) can return an error text to keep it open), or null.
  */
-export function dialog({ title, body, buttons = [{ label: 'Cancel', value: null }, { label: 'OK', value: 'ok', primary: true }], wide = false, side = false, onOpen, validate }) {
+export function dialog({ title, body, buttons = [{ label: 'Cancel', value: null }, { label: 'OK', value: 'ok', primary: true }], wide = false, side = false, cls = '', onOpen, validate }) {
   return new Promise((resolve) => {
     const host = document.getElementById('dialog');
     host.innerHTML = '';
     const d = document.createElement('div');
-    d.className = 'dlg' + (wide ? ' wide' : '') + (side ? ' side-actions' : '');
+    d.className = 'dlg' + (wide ? ' wide' : '') + (side ? ' side-actions' : '') + (cls ? ' ' + cls : '');
     d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-label', title);
     d.innerHTML = `<div class="dlg-head"><h2>${esc(title)}</h2><button class="dlg-x" aria-label="Close" data-v="__close">×</button></div>
       <div class="dlg-main"><div class="dlg-body"></div><div class="dlg-actions">${buttons.map((b, i) =>
