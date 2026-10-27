@@ -78,19 +78,21 @@ export function createWinLink(opts) {
   return { send, askPane, start, receive, get office() { return office; }, get link() { return link; } };
 }
 
-/** Maximise / Restore re-open the Office dialog at the other size (Office has no resize call); "App window" moves to a
- * normal browser window with minimise and maximise. carry() returns the view to restore in the new window. */
+/** One button on the title bar. The app window (a normal browser window: minimise, maximise and the taskbar come from
+ * the window itself) gets Full screen / Exit full screen. An Office dialog has no resize call, so its button re-opens it
+ * at the other size; carry() returns the view to restore in the new window. */
 export function windowButtons(box, send, carry) {
   if (!box) return;
-  const reopen = (mode) => { send({ type: 'reopen', mode, view: carry() }); };
   if (MODE === 'dialog') {
     const max = HASH.get('dlg') === 'max';
-    box.innerHTML = `<button class="wb" id="wMax" title="${max ? 'Back to the normal size' : 'Fill the screen'}">${max ? 'Restore' : 'Maximise'}</button>
-      <button class="wb" id="wApp" title="Open in a separate browser window that you can minimise, maximise and move to another screen">App window</button>`;
-    box.querySelector('#wMax').onclick = () => reopen(max ? 'normal' : 'max');
-    box.querySelector('#wApp').onclick = () => reopen('app');
-  } else if (MODE === 'app') {
-    box.innerHTML = `<button class="wb" id="wFull" title="Full screen (Esc to leave)">Full screen</button>`;
-    box.querySelector('#wFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); };
+    box.innerHTML = `<button class="wb" id="wMax" title="${max ? 'Back to the normal size' : 'Fill the screen'}">${max ? 'Restore' : 'Full screen'}</button>`;
+    box.querySelector('#wMax').onclick = () => send({ type: 'reopen', mode: max ? 'normal' : 'max', view: carry() });
+  } else {
+    box.innerHTML = `<button class="wb" id="wFull"></button>`;
+    const b = box.querySelector('#wFull');
+    const label = () => { const on = Boolean(document.fullscreenElement); b.textContent = on ? 'Exit full screen' : 'Full screen'; b.title = on ? 'Back to the window (Esc)' : 'Fill the whole screen (Esc to leave)'; };
+    b.onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); };
+    document.addEventListener('fullscreenchange', label);
+    label();
   }
 }

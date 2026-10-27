@@ -1,8 +1,8 @@
 // The task pane side of the two app windows: the measurement window (viewer.html, CostX style) and the DWFx
-// Schedules window (schedules.html). Three ways to open them: an Office dialog (Excel), a browser pop-up (add-in
-// opened in a browser), or the app window: a normal browser window with real minimise / maximise, linked to this
-// pane through the server (LinkChannel). Only one Office dialog can be open at a time, so the second window opens as an
-// app window. Messages from a window go to the handlers registered with onWindow().
+// Schedules window (schedules.html). In Excel they open as the app window: a normal browser window that can be
+// minimised to the taskbar, maximised and moved to another screen, linked to this pane through the server (LinkChannel).
+// An Office dialog (it cannot be minimised) is used only when Excel cannot open a browser window; a browser pop-up when
+// the add-in itself runs in a browser. Messages from a window go to the handlers registered with onWindow().
 import { App, api, session, status } from './core.js';
 import { LinkChannel } from './link.js';
 
@@ -37,7 +37,8 @@ export async function openWindow(kind, mode = 'normal', init = {}) {
   const base = new URL(PAGES[kind], location.href).href;
   const initData = { ...prevInit, ...init };
   const officeBusy = Object.entries(wins).some(([k, w]) => k !== kind && w?.office);
-  if (mode === 'app' || (officeBusy && inExcel)) return openAppWindow(kind, base, initData);
+  const browserWindow = typeof Office !== 'undefined' && Boolean(Office.context?.ui?.openBrowserWindow);
+  if (mode === 'app' || (inExcel && (browserWindow || officeBusy))) return openAppWindow(kind, base, initData);
   if (typeof Office !== 'undefined' && Office.context?.ui?.displayDialogAsync && inExcel) {
     const size = mode === 'max' ? 'max' : 'normal';
     Office.context.ui.displayDialogAsync(`${base}?dlg=${size}`, { ...WIN_SIZES[size], displayInIframe: false }, (r) => {
