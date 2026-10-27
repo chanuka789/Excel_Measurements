@@ -348,9 +348,6 @@ details.box > summary { cursor: pointer; font-weight: 600; }
 .qs-consts { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; margin: 6px 0; }
 .rates { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; font-size: 12px; }
 .rates label { display: flex; flex-direction: column; gap: 2px; }
-.vpop-list { display: flex; flex-direction: column; gap: 6px; max-width: 280px; }
-.vpop-list button { text-align: left; padding: 8px; border: 1px solid var(--stroke2); border-radius: var(--r-l); background: var(--bg); cursor: pointer; color: var(--fg); }
-.vpop-list button:hover { border-color: var(--brand); }
 /* AI plan checklist */
 .ai-actions ol.plan { list-style: none; padding: 0; margin: 6px 0; }
 .ai-actions li.pa { padding: 6px 4px; border-bottom: 1px solid var(--stroke2); }
